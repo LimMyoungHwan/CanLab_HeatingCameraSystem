@@ -1,0 +1,318 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Camera Position Mapping | Industrial Monitor</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0e1321;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b4949;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #859493;
+        }
+        .grid-slot {
+            aspect-ratio: 1 / 1;
+        }
+        .drag-handle:hover {
+            cursor: grab;
+        }
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed": "#ffdad5",
+                      "outline": "#859493",
+                      "on-error": "#690005",
+                      "inverse-on-surface": "#2b3040",
+                      "surface-variant": "#2f3444",
+                      "background": "#0e1321",
+                      "tertiary-fixed-dim": "#ffb4a9",
+                      "surface": "#0e1321",
+                      "on-tertiary": "#690001",
+                      "tertiary-container": "#ffa193",
+                      "secondary-fixed": "#6bfe9c",
+                      "tertiary": "#ffc9c1",
+                      "on-tertiary-fixed": "#410000",
+                      "inverse-surface": "#dee2f7",
+                      "on-tertiary-container": "#960e09",
+                      "error": "#ffb4ab",
+                      "surface-container-highest": "#2f3444",
+                      "primary-fixed": "#5af8fb",
+                      "on-surface-variant": "#bac9c9",
+                      "on-primary-fixed-variant": "#004f51",
+                      "on-secondary-fixed": "#00210c",
+                      "inverse-primary": "#00696b",
+                      "primary-container": "#00ced1",
+                      "error-container": "#93000a",
+                      "on-background": "#dee2f7",
+                      "secondary-container": "#06bb63",
+                      "surface-container-low": "#161b2a",
+                      "secondary-fixed-dim": "#4ae183",
+                      "surface-container-lowest": "#090e1c",
+                      "on-tertiary-fixed-variant": "#910807",
+                      "on-secondary-fixed-variant": "#005228",
+                      "on-secondary": "#003919",
+                      "on-surface": "#dee2f7",
+                      "on-error-container": "#ffdad6",
+                      "surface-bright": "#343949",
+                      "secondary": "#4ae183",
+                      "on-primary": "#003738",
+                      "surface-container": "#1a1f2e",
+                      "on-primary-fixed": "#002020",
+                      "outline-variant": "#3b4949",
+                      "surface-container-high": "#252a39",
+                      "on-primary-container": "#005354",
+                      "primary": "#47eaed",
+                      "surface-tint": "#2ddbde",
+                      "surface-dim": "#0e1321",
+                      "primary-fixed-dim": "#2ddbde",
+                      "on-secondary-container": "#00431f"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "panel-padding": "16px",
+                      "gutter": "12px",
+                      "unit": "4px",
+                      "stack-gap": "8px",
+                      "margin-page": "24px"
+              },
+              "fontFamily": {
+                      "display-lg": ["Hanken Grotesk"],
+                      "label-caps": ["JetBrains Mono"],
+                      "data-md": ["JetBrains Mono"],
+                      "headline-md": ["Hanken Grotesk"],
+                      "data-lg": ["JetBrains Mono"],
+                      "body-md": ["Hanken Grotesk"]
+              },
+              "fontSize": {
+                      "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                      "data-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                      "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "data-lg": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+              }
+            },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background text-on-surface font-body-md selection:bg-primary-container selection:text-on-primary-container overflow-hidden h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="bg-surface-container-high border-b border-outline-variant flex justify-between items-center w-full px-margin-page h-16 z-50">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary text-2xl">videocam_auto</span>
+<h1 class="font-display-lg text-on-surface text-xl">Camera Position Mapping</h1>
+<div class="ml-4 px-3 py-1 bg-surface-container rounded border border-outline-variant">
+<span class="font-label-caps text-outline uppercase">Assigned</span>
+<span class="font-data-md text-primary ml-2">48 / 64</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2 mr-4 text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">help</span>
+<span class="material-symbols-outlined text-[20px]">settings</span>
+</div>
+<button class="px-4 py-2 bg-surface-container text-on-surface font-semibold border border-outline-variant hover:bg-surface-bright active:scale-95 transition-all rounded text-sm">
+                Clear All
+            </button>
+<button class="px-4 py-2 bg-primary-container text-on-primary-container font-bold hover:brightness-110 active:scale-95 transition-all rounded text-sm shadow-[0_0_10px_rgba(0,206,209,0.3)]">
+                Save Mapping
+            </button>
+</div>
+</header>
+<main class="flex-1 flex overflow-hidden"><!-- Right Side: Available Cameras (30%) - Now on Left -->
+<aside class="w-[30%] bg-surface-container border-r border-outline-variant flex flex-col">
+<div class="p-panel-padding border-b border-outline-variant flex justify-between items-center bg-surface-container-high">
+<div>
+<h2 class="font-headline-md text-on-surface text-base">Available Cameras</h2>
+<p class="font-label-caps text-[10px] text-outline">Source Management</p>
+</div>
+<div class="flex gap-2">
+<button class="p-1 hover:bg-surface-bright rounded text-outline"><span class="material-symbols-outlined text-sm">filter_list</span></button>
+<button class="p-1 hover:bg-surface-bright rounded text-outline"><span class="material-symbols-outlined text-sm">refresh</span></button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar">
+<!-- Agent Section 1 -->
+<div class="agent-group">
+<button class="w-full flex items-center justify-between px-panel-padding py-3 bg-surface-container-low hover:bg-surface-container-high border-b border-outline-variant/30 transition-colors" onclick="toggleAgent(this)">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-primary transition-transform duration-200">expand_more</span>
+<span class="font-label-caps text-on-surface">Agent PC #1</span>
+<span class="font-data-md text-xs text-outline ml-1">(16)</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+</button>
+<div class="agent-content flex flex-col">
+<!-- Cam Rows -->
+<div class="flex items-center justify-between px-panel-padding py-2.5 border-b border-outline-variant/10 hover:bg-surface-bright group">
+<div class="flex items-center gap-3">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span class="font-data-md text-on-surface">CAM-17</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:text-primary drag-handle transition-colors">drag_indicator</span>
+</div>
+<div class="flex items-center justify-between px-panel-padding py-2.5 border-b border-outline-variant/10 bg-surface-dim/40 opacity-40">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-xs text-secondary" data-weight="fill">check_circle</span>
+<span class="font-data-md text-on-surface italic line-through">CAM-05</span>
+</div>
+<span class="material-symbols-outlined text-outline">lock</span>
+</div>
+<script>
+                            const agentContainer = document.querySelector('.agent-content');
+                            for(let j=18; j<=22; j++) {
+                                const row = document.createElement('div');
+                                row.className = "flex items-center justify-between px-panel-padding py-2.5 border-b border-outline-variant/10 hover:bg-surface-bright group";
+                                row.innerHTML = `
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                        <span class="font-data-md text-on-surface">CAM-${j}</span>
+                                    </div>
+                                    <span class="material-symbols-outlined text-outline group-hover:text-primary drag-handle transition-colors">drag_indicator</span>
+                                `;
+                                agentContainer.appendChild(row);
+                            }
+                         </script>
+</div>
+</div>
+<!-- Agent Section 2 -->
+<div class="agent-group">
+<button class="w-full flex items-center justify-between px-panel-padding py-3 bg-surface-container-low hover:bg-surface-container-high border-b border-outline-variant/30 transition-colors" onclick="toggleAgent(this)">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-primary transition-transform duration-200">chevron_right</span>
+<span class="font-label-caps text-on-surface">Agent PC #2</span>
+<span class="font-data-md text-xs text-outline ml-1">(16)</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+</button>
+</div>
+<!-- Agent Section 3 -->
+<div class="agent-group">
+<button class="w-full flex items-center justify-between px-panel-padding py-3 bg-surface-container-low hover:bg-surface-container-high border-b border-outline-variant/30 transition-colors" onclick="toggleAgent(this)">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-primary transition-transform duration-200">chevron_right</span>
+<span class="font-label-caps text-on-surface">Agent PC #3</span>
+<span class="font-data-md text-xs text-outline ml-1">(16)</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+</button>
+</div>
+<!-- Agent Section 4 -->
+<div class="agent-group">
+<button class="w-full flex items-center justify-between px-panel-padding py-3 bg-surface-container-low hover:bg-surface-container-high border-b border-outline-variant/30 transition-colors" onclick="toggleAgent(this)">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-primary transition-transform duration-200">chevron_right</span>
+<span class="font-label-caps text-on-surface">Agent PC #4</span>
+<span class="font-data-md text-xs text-outline ml-1">(16)</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+</button>
+</div>
+</div>
+<!-- Sidebar Footer -->
+<div class="p-panel-padding bg-surface-container-high border-t border-outline-variant">
+<div class="flex flex-col gap-2">
+<div class="flex justify-between text-[11px] font-label-caps">
+<span class="text-outline">Sync Status</span>
+<span class="text-secondary">Ready</span>
+</div>
+<div class="w-full bg-surface-dim h-1 rounded-full overflow-hidden">
+<div class="bg-primary w-3/4 h-full shadow-[0_0_6px_rgba(71,234,237,0.5)]"></div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Left Side: Position Grid (70%) - Now on Right -->
+<section class="w-[70%] p-gutter overflow-y-auto bg-surface-dim custom-scrollbar">
+<div class="grid grid-cols-8 gap-gutter max-w-6xl mx-auto">
+<script>
+                    const gridContainer = document.querySelector('section.w-\[70\%\] > div');
+                    const assignedIndices = new Set();
+                    while(assignedIndices.size < 48) {
+                        assignedIndices.add(Math.floor(Math.random() * 64) + 1);
+                    }
+
+                    for(let i = 1; i <= 64; i++) {
+                        const isAssigned = assignedIndices.has(i);
+                        const id = i < 10 ? `0${i}` : i;
+                        const slot = document.createElement('div');
+                        
+                        if(isAssigned) {
+                            const camId = Math.floor(Math.random() * 99) + 1;
+                            const camPadded = camId < 10 ? `0${camId}` : camId;
+                            slot.className = `grid-slot group relative bg-surface-container-high border-2 border-primary-container p-2 flex flex-col items-center justify-center gap-1 transition-all hover:bg-surface-bright`;
+                            slot.innerHTML = `
+                                <span class="absolute top-1 left-2 font-label-caps text-[10px] text-outline">P${id}</span>
+                                <div class="w-1.5 h-1.5 rounded-full bg-secondary shadow-[0_0_4px_#2ECC71]"></div>
+                                <span class="font-data-md text-on-surface tracking-wider">CAM-${camPadded}</span>
+                                <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity"></div>
+                            `;
+                        } else {
+                            slot.className = `grid-slot relative bg-surface-container-low border border-dashed border-outline-variant p-2 flex items-center justify-center transition-all hover:border-primary-container/50`;
+                            slot.innerHTML = `
+                                <span class="absolute top-1 left-2 font-label-caps text-[10px] text-outline">P${id}</span>
+                                <span class="font-data-lg text-outline-variant opacity-30">—</span>
+                            `;
+                        }
+                        gridContainer.appendChild(slot);
+                    }
+                </script>
+</div>
+</section></main>
+<!-- Visual Background Element -->
+<div class="fixed bottom-0 right-0 w-[70%] h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
+<script>
+        function toggleAgent(btn) {
+            const icon = btn.querySelector('.material-symbols-outlined');
+            const content = btn.nextElementSibling;
+            
+            if(content && content.classList.contains('agent-content')) {
+                const isHidden = content.classList.toggle('hidden');
+                icon.innerText = isHidden ? 'chevron_right' : 'expand_more';
+            } else {
+                // If collapsed, normally you'd fetch or show content
+                icon.innerText = icon.innerText === 'chevron_right' ? 'expand_more' : 'chevron_right';
+            }
+        }
+
+        // Simple animation for the progress bar
+        const progress = document.querySelector('.bg-primary.w-3\\/4');
+        if(progress) {
+            setInterval(() => {
+                const jitter = (Math.random() * 2 - 1) + 75;
+                progress.style.width = `${jitter}%`;
+            }, 3000);
+        }
+    </script>
+
+
+</body></html>

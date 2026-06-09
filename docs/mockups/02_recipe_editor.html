@@ -1,0 +1,403 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>THERM-SENSE INDUSTRIAL | Recipe Editor</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        body {
+            background-color: #0e1321;
+            color: #dee2f7;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0e1321;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #3b4949;
+        }
+        .step-row:hover .drag-handle {
+            color: #47eaed;
+        }
+        .dashed-border {
+            background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' stroke='%233b4949' stroke-width='2' stroke-dasharray='8%2c 8' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface": "#0e1321",
+                        "secondary-fixed-dim": "#4ae183",
+                        "on-tertiary-fixed": "#410000",
+                        "on-tertiary": "#690001",
+                        "on-secondary-fixed-variant": "#005228",
+                        "on-primary-container": "#005354",
+                        "primary-fixed-dim": "#2ddbde",
+                        "on-tertiary-fixed-variant": "#910807",
+                        "surface-container-high": "#252a39",
+                        "inverse-on-surface": "#2b3040",
+                        "surface-container-low": "#161b2a",
+                        "on-secondary-container": "#00431f",
+                        "surface-container-lowest": "#090e1c",
+                        "tertiary-container": "#ffa193",
+                        "on-error": "#690005",
+                        "surface-container-highest": "#2f3444",
+                        "on-error-container": "#ffdad6",
+                        "inverse-primary": "#00696b",
+                        "on-background": "#dee2f7",
+                        "outline": "#859493",
+                        "on-primary-fixed-variant": "#004f51",
+                        "on-primary": "#003738",
+                        "outline-variant": "#3b4949",
+                        "error-container": "#93000a",
+                        "inverse-surface": "#dee2f7",
+                        "surface-bright": "#343949",
+                        "primary-container": "#00ced1",
+                        "secondary-container": "#06bb63",
+                        "on-primary-fixed": "#002020",
+                        "on-tertiary-container": "#960e09",
+                        "on-surface-variant": "#bac9c9",
+                        "surface-tint": "#2ddbde",
+                        "error": "#ffb4ab",
+                        "tertiary-fixed": "#ffdad5",
+                        "primary-fixed": "#5af8fb",
+                        "surface-variant": "#2f3444",
+                        "secondary-fixed": "#6bfe9c",
+                        "background": "#0e1321",
+                        "on-secondary": "#003919",
+                        "on-surface": "#dee2f7",
+                        "on-secondary-fixed": "#00210c",
+                        "tertiary-fixed-dim": "#ffb4a9",
+                        "tertiary": "#ffc9c1",
+                        "surface-container": "#1a1f2e",
+                        "surface-dim": "#0e1321",
+                        "secondary": "#4ae183",
+                        "primary": "#47eaed"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "gutter": "12px",
+                        "margin-page": "24px",
+                        "panel-padding": "16px",
+                        "stack-gap": "8px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Hanken Grotesk"],
+                        "label-caps": ["JetBrains Mono"],
+                        "data-md": ["JetBrains Mono"],
+                        "data-lg": ["JetBrains Mono"],
+                        "headline-md": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "data-md": ["14px", {"lineHeight": "20px", "fontWeight": "500"}],
+                        "data-lg": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="h-screen overflow-hidden flex flex-col font-body-md text-on-surface">
+<!-- Top Navigation Shell -->
+<header class="bg-surface text-primary font-display-lg text-display-lg Headlines font-bold text-primary dark:text-primary tracking-tighter docked full-width top-0 border-b border-outline-variant dark:border-outline-variant flat no shadows flex justify-between items-center w-full px-margin-page h-16 shrink-0 z-50">
+<div class="flex items-center gap-gutter">
+<span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">browse_activity</span>
+<span class="">THERM-SENSE INDUSTRIAL</span>
+</div>
+<nav class="hidden md:flex gap-8 h-full items-center">
+<a class="font-label-caps text-label-caps text-on-surface-variant dark:text-on-surface-variant font-medium hover:text-primary transition-colors" href="#">MONITOR</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant dark:text-on-surface-variant font-medium hover:text-primary transition-colors" href="#">ANALYSIS</a>
+<a class="font-label-caps text-label-caps text-primary dark:text-primary border-b-2 border-primary pb-1 font-medium" href="#">CONFIG</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant dark:text-on-surface-variant font-medium hover:text-primary transition-colors" href="#">LOGS</a>
+</nav>
+<div class="flex items-center gap-4">
+<span class="bg-secondary-container text-on-secondary-container px-3 py-1 text-xs font-bold rounded-sm tracking-wider flex items-center gap-2">
+<span class="w-2 h-2 bg-on-secondary-container rounded-full animate-pulse"></span>
+                SYSTEM ARMED
+            </span>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors">notifications</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors">settings</span>
+<img alt="Operator Session" class="w-8 h-8 rounded-full border border-outline-variant" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjIIEfgVbplTkLeqZNsDJfv1fbATL1WnUomB8og2YAIQroRjeG3lzLuQKzbNyQDn7tPBP8MIcOGHkl5Ji2xBFHev7IuJEZDA4lgTSodmLABGJzF19cI-zqSH4WPi9cxqBaLg1Eg-n7qIph2W_SXBvYhw5QtXJCYSH3o4LPkMZnf1Ck4wrhD01zN-S7cUFeGZbTzi857-xAmYmALEgu3iG_N5B2GYgN-74A0V9glNczvdirXWkymrMqFvydUrMyC66WWKiwXNlx1AE1">
+</div>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<!-- Side Navigation Shell -->
+<aside class="bg-surface-container dark:bg-surface-container text-secondary-fixed-dim dark:text-secondary-fixed-dim font-headline-md text-headline-md Titles docked right-0 h-full w-64 border-l border-outline-variant dark:border-outline-variant flat no shadows fixed top-16 bottom-0 flex flex-col z-40">
+<div class="p-panel-padding border-b border-outline-variant">
+<div class="text-on-surface-variant font-label-caps text-label-caps mb-1">UNIT-01</div>
+<div class="text-on-surface text-sm font-bold flex items-center justify-between">
+                    Thermal Core A
+                    <span class="material-symbols-outlined text-secondary-fixed-dim text-sm" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</div>
+<nav class="flex-1 py-4 overflow-y-auto custom-scrollbar">
+<a class="text-on-surface-variant dark:text-on-surface-variant flex items-center gap-stack-gap py-3 px-panel-padding hover:bg-surface-container-high dark:hover:bg-surface-container-high hover:text-on-surface transition-all" href="#">
+<span class="material-symbols-outlined">videocam</span>
+<span class="font-data-md text-data-md">Thermal View</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant flex items-center gap-stack-gap py-3 px-panel-padding hover:bg-surface-container-high dark:hover:bg-surface-container-high hover:text-on-surface transition-all" href="#">
+<span class="material-symbols-outlined">sensors</span>
+<span class="font-data-md text-data-md">Sensor Array</span>
+</a>
+<a class="text-primary dark:text-primary font-bold bg-surface-container-highest dark:bg-surface-container-highest border-r-4 border-primary flex items-center gap-stack-gap py-3 px-panel-padding transition-all" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+<span class="font-data-md text-data-md">Zone Control</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant flex items-center gap-stack-gap py-3 px-panel-padding hover:bg-surface-container-high dark:hover:bg-surface-container-high hover:text-on-surface transition-all" href="#">
+<span class="material-symbols-outlined">warning</span>
+<span class="font-data-md text-data-md">Alarm Thresholds</span>
+</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant flex items-center gap-stack-gap py-3 px-panel-padding hover:bg-surface-container-high dark:hover:bg-surface-container-high hover:text-on-surface transition-all" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-data-md text-data-md">Diagnostics</span>
+</a>
+</nav>
+<div class="p-panel-padding mt-auto border-t border-outline-variant space-y-4">
+<button class="w-full bg-error text-on-error font-bold py-3 rounded-lg flex items-center justify-center gap-2 Active: brightness-125 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">emergency</span>
+                    EMERGENCY STOP
+                </button>
+<div class="flex flex-col gap-1">
+<a class="text-on-surface-variant flex items-center gap-2 text-xs py-1 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">lock</span>
+                        Lock Session
+                    </a>
+<a class="text-on-surface-variant flex items-center gap-2 text-xs py-1 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">account_circle</span>
+                        Operator Profile
+                    </a>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="mr-64 flex-1 flex overflow-hidden">
+<!-- Left Panel: Recipes List (Now on the left of the main area) -->
+<section class="w-1/4 border-r border-outline-variant bg-surface flex flex-col shrink-0">
+<div class="p-panel-padding border-b border-outline-variant">
+<h2 class="font-display-lg text-headline-md tracking-tight flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">book</span>
+                        Recipes
+                    </h2>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+<div class="bg-surface-container-highest border-l-4 border-primary p-3 rounded-r-md cursor-pointer group transition-all">
+<div class="flex justify-between items-start">
+<span class="font-data-md text-primary font-bold">Recipe A - 45C</span>
+<span class="text-[10px] bg-primary/20 text-primary px-1 rounded uppercase">Selected</span>
+</div>
+<div class="text-on-surface-variant text-[11px] font-label-caps mt-1">MODIFIED: 12m ago</div>
+</div>
+<div class="hover:bg-surface-container p-3 rounded cursor-pointer group transition-all border border-transparent hover:border-outline-variant">
+<div class="flex justify-between items-start">
+<span class="font-data-md text-on-surface group-hover:text-primary transition-colors">Recipe B - 60C</span>
+</div>
+<div class="text-on-surface-variant text-[11px] font-label-caps mt-1">MODIFIED: 4h ago</div>
+</div>
+<div class="hover:bg-surface-container p-3 rounded cursor-pointer group transition-all border border-transparent hover:border-outline-variant">
+<div class="flex justify-between items-start">
+<span class="font-data-md text-on-surface group-hover:text-primary transition-colors">Recipe C - High Temp Sweep</span>
+</div>
+<div class="text-on-surface-variant text-[11px] font-label-caps mt-1">MODIFIED: 2d ago</div>
+</div>
+</div>
+<div class="p-panel-padding grid grid-cols-3 gap-2 border-t border-outline-variant">
+<button class="flex flex-col items-center justify-center p-2 rounded bg-surface-container-high hover:bg-primary/20 hover:text-primary transition-all group">
+<span class="material-symbols-outlined mb-1 group-active:scale-90">1k</span>
+<span class="text-[10px] font-bold">NEW</span>
+</button>
+<button class="flex flex-col items-center justify-center p-2 rounded bg-surface-container-high hover:bg-secondary/20 hover:text-secondary transition-all group">
+<span class="material-symbols-outlined mb-1 group-active:scale-90">content_copy</span>
+<span class="text-[10px] font-bold uppercase">Copy</span>
+</button>
+<button class="flex flex-col items-center justify-center p-2 rounded bg-surface-container-high hover:bg-error/20 hover:text-error transition-all group">
+<span class="material-symbols-outlined mb-1 group-active:scale-90">delete</span>
+<span class="text-[10px] font-bold">DEL</span>
+</button>
+</div>
+</section>
+<!-- Main Editor Workspace (Now on the right of the main area) -->
+<section class="flex-1 flex flex-col bg-surface-container-lowest">
+<!-- Recipe Settings Top Section -->
+<div class="p-panel-padding bg-surface-container-low border-b border-outline-variant">
+<div class="flex items-center justify-between mb-gutter">
+<h3 class="font-headline-md text-on-surface">Recipe Settings</h3>
+<div class="flex items-center gap-2 text-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">history</span>
+                            Auto-saving changes...
+                        </div>
+</div>
+<div class="grid grid-cols-12 gap-gutter">
+<div class="col-span-3">
+<label class="block font-label-caps text-on-surface-variant mb-1 uppercase">Target Chamber Temp</label>
+<div class="flex items-center bg-surface border border-outline-variant p-2 rounded focus-within:border-primary transition-all">
+<input class="bg-transparent border-none focus:ring-0 font-data-lg text-data-lg text-primary w-full p-0" type="text" value="45.0">
+<span class="font-label-caps text-on-surface-variant ml-2 text-sm">°C</span>
+</div>
+</div>
+<div class="col-span-3">
+<label class="block font-label-caps text-on-surface-variant mb-1 uppercase">Target Chamber Humidity</label>
+<div class="flex items-center bg-surface border border-outline-variant p-2 rounded focus-within:border-primary transition-all">
+<input class="bg-transparent border-none focus:ring-0 font-data-lg text-data-lg text-on-surface w-full p-0" type="text" value="40">
+<span class="font-label-caps text-on-surface-variant ml-2 text-sm">%RH</span>
+</div>
+</div>
+<div class="col-span-6">
+<label class="block font-label-caps text-on-surface-variant mb-1 uppercase">Capture Mode</label>
+<div class="flex p-1 bg-surface-container rounded-sm border border-outline-variant">
+<button class="flex-1 py-3 px-2 bg-primary text-on-primary-container rounded-sm flex items-center justify-center gap-2 transition-all">
+<span class="material-symbols-outlined text-sm">filter_1</span>
+<span class="font-data-md">Sequential</span>
+</button>
+<button class="flex-1 py-3 px-2 text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-2 transition-all">
+<span class="material-symbols-outlined text-sm">filter_2</span>
+<span class="font-data-md">Simultaneous</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Steps Scroll Area -->
+<div class="flex-1 overflow-y-auto custom-scrollbar p-panel-padding space-y-stack-gap">
+<div class="flex items-center justify-between mb-2">
+<h4 class="font-label-caps text-on-surface-variant uppercase">Steps (drag to reorder)</h4>
+<span class="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full font-bold">6 STEPS ACTIVE</span>
+</div>
+<!-- Step Rows -->
+<div class="space-y-2">
+<!-- Step Row Template -->
+<div class="step-row flex items-center gap-gutter bg-surface-container p-3 rounded border border-outline-variant group transition-all hover:border-primary/50">
+<span class="material-symbols-outlined drag-handle cursor-grab active:cursor-grabbing text-on-surface-variant transition-colors">drag_indicator</span>
+<div class="bg-surface p-2 rounded w-10 h-10 flex items-center justify-center font-data-md text-primary border border-primary/30">#1</div>
+<div class="flex-1">
+<label class="block text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">Node Assignment</label>
+<input class="bg-transparent border-none focus:ring-0 p-0 font-body-md text-on-surface w-full" type="text" value="Position 12 → CAM-12">
+</div>
+<div class="w-32">
+<label class="block text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">Blackbody Ref</label>
+<div class="flex items-center gap-1 border-b border-outline-variant pb-1">
+<input class="bg-transparent border-none focus:ring-0 p-0 font-data-md text-on-surface w-full text-right" type="text" value="45.0">
+<span class="text-[10px] text-on-surface-variant">°C</span>
+</div>
+</div>
+<button class="p-2 text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined">delete</span>
+</button>
+</div>
+<!-- Step 2 -->
+<div class="step-row flex items-center gap-gutter bg-surface-container p-3 rounded border border-outline-variant group transition-all hover:border-primary/50">
+<span class="material-symbols-outlined drag-handle cursor-grab text-on-surface-variant transition-colors">drag_indicator</span>
+<div class="bg-surface p-2 rounded w-10 h-10 flex items-center justify-center font-data-md text-primary border border-primary/30">#2</div>
+<div class="flex-1">
+<label class="block text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">Node Assignment</label>
+<input class="bg-transparent border-none focus:ring-0 p-0 font-body-md text-on-surface w-full" type="text" value="Position 08 → CAM-08">
+</div>
+<div class="w-32">
+<label class="block text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">Blackbody Ref</label>
+<div class="flex items-center gap-1 border-b border-outline-variant pb-1">
+<input class="bg-transparent border-none focus:ring-0 p-0 font-data-md text-on-surface w-full text-right" type="text" value="45.2">
+<span class="text-[10px] text-on-surface-variant">°C</span>
+</div>
+</div>
+<button class="p-2 text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined">delete</span>
+</button>
+</div>
+<!-- Step 3 -->
+<div class="step-row flex items-center gap-gutter bg-surface-container p-3 rounded border border-outline-variant group transition-all hover:border-primary/50">
+<span class="material-symbols-outlined drag-handle cursor-grab text-on-surface-variant transition-colors">drag_indicator</span>
+<div class="bg-surface p-2 rounded w-10 h-10 flex items-center justify-center font-data-md text-primary border border-primary/30">#3</div>
+<div class="flex-1">
+<label class="block text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">Node Assignment</label>
+<input class="bg-transparent border-none focus:ring-0 p-0 font-body-md text-on-surface w-full" type="text" value="Position 24 → CAM-24">
+</div>
+<div class="w-32">
+<label class="block text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">Blackbody Ref</label>
+<div class="flex items-center gap-1 border-b border-outline-variant pb-1">
+<input class="bg-transparent border-none focus:ring-0 p-0 font-data-md text-on-surface w-full text-right" type="text" value="44.9">
+<span class="text-[10px] text-on-surface-variant">°C</span>
+</div>
+</div>
+<button class="p-2 text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined">delete</span>
+</button>
+</div>
+<!-- Step 4 -->
+<div class="step-row flex items-center gap-gutter bg-surface-container p-3 rounded border border-outline-variant group transition-all hover:border-primary/50">
+<span class="material-symbols-outlined drag-handle cursor-grab text-on-surface-variant transition-colors">drag_indicator</span>
+<div class="bg-surface p-2 rounded w-10 h-10 flex items-center justify-center font-data-md text-primary border border-primary/30">#4</div>
+<div class="flex-1">
+<label class="block text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">Node Assignment</label>
+<input class="bg-transparent border-none focus:ring-0 p-0 font-body-md text-on-surface w-full" type="text" value="Position 15 → CAM-15">
+</div>
+<div class="w-32">
+<label class="block text-[10px] font-label-caps text-on-surface-variant mb-1 uppercase">Blackbody Ref</label>
+<div class="flex items-center gap-1 border-b border-outline-variant pb-1">
+<input class="bg-transparent border-none focus:ring-0 p-0 font-data-md text-on-surface w-full text-right" type="text" value="45.0">
+<span class="text-[10px] text-on-surface-variant">°C</span>
+</div>
+</div>
+<button class="p-2 text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined">delete</span>
+</button>
+</div>
+<!-- Add Step Button -->
+<button class="dashed-border w-full py-6 flex items-center justify-center gap-2 text-on-surface-variant hover:text-primary transition-all group mt-4">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">add_circle</span>
+<span class="font-label-caps text-sm">Add New Recipe Step</span>
+</button>
+</div>
+</div>
+<!-- Bottom Bar Actions -->
+<div class="p-panel-padding bg-surface border-t border-outline-variant flex justify-between items-center">
+<div class="flex items-center gap-gutter text-on-surface-variant text-[11px] font-label-caps">
+<span class="flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+                            DB CONNECTION STABLE
+                        </span>
+<span class="opacity-20">|</span>
+<span class="">LAST SYNC: 14:02:11</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="px-6 py-2 border border-outline-variant text-on-surface-variant hover:bg-surface-container hover:text-on-surface font-bold rounded-sm transition-all text-sm uppercase tracking-wide">
+                            Cancel
+                        </button>
+<button class="px-8 py-2 bg-secondary text-on-secondary font-bold rounded-sm hover:brightness-110 active:scale-95 transition-all text-sm uppercase tracking-wide shadow-lg shadow-secondary/20">
+                            Save Recipe
+                        </button>
+</div>
+</div>
+</section>
+</main>
+</div>
+<!-- Background Atmospheric Effect -->
+<div class="fixed inset-0 pointer-events-none z-[-1] opacity-5">
+
+</div>
+
+
+</body></html>
