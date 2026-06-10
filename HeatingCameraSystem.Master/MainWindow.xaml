@@ -1,0 +1,53 @@
+<Window x:Class="HeatingCameraSystem.Master.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:HeatingCameraSystem.Master"
+        xmlns:vm="clr-namespace:HeatingCameraSystem.Master.ViewModels"
+        xmlns:views="clr-namespace:HeatingCameraSystem.Master.Views"
+        mc:Ignorable="d"
+        Title="Heating Camera Master System" Height="768" Width="1024" Background="#F5F6FA">
+    
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+
+    <Window.Resources>
+        <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
+            <views:DashboardView />
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left Navigation Panel -->
+        <Border Grid.Column="0" Background="#2F3542" Padding="20">
+            <StackPanel>
+                <TextBlock Text="Master Control" Foreground="White" FontSize="24" FontWeight="Bold" Margin="0,0,0,30"/>
+                
+                <Button Content="Dashboard" Command="{Binding NavigateToDashboardCommand}" 
+                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+                
+                <Button Content="Recipe Editor" Command="{Binding NavigateToRecipeEditorCommand}" 
+                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Column="1" Margin="20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            
+            <TextBlock Grid.Row="0" Text="{Binding CurrentViewTitle}" FontSize="28" FontWeight="SemiBold" Foreground="#2f3542" Margin="0,0,0,20"/>
+            
+            <ContentControl Grid.Row="1" Content="{Binding CurrentViewModel}" />
+        </Grid>
+    </Grid>
+</Window>

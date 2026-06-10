@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="HeatingCameraSystem.Agent/HeatingCameraSystem.Agent.csproj" />
+  <Project Path="HeatingCameraSystem.Core/HeatingCameraSystem.Core.csproj" />
+  <Project Path="HeatingCameraSystem.Master/HeatingCameraSystem.Master.csproj" />
+  <Project Path="HeatingCameraSystem.Protocols/HeatingCameraSystem.Protocols.csproj" />
+  <Project Path="HeatingCameraSystem.Tests/HeatingCameraSystem.Tests.csproj" />
+</Solution>
