@@ -2,15 +2,16 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using HeatingCameraSystem.Master.ViewModels;
 
 namespace HeatingCameraSystem.Master.Views
 {
-    public partial class DashboardView : UserControl
+    public partial class CameraMappingView : UserControl
     {
         private Point _dragStartPoint;
 
-        public DashboardView()
+        public CameraMappingView()
         {
             InitializeComponent();
         }
@@ -33,10 +34,10 @@ namespace HeatingCameraSystem.Master.Views
                     var border = sender as Border;
                     if (border == null) return;
                     
-                    var camera = border.DataContext as CameraNode;
-                    if (camera == null) return;
+                    var camera = border.DataContext as MappingCamera;
+                    if (camera == null || camera.IsAssigned) return;
 
-                    DataObject dragData = new DataObject("CameraNode", camera);
+                    DataObject dragData = new DataObject("MappingCamera", camera);
                     DragDrop.DoDragDrop(border, dragData, DragDropEffects.Move);
                 }
             }
@@ -44,8 +45,7 @@ namespace HeatingCameraSystem.Master.Views
 
         private void Slot_DragEnter(object sender, DragEventArgs e)
         {
-            if (!e.Data.GetDataPresent("CameraNode") || 
-                (DataContext is DashboardViewModel vm && vm.CurrentViewMode == 1))
+            if (!e.Data.GetDataPresent("MappingCamera"))
             {
                 e.Effects = DragDropEffects.None;
             }
@@ -53,22 +53,22 @@ namespace HeatingCameraSystem.Master.Views
 
         private void Slot_Drop(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent("CameraNode"))
+            if (e.Data.GetDataPresent("MappingCamera"))
             {
-                var camera = e.Data.GetData("CameraNode") as CameraNode;
+                var camera = e.Data.GetData("MappingCamera") as MappingCamera;
                 var border = sender as Border;
                 if (border == null) return;
 
-                var slot = border.DataContext as DashboardSlot;
+                var slot = border.DataContext as MappingSlot;
                 if (camera != null && slot != null)
                 {
-                    var viewModel = DataContext as DashboardViewModel;
-                    if (viewModel != null && viewModel.CurrentViewMode != 1)
+                    var viewModel = DataContext as CameraMappingViewModel;
+                    if (viewModel != null)
                     {
-                        var parameter = new Tuple<CameraNode, DashboardSlot>(camera, slot);
-                        if (viewModel.AssignCameraToDashboardSlotCommand.CanExecute(parameter))
+                        var parameter = new Tuple<MappingCamera, MappingSlot>(camera, slot);
+                        if (viewModel.AssignCameraToSlotCommand.CanExecute(parameter))
                         {
-                            viewModel.AssignCameraToDashboardSlotCommand.Execute(parameter);
+                            viewModel.AssignCameraToSlotCommand.Execute(parameter);
                         }
                     }
                 }
@@ -77,18 +77,19 @@ namespace HeatingCameraSystem.Master.Views
 
         private void Slot_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
+            // Right click to unassign
             var border = sender as Border;
             if (border == null) return;
 
-            var slot = border.DataContext as DashboardSlot;
+            var slot = border.DataContext as MappingSlot;
             if (slot != null && slot.HasCamera)
             {
-                var viewModel = DataContext as DashboardViewModel;
-                if (viewModel != null && viewModel.CurrentViewMode != 1)
+                var viewModel = DataContext as CameraMappingViewModel;
+                if (viewModel != null)
                 {
-                    if (viewModel.UnassignDashboardSlotCommand.CanExecute(slot))
+                    if (viewModel.UnassignSlotCommand.CanExecute(slot))
                     {
-                        viewModel.UnassignDashboardSlotCommand.Execute(slot);
+                        viewModel.UnassignSlotCommand.Execute(slot);
                     }
                 }
             }

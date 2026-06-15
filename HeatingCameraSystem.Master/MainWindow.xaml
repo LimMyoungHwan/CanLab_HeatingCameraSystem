@@ -17,6 +17,15 @@
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
             <views:DashboardView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:RecipeEditorViewModel}">
+            <views:RecipeEditorView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CameraMappingViewModel}">
+            <views:CameraMappingView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:HistoryViewModel}">
+            <views:HistoryView />
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -34,6 +43,12 @@
                         Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
                 
                 <Button Content="Recipe Editor" Command="{Binding NavigateToRecipeEditorCommand}" 
+                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+
+                <Button Content="Camera Mapping" Command="{Binding NavigateToCameraMappingCommand}" 
+                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+                
+                <Button Content="History Logs" Command="{Binding NavigateToHistoryCommand}" 
                         Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
             </StackPanel>
         </Border>

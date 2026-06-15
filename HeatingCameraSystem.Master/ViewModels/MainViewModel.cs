@@ -28,7 +28,21 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void NavigateToRecipeEditor()
         {
             CurrentViewTitle = "레시피 편집기 (Recipe Editor)";
-            // CurrentViewModel = new RecipeEditorViewModel(); // To be implemented
+            CurrentViewModel = new RecipeEditorViewModel();
+        }
+
+        [RelayCommand]
+        private void NavigateToCameraMapping()
+        {
+            CurrentViewTitle = "카메라 맵핑 (Camera Mapping)";
+            CurrentViewModel = new CameraMappingViewModel();
+        }
+
+        [RelayCommand]
+        private void NavigateToHistory()
+        {
+            CurrentViewTitle = "이력 조회 (History Logs)";
+            CurrentViewModel = new HistoryViewModel();
         }
     }
 }

@@ -1,0 +1,248 @@
+<UserControl x:Class="HeatingCameraSystem.Master.Views.RecipeEditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:HeatingCameraSystem.Master.Views"
+             xmlns:vm="clr-namespace:HeatingCameraSystem.Master.ViewModels"
+             mc:Ignorable="d" 
+             d:DesignHeight="768" d:DesignWidth="1024" Background="#0e1321" Foreground="#dee2f7">
+    
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <SolidColorBrush x:Key="BgSurface" Color="#0e1321"/>
+        <SolidColorBrush x:Key="BgSurfaceContainer" Color="#1a1f2e"/>
+        <SolidColorBrush x:Key="BgSurfaceVariant" Color="#2f3444"/>
+        <SolidColorBrush x:Key="OutlineVariant" Color="#3b4949"/>
+        <SolidColorBrush x:Key="Primary" Color="#47eaed"/>
+        <SolidColorBrush x:Key="Secondary" Color="#4ae183"/>
+        <SolidColorBrush x:Key="Error" Color="#ffb4ab"/>
+        <SolidColorBrush x:Key="TextOnSurface" Color="#dee2f7"/>
+        <SolidColorBrush x:Key="TextOnSurfaceVariant" Color="#bac9c9"/>
+        
+        <Style x:Key="ListItemBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource BgSurfaceContainer}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource OutlineVariant}"/>
+                </Trigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource BgSurfaceVariant}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource Primary}"/>
+                    <Setter Property="BorderThickness" Value="4,0,0,0"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left Panel: Recipes List -->
+        <Border Grid.Column="0" Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,1,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <Border Grid.Row="0" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,0,1" Padding="16">
+                    <TextBlock Text="Recipes" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource TextOnSurface}"/>
+                </Border>
+                
+                <ScrollViewer Grid.Row="1" Margin="8,8,8,0">
+                    <ItemsControl ItemsSource="{Binding Recipes}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource ListItemBorderStyle}">
+                                    <Border.InputBindings>
+                                        <MouseBinding MouseAction="LeftClick" Command="{Binding DataContext.SelectRecipeCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
+                                    </Border.InputBindings>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="14">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextOnSurface}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource Primary}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Grid.Row="1" Text="{Binding LastModified, StringFormat='MODIFIED: {0}'}" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,4,0,0"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                
+                <Border Grid.Row="2" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,1,0,0" Padding="16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <Button Grid.Column="0" Content="NEW" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Primary}" BorderThickness="0" Margin="0,0,4,0" Padding="0,8"/>
+                        <Button Grid.Column="1" Content="COPY" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Secondary}" BorderThickness="0" Margin="4,0,4,0" Padding="0,8"/>
+                        <Button Grid.Column="2" Content="DEL" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Error}" BorderThickness="0" Margin="4,0,0,0" Padding="0,8"/>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Right Panel: Main Editor Workspace -->
+        <Border Grid.Column="1" Background="#090e1c">
+            <Grid DataContext="{Binding SelectedRecipe}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Recipe Settings Top Section -->
+                <Border Grid.Row="0" Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,0,1" Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="Recipe Settings" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource TextOnSurface}" Margin="0,0,0,16"/>
+                        
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="1.5*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                <TextBlock Text="TARGET CHAMBER TEMP" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                <Border Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBox Text="{Binding TargetChamberTemp}" Background="Transparent" Foreground="{StaticResource Primary}" BorderThickness="0" FontSize="18" FontWeight="Bold" Width="60"/>
+                                        <TextBlock Text="°C" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                            
+                            <StackPanel Grid.Column="1" Margin="0,0,16,0">
+                                <TextBlock Text="TARGET CHAMBER HUMIDITY" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                <Border Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBox Text="{Binding TargetChamberHumidity}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="18" FontWeight="Bold" Width="60"/>
+                                        <TextBlock Text="%RH" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="CAPTURE MODE" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="2">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <!-- Note: using simplistic toggle buttons or regular buttons binding to a command. -->
+                                        <!-- This is just a placeholder look -->
+                                        <Button Grid.Column="0" Content="Sequential" Background="{StaticResource Primary}" Foreground="#002020" BorderThickness="0" FontWeight="Bold" Padding="0,8"/>
+                                        <Button Grid.Column="1" Content="Simultaneous" Background="Transparent" Foreground="{StaticResource TextOnSurfaceVariant}" BorderThickness="0" Padding="0,8"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Steps Scroll Area -->
+                <ScrollViewer Grid.Row="1" Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="STEPS (DRAG TO REORDER)" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,8"/>
+                        
+                        <ItemsControl ItemsSource="{Binding Steps}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
+                                            AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            
+                                            <TextBlock Grid.Column="0" Text="=" FontSize="20" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="0,0,16,0" Cursor="SizeAll"
+                                                       PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown"
+                                                       MouseMove="Step_MouseMove"/>
+                                            
+                                            <Border Grid.Column="1" Background="{StaticResource BgSurface}" BorderBrush="{StaticResource Primary}" BorderThickness="1" CornerRadius="4" Width="40" Height="40" Margin="0,0,16,0">
+                                                <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold"/>
+                                            </Border>
+                                            
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                                <TextBlock Text="NODE ASSIGNMENT" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                                <TextBox Text="{Binding NodeAssignment}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
+                                            </StackPanel>
+                                            
+                                            <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="16,0" Width="120">
+                                                <TextBlock Text="BLACKBODY REF" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                                <Border BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,0,1">
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                        <TextBox Text="{Binding BlackbodyRef, StringFormat={}{0:F1}}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14" FontWeight="Bold" TextAlignment="Right" Width="60"/>
+                                                        <TextBlock Text="°C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Bottom" Margin="4,0,0,2"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+                                            
+                                            <Button Grid.Column="4" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" VerticalAlignment="Center" Margin="8,0,0,0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        
+                        <!-- Add Step Button -->
+                        <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="0,24" Margin="0,16,0,0" Cursor="Hand">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="+" FontSize="20" FontWeight="Bold" Margin="0,0,8,0"/>
+                                <TextBlock Text="ADD NEW RECIPE STEP" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Bottom Bar Actions -->
+                <Border Grid.Row="2" Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,1,0,0" Padding="16">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="8" Height="8" Fill="{StaticResource Secondary}" Margin="0,0,8,0"/>
+                            <TextBlock Text="DB CONNECTION STABLE" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                        </StackPanel>
+                        
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="CANCEL" Background="Transparent" Foreground="{StaticResource TextOnSurfaceVariant}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="24,8" Margin="0,0,16,0" FontWeight="Bold"/>
+                            <Button Content="SAVE RECIPE" Background="{StaticResource Secondary}" Foreground="#00210c" BorderThickness="0" Padding="32,8" FontWeight="Bold"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

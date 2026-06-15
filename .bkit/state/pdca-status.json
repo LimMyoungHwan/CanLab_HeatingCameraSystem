@@ -1,0 +1,84 @@
+{
+  "version": "3.0",
+  "lastUpdated": "2026-06-12T05:44:08.964Z",
+  "activeFeatures": [],
+  "features": {},
+  "primaryFeature": null,
+  "archivedFeatures": {},
+  "pipeline": {
+    "currentPhase": 1,
+    "level": "Starter",
+    "phaseHistory": []
+  },
+  "session": {
+    "startedAt": "2026-06-10T23:54:41.426Z",
+    "lastActivity": "2026-06-12T05:44:08.964Z",
+    "onboardingCompleted": false
+  },
+  "history": [
+    {
+      "timestamp": "2026-06-12T01:25:58.106Z",
+      "action": "session_end",
+      "feature": null,
+      "details": "Session ended"
+    },
+    {
+      "timestamp": "2026-06-12T01:25:58.766Z",
+      "action": "session_end",
+      "feature": null,
+      "details": "Session ended"
+    },
+    {
+      "timestamp": "2026-06-12T01:34:24.522Z",
+      "action": "session_end",
+      "feature": null,
+      "details": "Session ended"
+    },
+    {
+      "timestamp": "2026-06-12T01:34:25.274Z",
+      "action": "session_end",
+      "feature": null,
+      "details": "Session ended"
+    },
+    {
+      "timestamp": "2026-06-12T01:34:26.050Z",
+      "action": "session_end",
+      "feature": null,
+      "details": "Session ended"
+    },
+    {
+      "timestamp": "2026-06-12T05:43:47.840Z",
+      "action": "session_end",
+      "feature": null,
+      "details": "Session ended"
+    },
+    {
+      "timestamp": "2026-06-12T05:43:48.130Z",
+      "action": "session_end",
+      "feature": null,
+      "details": "Session ended"
+    },
+    {
+      "timestamp": "2026-06-12T05:43:48.509Z",
+      "action": "session_end",
+      "feature": null,
+      "details": "Session ended"
+    }
+  ],
+  "stateMachine": {
+    "defaultWorkflow": "default",
+    "activeWorkflows": {},
+    "totalTransitions": 0
+  },
+  "automation": {
+    "globalLevel": 2,
+    "trustScore": 38,
+    "pendingApprovals": 0,
+    "lastGateResult": null
+  },
+  "team": {
+    "enabled": true,
+    "stateFile": ".bkit/runtime/agent-state.json",
+    "eventsFile": ".bkit/runtime/agent-events.jsonl"
+  }
+}

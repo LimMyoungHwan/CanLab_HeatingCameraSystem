@@ -4,59 +4,320 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:HeatingCameraSystem.Master.Views"
+             xmlns:vm="clr-namespace:HeatingCameraSystem.Master.ViewModels"
              mc:Ignorable="d" 
-             d:DesignHeight="600" d:DesignWidth="800" Background="White">
-    <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+             d:DesignHeight="768" d:DesignWidth="1024" Background="#0e1321" Foreground="#dee2f7">
+    
+    <!-- Color resources to match mockup -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <SolidColorBrush x:Key="BgSurface" Color="#0e1321"/>
+        <SolidColorBrush x:Key="BgSurfaceContainer" Color="#1a1f2e"/>
+        <SolidColorBrush x:Key="BgSurfaceVariant" Color="#2f3444"/>
+        <SolidColorBrush x:Key="OutlineVariant" Color="#3b4949"/>
+        <SolidColorBrush x:Key="Outline" Color="#859493"/>
+        <SolidColorBrush x:Key="Primary" Color="#47eaed"/>
+        <SolidColorBrush x:Key="Secondary" Color="#4ae183"/>
+        <SolidColorBrush x:Key="Error" Color="#ffb4ab"/>
+        <SolidColorBrush x:Key="TextOnSurface" Color="#dee2f7"/>
+        <SolidColorBrush x:Key="TextOnSurfaceVariant" Color="#bac9c9"/>
         
-        <!-- Control Panel -->
-        <Border Grid.Row="0" Background="#f1f2f6" CornerRadius="8" Padding="15" Margin="0,0,0,15">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Chamber PV: " FontWeight="Bold" FontSize="16" Foreground="#2f3542"/>
-                    <TextBlock Text="{Binding CurrentTemperature, StringFormat={}{0:F1} °C}" FontSize="16" Margin="0,0,20,0" Foreground="#e15f41"/>
-                    
-                    <TextBlock Text="Humidity PV: " FontWeight="Bold" FontSize="16" Foreground="#2f3542"/>
-                    <TextBlock Text="{Binding CurrentHumidity, StringFormat={}{0:F1} %}" FontSize="16" Foreground="#3dc1d3"/>
-                </StackPanel>
-                
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Status: " FontWeight="Bold" FontSize="16" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <TextBlock Text="{Binding RecipeStatus}" FontSize="16" VerticalAlignment="Center" Margin="0,0,20,0" Foreground="#57606f"/>
-                    
-                    <Button Content="Start Recipe" Command="{Binding StartRecipeCommand}" Background="#20bf6b" Foreground="White" Padding="15,8" BorderThickness="0" Margin="0,0,10,0" FontWeight="Bold"/>
-                    <Button Content="Stop" Command="{Binding StopRecipeCommand}" Background="#eb3b5a" Foreground="White" Padding="15,8" BorderThickness="0" FontWeight="Bold"/>
-                </StackPanel>
-            </Grid>
-        </Border>
+        <Style x:Key="ModeButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextOnSurfaceVariant}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource OutlineVariant}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{StaticResource BgSurfaceVariant}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Path=Tag, RelativeSource={RelativeSource Self}}" Value="1"/>
+                        <Condition Binding="{Binding Path=DataContext.CurrentViewMode, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="1"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Foreground" Value="{StaticResource Primary}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource Primary}"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Path=Tag, RelativeSource={RelativeSource Self}}" Value="2"/>
+                        <Condition Binding="{Binding Path=DataContext.CurrentViewMode, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="2"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Foreground" Value="{StaticResource Primary}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource Primary}"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Path=Tag, RelativeSource={RelativeSource Self}}" Value="3"/>
+                        <Condition Binding="{Binding Path=DataContext.CurrentViewMode, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="3"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Foreground" Value="{StaticResource Primary}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource Primary}"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Path=Tag, RelativeSource={RelativeSource Self}}" Value="4"/>
+                        <Condition Binding="{Binding Path=DataContext.CurrentViewMode, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="4"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Foreground" Value="{StaticResource Primary}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource Primary}"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Path=Tag, RelativeSource={RelativeSource Self}}" Value="5"/>
+                        <Condition Binding="{Binding Path=DataContext.CurrentViewMode, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="5"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Foreground" Value="{StaticResource Primary}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource Primary}"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
 
-        <!-- Camera Feeds -->
-        <ItemsControl Grid.Row="1" ItemsSource="{Binding CameraFeeds}">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <UniformGrid Columns="4"/>
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <Border BorderBrush="#dfe4ea" BorderThickness="1" CornerRadius="4" Margin="5" Background="#ffffff">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="3*"/>
+            <ColumnDefinition Width="1*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left Content Area -->
+        <Grid Grid.Column="0" Margin="0,0,1,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="6*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="4*"/>
+            </Grid.RowDefinitions>
+            
+            <Border Grid.Row="0" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,1,0">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Toolbar -->
+                    <Border Grid.Row="0" Background="#161b2a" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12">
                         <Grid>
-                            <!-- Placeholder for Image -->
-                            <Rectangle Fill="#ced6e0" Margin="10"/>
-                            <TextBlock Text="{Binding}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18" Foreground="#2f3542" FontWeight="SemiBold"/>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <Button Content="Mode 1 (Auto 8)" Style="{StaticResource ModeButtonStyle}" Tag="1" Command="{Binding SetViewModeCommand}" CommandParameter="1"/>
+                                <Button Content="Mode 2 (8)" Style="{StaticResource ModeButtonStyle}" Tag="2" Command="{Binding SetViewModeCommand}" CommandParameter="2"/>
+                                <Button Content="Mode 3 (4)" Style="{StaticResource ModeButtonStyle}" Tag="3" Command="{Binding SetViewModeCommand}" CommandParameter="3"/>
+                                <Button Content="Mode 4 (2)" Style="{StaticResource ModeButtonStyle}" Tag="4" Command="{Binding SetViewModeCommand}" CommandParameter="4"/>
+                                <Button Content="Mode 5 (1)" Style="{StaticResource ModeButtonStyle}" Tag="5" Command="{Binding SetViewModeCommand}" CommandParameter="5"/>
+                            </StackPanel>
+                            
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Ellipse Width="8" Height="8" Fill="{StaticResource Secondary}" Margin="0,0,8,0"/>
+                                <TextBlock Text="1S REFRESH" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" FontWeight="Bold" Margin="0,0,16,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding CurrentPageInfo}" Foreground="{StaticResource TextOnSurface}" FontSize="11" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+                    
+                    <!-- Camera Grid -->
+                    <ItemsControl Grid.Row="1" ItemsSource="{Binding CameraFeeds}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <!-- Uses UniformGrid dynamically based on items count for simplicity, in real app might bind Rows/Columns to ViewMode -->
+                                <UniformGrid />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#090e1c" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="4"
+                                        AllowDrop="True" DragEnter="Slot_DragEnter" Drop="Slot_Drop" PreviewMouseRightButtonDown="Slot_MouseRightButtonDown" ToolTip="Drag camera here to assign (Modes 2-5). Right click to clear.">
+                                    <Grid>
+                                        <!-- Empty State Border -->
+                                        <Border x:Name="EmptyStateBorder" Background="#090e1c" CornerRadius="4">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasCamera}" Value="False">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="Drag Camera Here" Foreground="{StaticResource Outline}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14" FontWeight="SemiBold"/>
+                                        </Border>
+
+                                        <!-- Camera Feed Grid -->
+                                        <Grid x:Name="CameraFeedGrid">
+                                            <Grid.Style>
+                                                <Style TargetType="Grid">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasCamera}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Grid.Style>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <!-- Header -->
+                                            <Border Background="#1a1f2e" Padding="8,4" CornerRadius="4,4,0,0">
+                                                <TextBlock Text="{Binding Camera.Id}" Foreground="{StaticResource TextOnSurface}" FontSize="12" FontWeight="Bold"/>
+                                            </Border>
+                                            <!-- Thermal Image Placeholder -->
+                                            <Border Grid.Row="1" Background="#2f3444" Margin="8" CornerRadius="2">
+                                                <TextBlock Text="No Signal" Foreground="{StaticResource TextOnSurfaceVariant}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <!-- Footer -->
+                                            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,4">
+                                                <TextBlock Text="{Binding Camera.CurrentTemperature, StringFormat={}{0:F1}}" Foreground="{StaticResource Primary}" FontSize="20" FontWeight="Bold"/>
+                                                <TextBlock Text=" °C" Foreground="{StaticResource Primary}" FontSize="12" VerticalAlignment="Bottom" Margin="0,0,0,2"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Border>
+            
+            <Border Grid.Row="1" Height="1" Background="{StaticResource OutlineVariant}"/>
+            
+            <!-- Bottom Chart Section -->
+            <Border Grid.Row="2" Background="#090e1c" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <Grid Grid.Row="0" Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Chamber Temp / Humidity" Foreground="{StaticResource TextOnSurface}" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="0,0,8,0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="12" Height="4" Fill="#ffb4ab" Margin="0,0,8,0"/>
+                                    <TextBlock Text="TEMP " Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,8,0"/>
+                                    <TextBlock Text="{Binding CurrentTemperature, StringFormat={}{0:F1}°C}" Foreground="#ffb4ab" FontSize="14" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8,4">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="12" Height="4" Fill="{StaticResource Primary}" Margin="0,0,8,0"/>
+                                    <TextBlock Text="HUMIDITY " Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,8,0"/>
+                                    <TextBlock Text="{Binding CurrentHumidity, StringFormat={}{0:F1}%RH}" Foreground="{StaticResource Primary}" FontSize="14" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                    
+                    <!-- Chart Placeholder -->
+                    <Border Grid.Row="1" Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4">
+                        <TextBlock Text="Chart Area Placeholder" Foreground="{StaticResource TextOnSurfaceVariant}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Right Sidebar Area -->
+        <Border Grid.Column="1" Background="#161b2a" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1,0,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <!-- Header -->
+                <StackPanel Grid.Row="0" Margin="16">
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock Text="Cameras" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource TextOnSurface}"/>
+                        <TextBlock Text="64 Active Units" FontSize="11" Foreground="{StaticResource Secondary}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+                    <TextBox Background="#090e1c" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}" Padding="8,6" Text="Search devices..."/>
+                </StackPanel>
+                
+                <!-- Camera List -->
+                <ScrollViewer Grid.Row="1" Margin="16,0">
+                    <ItemsControl ItemsSource="{Binding Agents}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Background="#0e1321">
+                                    <StackPanel>
+                                        <Border Background="{StaticResource BgSurfaceVariant}" Padding="8">
+                                            <Grid>
+                                                <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextOnSurface}" FontSize="11" FontWeight="Bold"/>
+                                                <TextBlock Text="{Binding Status}" Foreground="{StaticResource Secondary}" FontSize="11" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                        </Border>
+                                        
+                                        <ItemsControl ItemsSource="{Binding Cameras}" Margin="0,4" Visibility="{Binding IsExpanded, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="Transparent" Padding="4"
+                                                            PreviewMouseLeftButtonDown="CameraItem_PreviewMouseLeftButtonDown"
+                                                            MouseMove="CameraItem_MouseMove"
+                                                            Cursor="Hand" ToolTip="Drag to view feed">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Ellipse Width="8" Height="8" Fill="{StaticResource Secondary}" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Id}" Foreground="{StaticResource TextOnSurface}" FontSize="14" VerticalAlignment="Center"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                
+                <!-- Footer Controls -->
+                <Border Grid.Row="2" Background="#1a1f2e" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,1,0,0" Padding="16">
+                    <StackPanel>
+                        <Button Content="START" Background="{StaticResource Secondary}" Foreground="#00210c" FontSize="20" FontWeight="Bold" Padding="0,12" Margin="0,0,0,8" BorderThickness="0" Command="{Binding StartRecipeCommand}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Content="STOP" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Error}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="0,8" Command="{Binding StopRecipeCommand}"/>
+                            <Button Grid.Column="2" Content="CONFIG" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="0,8"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>
