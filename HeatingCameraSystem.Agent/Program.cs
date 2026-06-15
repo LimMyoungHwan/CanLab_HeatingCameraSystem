@@ -1,8 +1,10 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Agent.Services;
+using HeatingCameraSystem.Core.Config;
 using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Protocols;
 
@@ -12,44 +14,78 @@ namespace HeatingCameraSystem.Agent
     {
         static async Task Main(string[] args)
         {
-            string agentId  = args.Length > 0 ? args[0] : Environment.MachineName;
-            string natsUrl  = args.Length > 1 ? args[1] : "nats://127.0.0.1:4222";
-            string storagePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ImageStorage");
+            var config = LoadOrCreateConfig(args);
+            string storagePath = Path.IsPathRooted(config.StoragePath)
+                ? config.StoragePath
+                : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, config.StoragePath);
 
             using var cameraService = new CameraCaptureService(storagePath);
-            bool cameraReady = cameraService.InitializeCamera(0);
+            bool cameraReady = cameraService.InitializeCamera(config.CameraIndex);
             if (!cameraReady)
-                Console.WriteLine($"[{agentId}] Camera unavailable — capture commands will report failure.");
+                Console.WriteLine($"[{config.AgentId}] Camera {config.CameraIndex} unavailable — capture commands will report failure.");
 
             await using var nats = new NatsCommunicationService();
-            await nats.ConnectAsync(natsUrl);
-            Console.WriteLine($"[{agentId}] Connected to NATS ({natsUrl})");
+            await nats.ConnectAsync(config.NatsUrl);
+            Console.WriteLine($"[{config.AgentId}] Connected to NATS ({config.NatsUrl})");
 
-            await nats.SubscribeCaptureCommandAsync(agentId, cmd =>
+            await nats.SubscribeCaptureCommandAsync(config.AgentId, cmd =>
             {
-                _ = HandleCaptureAsync(cmd, cameraService, nats, agentId);
+                _ = HandleCaptureAsync(cmd, cameraService, nats, config.AgentId);
             });
 
             using var heartbeat = new Timer(async _ =>
             {
                 await nats.PublishAgentStatusAsync(new AgentStatusMessage
                 {
-                    AgentId = agentId,
-                    CameraIndex = 0,
+                    AgentId = config.AgentId,
+                    CameraIndex = config.CameraIndex,
                     IsCameraReady = cameraReady,
                     Timestamp = DateTime.UtcNow
                 });
-            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(config.HeartbeatIntervalSeconds));
 
-            Console.WriteLine($"[{agentId}] Agent running. Press Ctrl+C to stop.");
+            Console.WriteLine($"[{config.AgentId}] Agent running. Press Ctrl+C to stop.");
 
             var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
             await Task.Delay(Timeout.Infinite, cts.Token).ContinueWith(_ => { });
 
-            Console.WriteLine($"[{agentId}] Shutting down.");
+            Console.WriteLine($"[{config.AgentId}] Shutting down.");
             cameraService.Stop();
+        }
+
+        private static AgentConfig LoadOrCreateConfig(string[] args)
+        {
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "agent.json");
+            var opts = new JsonSerializerOptions { WriteIndented = true };
+            AgentConfig config;
+
+            if (File.Exists(path))
+            {
+                try
+                {
+                    config = JsonSerializer.Deserialize<AgentConfig>(File.ReadAllText(path), opts) ?? new AgentConfig();
+                }
+                catch
+                {
+                    config = new AgentConfig();
+                }
+            }
+            else
+            {
+                config = new AgentConfig { AgentId = Environment.MachineName };
+                File.WriteAllText(path, JsonSerializer.Serialize(config, opts));
+                Console.WriteLine($"Created default agent.json at {path}");
+            }
+
+            if (string.IsNullOrWhiteSpace(config.AgentId))
+                config.AgentId = Environment.MachineName;
+
+            if (args.Length > 0) config.AgentId = args[0];
+            if (args.Length > 1) config.NatsUrl = args[1];
+
+            return config;
         }
 
         private static async Task HandleCaptureAsync(
