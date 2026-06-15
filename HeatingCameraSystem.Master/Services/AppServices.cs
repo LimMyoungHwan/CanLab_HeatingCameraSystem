@@ -21,7 +21,9 @@ namespace HeatingCameraSystem.Master.Services
         public static ICaptureHistoryRepository HistoryRepo { get; private set; } = null!;
         public static NatsCommunicationService? NatsService { get; private set; }
         public static PlcModbusClient? PlcController { get; private set; }
+        public static ISerialShutterController? ShutterController { get; private set; }
         public static RecipeEngine? RecipeEngine { get; private set; }
+        public static ConnectionMonitorService? ConnectionMonitor { get; private set; }
 
         public static void Initialize()
         {
@@ -39,7 +41,10 @@ namespace HeatingCameraSystem.Master.Services
 
             NatsService = new NatsCommunicationService();
             PlcController = new PlcModbusClient(Settings.Plc);
+            ShutterController = new SerialShutterController(Settings.Serial);
             RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo);
+            ConnectionMonitor = new ConnectionMonitorService(PlcController, ShutterController, Settings);
+            ConnectionMonitor.Start();
         }
 
         public static async Task TryConnectServicesAsync()
@@ -67,6 +72,8 @@ namespace HeatingCameraSystem.Master.Services
 
         public static async Task DisposeAsync()
         {
+            ConnectionMonitor?.Dispose();
+            ShutterController?.Dispose();
             if (NatsService != null) await NatsService.DisposeAsync();
             PlcController?.Dispose();
             Db?.Dispose();

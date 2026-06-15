@@ -13,6 +13,8 @@ namespace HeatingCameraSystem.Protocols
         private bool _isConnected;
         private readonly PlcSettings _s;
 
+        public bool IsConnected => _isConnected;
+
         public PlcModbusClient(PlcSettings? settings = null)
         {
             _s = settings ?? new PlcSettings();

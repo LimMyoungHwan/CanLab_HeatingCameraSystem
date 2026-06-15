@@ -4,6 +4,7 @@ namespace HeatingCameraSystem.Core.Interfaces
 {
     public interface IPlcController
     {
+        bool IsConnected { get; }
         Task ConnectAsync(string ipAddress, int port = 502);
         void Disconnect();
 

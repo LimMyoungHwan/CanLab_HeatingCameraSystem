@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
@@ -67,6 +68,10 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public ObservableCollection<DashboardSlot> CameraFeeds { get; } = new ObservableCollection<DashboardSlot>();
         public ObservableCollection<AgentNode> Agents { get; } = new ObservableCollection<AgentNode>();
+        public ObservableCollection<Recipe> Recipes { get; } = new ObservableCollection<Recipe>();
+
+        [ObservableProperty]
+        private Recipe? _selectedRecipe;
 
         private readonly List<CameraNode?> _mode2Assignments = new();
         private readonly List<CameraNode?> _mode3Assignments = new();
@@ -110,11 +115,23 @@ namespace HeatingCameraSystem.Master.ViewModels
                 _mode5Assignments.Add(i < allCameras.Count ? allCameras[i] : null);
             
             LoadCameraFeeds();
+            LoadRecipes();
 
             _plcPollTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             _plcPollTimer.Tick += async (_, _) => await PollPlcAsync();
             _plcPollTimer.Start();
         }
+
+        private void LoadRecipes()
+        {
+            Recipes.Clear();
+            foreach (var r in AppServices.RecipeRepo.GetAllAsync().GetAwaiter().GetResult())
+                Recipes.Add(r);
+            SelectedRecipe = Recipes.FirstOrDefault();
+        }
+
+        [RelayCommand]
+        private void RefreshRecipes() => LoadRecipes();
 
         private async Task PollPlcAsync()
         {
@@ -246,16 +263,15 @@ namespace HeatingCameraSystem.Master.ViewModels
         private async Task StartRecipeAsync()
         {
             if (AppServices.RecipeEngine == null) { RecipeStatus = "서비스 미초기화"; return; }
-            var recipes = (await AppServices.RecipeRepo.GetAllAsync()).ToList();
-            if (recipes.Count == 0) { RecipeStatus = "레시피 없음"; return; }
+            if (SelectedRecipe == null) { RecipeStatus = "레시피 선택 필요"; return; }
 
             _recipeCts?.Cancel();
             _recipeCts = new CancellationTokenSource();
-            RecipeStatus = "실행 중...";
+            RecipeStatus = $"실행 중: {SelectedRecipe.Name}";
 
             try
             {
-                await AppServices.RecipeEngine.ExecuteRecipeAsync(recipes[0], _recipeCts.Token);
+                await AppServices.RecipeEngine.ExecuteRecipeAsync(SelectedRecipe, _recipeCts.Token);
                 RecipeStatus = "완료";
             }
             catch (OperationCanceledException)

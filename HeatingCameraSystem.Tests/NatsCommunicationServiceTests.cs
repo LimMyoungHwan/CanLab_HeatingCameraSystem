@@ -37,7 +37,7 @@ namespace HeatingCameraSystem.Tests
         {
             // Arrange
             var mockService = new Mock<INatsCommunicationService>();
-            AgentStatusMessage receivedMessage = null;
+            AgentStatusMessage? receivedMessage = null;
             var testMessage = new AgentStatusMessage { AgentId = "Agent01", IsCameraReady = true };
 
             mockService.Setup(s => s.SubscribeAgentStatusAsync(It.IsAny<Action<AgentStatusMessage>>()))
