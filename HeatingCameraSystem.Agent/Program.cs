@@ -1,58 +1,73 @@
 using System;
 using System.IO;
-using OpenCvSharp;
+using System.Threading;
+using System.Threading.Tasks;
+using HeatingCameraSystem.Agent.Services;
+using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Protocols;
 
 namespace HeatingCameraSystem.Agent
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-            Console.WriteLine("Initializing Heating Camera Agent (Phase 1)...");
-
+            string agentId  = args.Length > 0 ? args[0] : Environment.MachineName;
+            string natsUrl  = args.Length > 1 ? args[1] : "nats://127.0.0.1:4222";
             string storagePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ImageStorage");
-            using var cameraService = new HeatingCameraSystem.Agent.Services.CameraCaptureService(storagePath);
 
-            // Open default camera (index 0)
-            if (!cameraService.InitializeCamera(0))
+            using var cameraService = new CameraCaptureService(storagePath);
+            bool cameraReady = cameraService.InitializeCamera(0);
+            if (!cameraReady)
+                Console.WriteLine($"[{agentId}] Camera unavailable — capture commands will report failure.");
+
+            await using var nats = new NatsCommunicationService();
+            await nats.ConnectAsync(natsUrl);
+            Console.WriteLine($"[{agentId}] Connected to NATS ({natsUrl})");
+
+            await nats.SubscribeCaptureCommandAsync(agentId, cmd =>
             {
-                Console.WriteLine("Error: Cannot open the camera.");
-                return;
-            }
+                _ = HandleCaptureAsync(cmd, cameraService, nats, agentId);
+            });
 
-            Console.WriteLine($"Camera opened successfully.");
-            Console.WriteLine($"Saving images to: {storagePath}");
-            Console.WriteLine("Press 'Q' or 'ESC' to stop capture.");
-
-            int frameCount = 0;
-            using var window = new Window("Camera Feed", WindowFlags.AutoSize);
-
-            while (true)
+            using var heartbeat = new Timer(async _ =>
             {
-                if (!cameraService.CaptureFrame(out string savedFilePath))
+                await nats.PublishAgentStatusAsync(new AgentStatusMessage
                 {
-                    Console.WriteLine("Warning: Failed to capture or empty frame grabbed.");
-                    break;
-                }
+                    AgentId = agentId,
+                    CameraIndex = 0,
+                    IsCameraReady = cameraReady,
+                    Timestamp = DateTime.UtcNow
+                });
+            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
 
-                // Show frame
-                using var frame = new Mat(savedFilePath);
-                if (!frame.Empty())
-                {
-                    window.ShowImage(frame);
-                }
-                frameCount++;
+            Console.WriteLine($"[{agentId}] Agent running. Press Ctrl+C to stop.");
 
-                // Sleep for a short while (e.g., 1000ms for 1 fps as per 1초 간격 업데이트 요구사항 in spec)
-                int key = Cv2.WaitKey(1000); 
-                
-                if (key == 27 || key == 'q' || key == 'Q') // ESC or Q
-                {
-                    break;
-                }
-            }
+            var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-            Console.WriteLine($"Capture stopped. Total frames saved: {frameCount}");
+            await Task.Delay(Timeout.Infinite, cts.Token).ContinueWith(_ => { });
+
+            Console.WriteLine($"[{agentId}] Shutting down.");
+            cameraService.Stop();
+        }
+
+        private static async Task HandleCaptureAsync(
+            CaptureCommandMessage cmd,
+            CameraCaptureService camera,
+            NatsCommunicationService nats,
+            string agentId)
+        {
+            bool success = camera.CaptureFrame(out string savedPath);
+            await nats.PublishCaptureResultAsync(new CaptureResultMessage
+            {
+                AgentId      = agentId,
+                RecipeStepId = cmd.RecipeStepId,
+                IsSuccess    = success,
+                ImagePath    = savedPath,
+                Timestamp    = DateTime.UtcNow
+            });
+            Console.WriteLine($"[{agentId}] Step {cmd.RecipeStepId}: {(success ? "OK" : "FAIL")} -> {savedPath}");
         }
     }
 }

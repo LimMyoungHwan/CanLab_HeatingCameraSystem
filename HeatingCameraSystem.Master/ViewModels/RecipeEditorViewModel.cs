@@ -1,43 +1,35 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
     public partial class RecipeStepModel : ObservableObject
     {
-        [ObservableProperty]
-        private int _stepNumber;
+        [ObservableProperty] private int _stepNumber;
+        [ObservableProperty] private string _nodeAssignment = string.Empty;
+        [ObservableProperty] private float _blackbodyRef;
 
-        [ObservableProperty]
-        private string _nodeAssignment = string.Empty;
-
-        [ObservableProperty]
-        private float _blackbodyRef;
+        public int CameraIndex { get; set; }
+        public int TargetPositionIndex { get; set; }
     }
 
     public partial class RecipeModel : ObservableObject
     {
-        [ObservableProperty]
-        private string _name = string.Empty;
+        public string Id { get; set; } = Guid.NewGuid().ToString();
 
-        [ObservableProperty]
-        private bool _isSelected;
+        [ObservableProperty] private string _name = string.Empty;
+        [ObservableProperty] private bool _isSelected;
+        [ObservableProperty] private string _lastModified = string.Empty;
+        [ObservableProperty] private float _targetChamberTemp;
+        [ObservableProperty] private float _targetChamberHumidity;
+        [ObservableProperty] private bool _isSequentialMode = true;
 
-        [ObservableProperty]
-        private string _lastModified = string.Empty;
-
-        [ObservableProperty]
-        private float _targetChamberTemp;
-
-        [ObservableProperty]
-        private float _targetChamberHumidity;
-
-        [ObservableProperty]
-        private bool _isSequentialMode = true;
-
-        public ObservableCollection<RecipeStepModel> Steps { get; } = new ObservableCollection<RecipeStepModel>();
+        public ObservableCollection<RecipeStepModel> Steps { get; } = new();
     }
 
     public partial class RecipeEditorViewModel : ObservableObject
@@ -49,78 +41,83 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public RecipeEditorViewModel()
         {
-            // Dummy Data
-            var recipeA = new RecipeModel { Name = "Recipe A - 45C", LastModified = "12m ago", TargetChamberTemp = 45.0f, TargetChamberHumidity = 40.0f };
-            recipeA.Steps.Add(new RecipeStepModel { StepNumber = 1, NodeAssignment = "Position 12 -> CAM-12", BlackbodyRef = 45.0f });
-            recipeA.Steps.Add(new RecipeStepModel { StepNumber = 2, NodeAssignment = "Position 08 -> CAM-08", BlackbodyRef = 45.2f });
-            recipeA.Steps.Add(new RecipeStepModel { StepNumber = 3, NodeAssignment = "Position 24 -> CAM-24", BlackbodyRef = 44.9f });
-            recipeA.Steps.Add(new RecipeStepModel { StepNumber = 4, NodeAssignment = "Position 15 -> CAM-15", BlackbodyRef = 45.0f });
+            foreach (var r in AppServices.RecipeRepo.GetAllAsync().GetAwaiter().GetResult())
+                Recipes.Add(FromDomain(r));
 
-            var recipeB = new RecipeModel { Name = "Recipe B - 60C", LastModified = "4h ago" };
-            var recipeC = new RecipeModel { Name = "Recipe C - High Temp Sweep", LastModified = "2d ago" };
-
-            Recipes.Add(recipeA);
-            Recipes.Add(recipeB);
-            Recipes.Add(recipeC);
-
-            SelectRecipe(recipeA);
+            if (Recipes.Count > 0)
+                SelectRecipe(Recipes[0]);
         }
 
         [RelayCommand]
         private void SelectRecipe(RecipeModel recipe)
         {
-            if (SelectedRecipe != null)
-                SelectedRecipe.IsSelected = false;
-            
+            if (SelectedRecipe != null) SelectedRecipe.IsSelected = false;
             SelectedRecipe = recipe;
-            
-            if (SelectedRecipe != null)
-                SelectedRecipe.IsSelected = true;
+            if (SelectedRecipe != null) SelectedRecipe.IsSelected = true;
+        }
+
+        [RelayCommand]
+        private void AddRecipe()
+        {
+            var vm = new RecipeModel { Name = "New Recipe", LastModified = DateTime.Now.ToString("g"), TargetChamberTemp = 25.0f, TargetChamberHumidity = 50.0f };
+            Recipes.Add(vm);
+            AppServices.RecipeRepo.SaveAsync(ToDomain(vm)).GetAwaiter().GetResult();
+            SelectRecipe(vm);
+        }
+
+        [RelayCommand]
+        private void SaveRecipe()
+        {
+            if (SelectedRecipe == null) return;
+            SelectedRecipe.LastModified = DateTime.Now.ToString("g");
+            AppServices.RecipeRepo.SaveAsync(ToDomain(SelectedRecipe)).GetAwaiter().GetResult();
+        }
+
+        [RelayCommand]
+        private void DeleteRecipe(RecipeModel recipe)
+        {
+            if (recipe == null) return;
+            AppServices.RecipeRepo.DeleteAsync(recipe.Id).GetAwaiter().GetResult();
+            Recipes.Remove(recipe);
+            if (SelectedRecipe == recipe)
+                SelectedRecipe = Recipes.FirstOrDefault();
         }
 
         [RelayCommand]
         private void AddStep()
         {
-            if (SelectedRecipe != null)
+            if (SelectedRecipe == null) return;
+            int n = SelectedRecipe.Steps.Count + 1;
+            SelectedRecipe.Steps.Add(new RecipeStepModel
             {
-                int nextStepNum = SelectedRecipe.Steps.Count + 1;
-                SelectedRecipe.Steps.Add(new RecipeStepModel { StepNumber = nextStepNum, NodeAssignment = "New Position -> CAM-XX", BlackbodyRef = 25.0f });
-            }
+                StepNumber = n,
+                NodeAssignment = $"Position {n:D2} -> CAM-{n:D2}",
+                CameraIndex = n,
+                TargetPositionIndex = n,
+                BlackbodyRef = 25.0f
+            });
         }
 
         [RelayCommand]
         private void DeleteStep(RecipeStepModel step)
         {
-            if (SelectedRecipe != null && step != null)
-            {
-                SelectedRecipe.Steps.Remove(step);
-                // Re-number steps
-                for(int i = 0; i < SelectedRecipe.Steps.Count; i++)
-                {
-                    SelectedRecipe.Steps[i].StepNumber = i + 1;
-                }
-            }
+            if (SelectedRecipe == null || step == null) return;
+            SelectedRecipe.Steps.Remove(step);
+            for (int i = 0; i < SelectedRecipe.Steps.Count; i++)
+                SelectedRecipe.Steps[i].StepNumber = i + 1;
         }
 
         [RelayCommand]
         private void MoveStep(Tuple<RecipeStepModel, RecipeStepModel> param)
         {
             if (param == null || SelectedRecipe == null) return;
-            var source = param.Item1;
-            var target = param.Item2;
-
-            int oldIndex = SelectedRecipe.Steps.IndexOf(source);
-            int newIndex = SelectedRecipe.Steps.IndexOf(target);
-
-            if (oldIndex >= 0 && newIndex >= 0 && oldIndex != newIndex)
+            int oldIdx = SelectedRecipe.Steps.IndexOf(param.Item1);
+            int newIdx = SelectedRecipe.Steps.IndexOf(param.Item2);
+            if (oldIdx >= 0 && newIdx >= 0 && oldIdx != newIdx)
             {
-                SelectedRecipe.Steps.Move(oldIndex, newIndex);
-                
-                // Re-number steps
+                SelectedRecipe.Steps.Move(oldIdx, newIdx);
                 for (int i = 0; i < SelectedRecipe.Steps.Count; i++)
-                {
                     SelectedRecipe.Steps[i].StepNumber = i + 1;
-                }
             }
         }
 
@@ -128,9 +125,48 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void SetCaptureMode(string mode)
         {
             if (SelectedRecipe != null)
-            {
                 SelectedRecipe.IsSequentialMode = mode == "Sequential";
-            }
+        }
+
+        private static Recipe ToDomain(RecipeModel vm)
+        {
+            var r = new Recipe { Id = vm.Id, Name = vm.Name, GlobalTargetTemperature = vm.TargetChamberTemp, GlobalTargetHumidity = vm.TargetChamberHumidity };
+            foreach (var s in vm.Steps)
+                r.Steps.Add(new RecipeStep
+                {
+                    CameraIndex = s.CameraIndex > 0 ? s.CameraIndex : ParseCameraIndex(s.NodeAssignment),
+                    TargetPositionIndex = s.TargetPositionIndex > 0 ? s.TargetPositionIndex : ParsePositionIndex(s.NodeAssignment),
+                    TargetBlackBodyTemperature = s.BlackbodyRef
+                });
+            return r;
+        }
+
+        private static RecipeModel FromDomain(Recipe r)
+        {
+            var vm = new RecipeModel { Id = r.Id, Name = r.Name, TargetChamberTemp = r.GlobalTargetTemperature, TargetChamberHumidity = r.GlobalTargetHumidity, LastModified = DateTime.Now.ToString("g") };
+            int n = 1;
+            foreach (var s in r.Steps)
+                vm.Steps.Add(new RecipeStepModel
+                {
+                    StepNumber = n++,
+                    NodeAssignment = $"Position {s.TargetPositionIndex:D2} -> CAM-{s.CameraIndex:D2}",
+                    CameraIndex = s.CameraIndex,
+                    TargetPositionIndex = s.TargetPositionIndex,
+                    BlackbodyRef = s.TargetBlackBodyTemperature
+                });
+            return vm;
+        }
+
+        private static int ParseCameraIndex(string s)
+        {
+            try { var p = s.Split(new[] { "-> CAM-" }, StringSplitOptions.None); if (p.Length > 1 && int.TryParse(p[1].Trim(), out int v)) return v; } catch { }
+            return 1;
+        }
+
+        private static int ParsePositionIndex(string s)
+        {
+            try { var p = s.Replace("Position ", "").Split(new[] { " ->" }, StringSplitOptions.None); if (p.Length > 0 && int.TryParse(p[0].Trim(), out int v)) return v; } catch { }
+            return 1;
         }
     }
 }

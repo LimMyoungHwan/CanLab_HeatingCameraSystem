@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
@@ -72,6 +75,8 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private System.Windows.Threading.DispatcherTimer? _autoCycleTimer;
         private int _currentPageIndex = 0;
+        private CancellationTokenSource? _recipeCts;
+        private System.Windows.Threading.DispatcherTimer? _plcPollTimer;
 
         public DashboardViewModel()
         {
@@ -105,8 +110,26 @@ namespace HeatingCameraSystem.Master.ViewModels
                 _mode5Assignments.Add(i < allCameras.Count ? allCameras[i] : null);
             
             LoadCameraFeeds();
+
+            _plcPollTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _plcPollTimer.Tick += async (_, _) => await PollPlcAsync();
+            _plcPollTimer.Start();
         }
-        
+
+        private async Task PollPlcAsync()
+        {
+            if (AppServices.PlcController == null) return;
+            try
+            {
+                CurrentTemperature = await AppServices.PlcController.GetCurrentTemperatureAsync();
+                CurrentHumidity = await AppServices.PlcController.GetCurrentHumidityAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Dashboard] PLC poll failed: {ex.Message}");
+            }
+        }
+
         private void LoadCameraFeeds()
         {
             if (CurrentViewMode == 1)
@@ -220,15 +243,36 @@ namespace HeatingCameraSystem.Master.ViewModels
         }
 
         [RelayCommand]
-        private void StartRecipe()
+        private async Task StartRecipeAsync()
         {
+            if (AppServices.RecipeEngine == null) { RecipeStatus = "서비스 미초기화"; return; }
+            var recipes = (await AppServices.RecipeRepo.GetAllAsync()).ToList();
+            if (recipes.Count == 0) { RecipeStatus = "레시피 없음"; return; }
+
+            _recipeCts?.Cancel();
+            _recipeCts = new CancellationTokenSource();
             RecipeStatus = "실행 중...";
+
+            try
+            {
+                await AppServices.RecipeEngine.ExecuteRecipeAsync(recipes[0], _recipeCts.Token);
+                RecipeStatus = "완료";
+            }
+            catch (OperationCanceledException)
+            {
+                RecipeStatus = "중지됨";
+            }
+            catch (Exception ex)
+            {
+                RecipeStatus = $"오류: {ex.Message}";
+            }
         }
 
         [RelayCommand]
         private void StopRecipe()
         {
-            RecipeStatus = "정지됨";
+            _recipeCts?.Cancel();
+            RecipeStatus = "중지 중...";
         }
 
         [RelayCommand]
@@ -238,10 +282,8 @@ namespace HeatingCameraSystem.Master.ViewModels
             var camera = param.Item1;
             var slot = param.Item2;
 
-            // Update the slot property
             slot.Camera = camera;
 
-            // Also update the persistent list for the current mode
             var currentAssignments = GetAssignmentsForMode(CurrentViewMode);
             if (slot.Index >= 0 && slot.Index < currentAssignments.Count)
             {

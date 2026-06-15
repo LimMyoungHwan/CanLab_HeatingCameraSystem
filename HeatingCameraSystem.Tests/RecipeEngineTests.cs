@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,16 +15,34 @@ namespace HeatingCameraSystem.Tests
         [Fact]
         public async Task ExecuteRecipeAsync_ShouldRunAllStepsAndCallPlc()
         {
-            // Arrange
-            var mockPlc = new Mock<IPlcController>();
-            var mockNats = new Mock<INatsCommunicationService>();
+            var mockPlc     = new Mock<IPlcController>();
+            var mockNats    = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
 
-            // Setup PLC to return true/expected values instantly
             mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
             mockPlc.Setup(p => p.IsServoAtPositionAsync()).ReturnsAsync(true);
             mockPlc.Setup(p => p.GetCurrentBlackBodyTemperatureAsync(It.IsAny<int>())).ReturnsAsync(30.0f);
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
 
-            var engine = new RecipeEngine(mockPlc.Object, mockNats.Object);
+            Action<CaptureResultMessage>? resultCb = null;
+            mockNats
+                .Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>()))
+                .Callback<Action<CaptureResultMessage>>(cb => resultCb = cb)
+                .Returns(Task.CompletedTask);
+
+            mockNats
+                .Setup(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()))
+                .Callback<CaptureCommandMessage>(cmd => resultCb?.Invoke(new CaptureResultMessage
+                {
+                    AgentId      = "Agent_1",
+                    RecipeStepId = cmd.RecipeStepId,
+                    IsSuccess    = true,
+                    ImagePath    = "/test/image.jpg",
+                    Timestamp    = DateTime.UtcNow
+                }))
+                .Returns(Task.CompletedTask);
+
+            var engine = new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object);
 
             var recipe = new Recipe
             {
@@ -36,21 +55,13 @@ namespace HeatingCameraSystem.Tests
                 }
             };
 
-            // Act
             await engine.ExecuteRecipeAsync(recipe, CancellationToken.None);
 
-            // Assert
-            // Verify chamber start
             mockPlc.Verify(p => p.StartChamberAsync(), Times.Once);
             mockPlc.Verify(p => p.SetTargetTemperatureAsync(25.0f), Times.Once);
-
-            // Verify servo movement
             mockPlc.Verify(p => p.MoveServoToPositionAsync(5), Times.Once);
-
-            // Verify NATS capture command sent
             mockNats.Verify(n => n.PublishCaptureCommandAsync(It.Is<CaptureCommandMessage>(m => m.TargetAgentId == "Agent_1")), Times.Once);
-
-            // Verify chamber stop
+            mockHistory.Verify(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>()), Times.Once);
             mockPlc.Verify(p => p.StopChamberAsync(), Times.Once);
         }
     }

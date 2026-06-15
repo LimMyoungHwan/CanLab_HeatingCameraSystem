@@ -1,8 +1,9 @@
-using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
@@ -104,22 +105,14 @@ namespace HeatingCameraSystem.Master.ViewModels
                 AvailableAgents.Add(agent);
             }
 
-            // 3. Populate default mock assignments (48 slots assigned randomly to match mockup)
-            var random = new Random(42); // Seeded for consistency
-            var allCameras = AvailableAgents.SelectMany(a => a.Cameras).ToList();
-            var shuffledCameras = allCameras.OrderBy(c => random.Next()).ToList();
-            
-            // Assign 48 cameras
-            int assignCount = 48;
-            var slotsToAssign = Slots.OrderBy(s => random.Next()).Take(assignCount).ToList();
-
-            for (int i = 0; i < assignCount; i++)
+            var saved = AppServices.MappingRepo.GetAllAsync().GetAwaiter().GetResult().ToList();
+            foreach (var m in saved.Where(m => m.CameraId != null))
             {
-                var cam = shuffledCameras[i];
-                var slot = slotsToAssign[i];
-
-                slot.CameraId = cam.Id;
-                cam.IsAssigned = true;
+                var slot = Slots.FirstOrDefault(s => s.PositionId == m.SlotId);
+                if (slot == null) continue;
+                slot.CameraId = m.CameraId;
+                var cam = AvailableAgents.SelectMany(a => a.Cameras).FirstOrDefault(c => c.Id == m.CameraId);
+                if (cam != null) cam.IsAssigned = true;
             }
 
             UpdateAssignedCount();
@@ -152,8 +145,8 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand]
         private void SaveMapping()
         {
-            // Placeholder: Save logic
-            System.Diagnostics.Debug.WriteLine("Mapping configuration saved successfully.");
+            var mappings = Slots.Select(s => new CameraMappingConfig { SlotId = s.PositionId, CameraId = s.CameraId });
+            AppServices.MappingRepo.SaveAllAsync(mappings).GetAwaiter().GetResult();
         }
 
         [RelayCommand]

@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
@@ -21,7 +23,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private float _humidity;
 
         [ObservableProperty]
-        private string _thumbnailUrl = string.Empty; // In real app, local path or URL
+        private string _thumbnailUrl = string.Empty;
     }
 
     public partial class HistoryViewModel : ObservableObject
@@ -89,87 +91,54 @@ namespace HeatingCameraSystem.Master.ViewModels
         private string _versionText = "V2.4.1 Build 9022";
 
         public ObservableCollection<HistoryLogItem> LogItems { get; } = new ObservableCollection<HistoryLogItem>();
-        private List<HistoryLogItem> _allMockLogs = new List<HistoryLogItem>();
 
         public HistoryViewModel()
         {
-            // Default Filter dates
             FromDateTime = DateTime.Today.AddDays(-2);
             ToDateTime = DateTime.Today.AddDays(1).AddSeconds(-1);
-
-            GenerateMockData();
             LoadPage();
-        }
-
-        private void GenerateMockData()
-        {
-            var random = new Random(100);
-            var now = DateTime.Now;
-
-            // Generate 1248 logs
-            for (int i = 0; i < 1248; i++)
-            {
-                int camNum = random.Next(1, 65);
-                float temp = 25.0f + (float)random.NextDouble() * 25.0f; // 25 to 50
-                float humidity = 35.0f + (float)random.NextDouble() * 15.0f; // 35 to 50
-
-                // HTML Mockup uses 2 static test image urls
-                string imgUrl = camNum % 2 == 0 
-                    ? "https://lh3.googleusercontent.com/aida/AP1WRLsqVbcuiVRcKBpaI85kWS4D5Me5-Cvd77EZzkSjNNeb0GuMwUSA0dmAbXUo6w8YQIbEyJgD6oAPSvn-vDnKB2Uq1fUCvBJQwYZYZjERKwvuYTKqThqBVVmVxro41fwZy3Iu1k64vBm9eqyjCicV8CcP_uyhTNsO35JlbSRSbAxPGPimBLxD5kwIYFr27MNVJ6AD0wsA_GQiqW748dRKodERWh8cpVlWvK-JT19iqLiW_lNlDRVxc97znRsS"
-                    : "https://lh3.googleusercontent.com/aida/AP1WRLvOi1m9ukqQco9BgJcjhlTTmqfHz0vo-NmooxNMh9sv1GkTX9ZUdzIZZPxeI4r9PSYyDdznya_WUkz0HTgHZLtKMJZU-mHzJtF3A8SpLl_Gry0FLDntzN4556t9WA54RF000N7JYQeeAL7zhPqGmooQlqM-yl6jSxFfzbvnqrt13uc-5i8I57sAauEXGCLL0Z_S2_ZvJgSFbHn73BMGtQIy2AX7MaIMHJ4ogs0fAiBnSDpKNs_g2oXu0YYf";
-
-                _allMockLogs.Add(new HistoryLogItem
-                {
-                    Timestamp = now.AddMinutes(-5 * i),
-                    CameraId = $"CAM-{camNum:D2}",
-                    Temperature = temp,
-                    Humidity = humidity,
-                    ThumbnailUrl = imgUrl
-                });
-            }
         }
 
         private void LoadPage()
         {
             LogItems.Clear();
 
-            // Filter
-            var filtered = _allMockLogs.AsEnumerable();
+            var allRecords = AppServices.HistoryRepo
+                .QueryAsync(FromDateTime, ToDateTime, null, 1, int.MaxValue)
+                .GetAwaiter().GetResult()
+                .ToList();
 
-            // Apply Group Filter
             if (SelectedCameraGroup != "All Units")
             {
-                int minCam = 1;
-                int maxCam = 64;
-                if (SelectedCameraGroup.Contains("Agent-PC-01")) { minCam = 1; maxCam = 16; }
-                else if (SelectedCameraGroup.Contains("Agent-PC-02")) { minCam = 17; maxCam = 32; }
-                else if (SelectedCameraGroup.Contains("Agent-PC-03")) { minCam = 33; maxCam = 64; }
+                int min = 1, max = 64;
+                if (SelectedCameraGroup.Contains("Agent-PC-01")) { min = 1; max = 16; }
+                else if (SelectedCameraGroup.Contains("Agent-PC-02")) { min = 17; max = 32; }
+                else if (SelectedCameraGroup.Contains("Agent-PC-03")) { min = 33; max = 64; }
 
-                filtered = filtered.Where(log =>
+                allRecords = allRecords.Where(r =>
                 {
-                    if (int.TryParse(log.CameraId.Replace("CAM-", ""), out int num))
-                    {
-                        return num >= minCam && num <= maxCam;
-                    }
+                    if (int.TryParse(r.CameraId.Replace("CAM-", ""), out int n))
+                        return n >= min && n <= max;
                     return false;
-                });
+                }).ToList();
             }
 
-            // Apply Date Filter
-            filtered = filtered.Where(log => log.Timestamp >= FromDateTime && log.Timestamp <= ToDateTime);
-
-            var list = filtered.ToList();
-            TotalRecords = list.Count;
+            TotalRecords = allRecords.Count;
             TotalPages = (int)Math.Ceiling((double)TotalRecords / PageSize);
             if (TotalPages == 0) TotalPages = 1;
-
             if (CurrentPage > TotalPages) CurrentPage = TotalPages;
             if (CurrentPage < 1) CurrentPage = 1;
 
-            var pageItems = list.Skip((CurrentPage - 1) * PageSize).Take(PageSize);
-            foreach (var item in pageItems)
+            foreach (var r in allRecords.Skip((CurrentPage - 1) * PageSize).Take(PageSize))
             {
-                LogItems.Add(item);
+                LogItems.Add(new HistoryLogItem
+                {
+                    Timestamp = r.Timestamp,
+                    CameraId = r.CameraId,
+                    Temperature = r.Temperature,
+                    Humidity = r.Humidity,
+                    ThumbnailUrl = r.ImagePath
+                });
             }
         }
 
@@ -224,7 +193,6 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void EmergencyStop()
         {
             SystemStatusText = "System Status: EMERGENCY STOPPED";
-            // Set all background to warning in real system
         }
     }
 }
