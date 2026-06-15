@@ -1,0 +1,33 @@
+{
+  "Plc": {
+    "IpAddress": "10.0.1.50",
+    "Port": 502,
+    "UnitId": 1,
+    "RegTempPv": 4096,
+    "RegTempSv": 4097,
+    "RegHumPv": 4098,
+    "RegHumSv": 4099,
+    "RegServoPosSv": 4100,
+    "RegBb1TempSv": 4101,
+    "RegBb2TempSv": 4102,
+    "RegBb1TempPv": 4103,
+    "RegBb2TempPv": 4104,
+    "CoilRunStop": 256,
+    "CoilServoArrival": 257,
+    "CoilEStop": 258
+  },
+  "Nats": {
+    "Url": "nats://master.local:4222"
+  },
+  "Serial": {
+    "PortName": "COM5",
+    "BaudRate": 19200,
+    "DataBits": 8,
+    "Parity": "Even",
+    "StopBits": "One"
+  },
+  "RecipeEngine": {
+    "TemperatureTolerance": 0.3,
+    "CaptureResultTimeoutSeconds": 45
+  }
+}

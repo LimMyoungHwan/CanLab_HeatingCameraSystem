@@ -1,0 +1,7 @@
+{
+  "AgentId": "Agent_FloorA_Bay1",
+  "CameraIndex": 0,
+  "NatsUrl": "nats://master.local:4222",
+  "StoragePath": "D:\\ThermalCaptures",
+  "HeartbeatIntervalSeconds": 5
+}
