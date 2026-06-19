@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
@@ -12,6 +14,9 @@ namespace HeatingCameraSystem.Master.ViewModels
 {
     public partial class SettingsViewModel : ObservableObject
     {
+        private readonly HashSet<string> _subscribedAgents = new();
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<SerialConfigAckMessage>> _pendingAcks = new();
+
         public ObservableCollection<CameraSerialSettings> CameraSettings { get; } = new();
 
         [ObservableProperty]
@@ -69,11 +74,19 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
 
             string agentId = $"Agent_{SelectedSettings!.CameraIndex}";
+
+            if (_subscribedAgents.Add(agentId))
+            {
+                await AppServices.NatsService.SubscribeSerialConfigAckAsync(agentId, ack =>
+                {
+                    if (_pendingAcks.TryRemove(ack.AgentId, out var tcs))
+                        tcs.TrySetResult(ack);
+                });
+            }
+
             var ackTcs = new TaskCompletionSource<SerialConfigAckMessage>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
-
-            await AppServices.NatsService.SubscribeSerialConfigAckAsync(
-                agentId, ack => ackTcs.TrySetResult(ack));
+            _pendingAcks[agentId] = ackTcs;
 
             await AppServices.NatsService.PublishSerialConfigAsync(new SerialConfigMessage
             {
@@ -92,6 +105,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
             catch (OperationCanceledException)
             {
+                _pendingAcks.TryRemove(agentId, out _);
                 StatusMessage = "✘ 응답 없음 (5초 초과)";
             }
 
