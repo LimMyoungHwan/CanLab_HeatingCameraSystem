@@ -272,7 +272,18 @@
                                         <Border Background="{StaticResource BgSurfaceVariant}" Padding="8">
                                             <Grid>
                                                 <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextOnSurface}" FontSize="11" FontWeight="Bold"/>
-                                                <TextBlock Text="{Binding Status}" Foreground="{StaticResource Secondary}" FontSize="11" HorizontalAlignment="Right"/>
+                                                <Ellipse Width="8" Height="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Setter Property="Fill" Value="#859493"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsOnline}" Value="True">
+                                                                    <Setter Property="Fill" Value="#4ae183"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
                                             </Grid>
                                         </Border>
                                         
@@ -288,7 +299,21 @@
                                                                 <ColumnDefinition Width="Auto"/>
                                                                 <ColumnDefinition Width="*"/>
                                                             </Grid.ColumnDefinitions>
-                                                            <Ellipse Width="8" Height="8" Fill="{StaticResource Secondary}" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                                            <Ellipse Width="8" Height="8" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                                <Ellipse.Style>
+                                                                    <Style TargetType="Ellipse">
+                                                                        <Setter Property="Fill" Value="#859493"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding CameraStatus}" Value="Connected">
+                                                                                <Setter Property="Fill" Value="#47eaed"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding CameraStatus}" Value="Streaming">
+                                                                                <Setter Property="Fill" Value="#4ae183"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Ellipse.Style>
+                                                            </Ellipse>
                                                             <TextBlock Grid.Column="1" Text="{Binding Id}" Foreground="{StaticResource TextOnSurface}" FontSize="14" VerticalAlignment="Center"/>
                                                         </Grid>
                                                     </Border>

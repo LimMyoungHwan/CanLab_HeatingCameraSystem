@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HeatingCameraSystem.Core.Models;
@@ -21,6 +22,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         
         [ObservableProperty]
         private float _currentTemperature = 0f;
+
+        [ObservableProperty]
+        private Core.Models.CameraStatus _cameraStatus = Core.Models.CameraStatus.Offline;
     }
 
     public partial class AgentNode : ObservableObject
@@ -32,7 +36,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         private bool _isExpanded = true;
 
         [ObservableProperty]
-        private string _status = "Active";
+        private bool _isOnline = false;
+
+        [ObservableProperty]
+        private DateTime _lastHeartbeat = DateTime.MinValue;
 
         public ObservableCollection<CameraNode> Cameras { get; } = new ObservableCollection<CameraNode>();
     }
@@ -78,48 +85,35 @@ namespace HeatingCameraSystem.Master.ViewModels
         private readonly List<CameraNode?> _mode4Assignments = new();
         private readonly List<CameraNode?> _mode5Assignments = new();
 
+        private readonly Dictionary<string, AgentNode> _agentMap = new();
         private System.Windows.Threading.DispatcherTimer? _autoCycleTimer;
         private int _currentPageIndex = 0;
         private CancellationTokenSource? _recipeCts;
         private System.Windows.Threading.DispatcherTimer? _plcPollTimer;
+        private System.Windows.Threading.DispatcherTimer? _offlineCheckTimer;
 
         public DashboardViewModel()
         {
-            CurrentTemperature = 45.2f;
-            CurrentHumidity = 38f;
-            
-            // Dummy Agents and Cameras
-            for (int i = 1; i <= 3; i++)
-            {
-                var agent = new AgentNode { Name = $"Agent PC #{i} (16)", IsExpanded = i == 1 };
-                for (int j = 1; j <= 16; j++)
-                {
-                    agent.Cameras.Add(new CameraNode { Id = $"CAM-{(i-1)*16 + j:D2}", CurrentTemperature = 40.5f + (j % 5) });
-                }
-                Agents.Add(agent);
-            }
+            CurrentTemperature = 0f;
+            CurrentHumidity = 0f;
 
-            // Pre-populate view modes with some default cameras
-            var allCameras = Agents.SelectMany(a => a.Cameras).ToList();
-            
-            for (int i = 0; i < 8; i++)
-                _mode2Assignments.Add(i < allCameras.Count ? allCameras[i] : null);
-                
-            for (int i = 0; i < 4; i++)
-                _mode3Assignments.Add(i < allCameras.Count ? allCameras[i] : null);
-                
-            for (int i = 0; i < 2; i++)
-                _mode4Assignments.Add(i < allCameras.Count ? allCameras[i] : null);
-                
-            for (int i = 0; i < 1; i++)
-                _mode5Assignments.Add(i < allCameras.Count ? allCameras[i] : null);
-            
+            for (int i = 0; i < 8; i++) _mode2Assignments.Add(null);
+            for (int i = 0; i < 4; i++) _mode3Assignments.Add(null);
+            for (int i = 0; i < 2; i++) _mode4Assignments.Add(null);
+            for (int i = 0; i < 1; i++) _mode5Assignments.Add(null);
+
             LoadCameraFeeds();
             LoadRecipes();
 
             _plcPollTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             _plcPollTimer.Tick += async (_, _) => await PollPlcAsync();
             _plcPollTimer.Start();
+
+            _offlineCheckTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _offlineCheckTimer.Tick += (_, _) => CheckOfflineAgents();
+            _offlineCheckTimer.Start();
+
+            _ = SubscribeAgentStatusAsync();
         }
 
         private void LoadRecipes()
@@ -132,6 +126,50 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         [RelayCommand]
         private void RefreshRecipes() => LoadRecipes();
+
+        private async Task SubscribeAgentStatusAsync()
+        {
+            if (AppServices.NatsService == null) return;
+
+            await AppServices.NatsService.SubscribeAgentStatusAsync(msg =>
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    if (!_agentMap.TryGetValue(msg.AgentId, out var agent))
+                    {
+                        agent = new AgentNode { Name = msg.AgentId, IsExpanded = true };
+                        _agentMap[msg.AgentId] = agent;
+                        Agents.Add(agent);
+                    }
+
+                    agent.IsOnline      = true;
+                    agent.LastHeartbeat  = msg.Timestamp;
+
+                    string camId = $"CAM-{msg.CameraIndex:D2}";
+                    var cam = agent.Cameras.FirstOrDefault(c => c.Id == camId);
+                    if (cam == null)
+                    {
+                        cam = new CameraNode { Id = camId };
+                        agent.Cameras.Add(cam);
+                    }
+                    cam.CameraStatus = msg.CameraStatus;
+                });
+            });
+        }
+
+        private void CheckOfflineAgents()
+        {
+            var threshold = DateTime.UtcNow.AddSeconds(-15);
+            foreach (var agent in Agents)
+            {
+                if (agent.LastHeartbeat < threshold && agent.IsOnline)
+                {
+                    agent.IsOnline = false;
+                    foreach (var cam in agent.Cameras)
+                        cam.CameraStatus = CameraStatus.Offline;
+                }
+            }
+        }
 
         private async Task PollPlcAsync()
         {

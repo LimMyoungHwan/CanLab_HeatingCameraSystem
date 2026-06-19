@@ -38,7 +38,7 @@ namespace HeatingCameraSystem.Tests
             // Arrange
             var mockService = new Mock<INatsCommunicationService>();
             AgentStatusMessage? receivedMessage = null;
-            var testMessage = new AgentStatusMessage { AgentId = "Agent01", IsCameraReady = true };
+            var testMessage = new AgentStatusMessage { AgentId = "Agent01", CameraStatus = CameraStatus.Connected };
 
             mockService.Setup(s => s.SubscribeAgentStatusAsync(It.IsAny<Action<AgentStatusMessage>>()))
                 .Callback<Action<AgentStatusMessage>>(action => action(testMessage))
@@ -50,7 +50,7 @@ namespace HeatingCameraSystem.Tests
             // Assert
             Assert.NotNull(receivedMessage);
             Assert.Equal("Agent01", receivedMessage.AgentId);
-            Assert.True(receivedMessage.IsCameraReady);
+            Assert.Equal(CameraStatus.Connected, receivedMessage.CameraStatus);
         }
     }
 }

@@ -2,6 +2,13 @@ using System;
 
 namespace HeatingCameraSystem.Core.Models
 {
+    public enum CameraStatus
+    {
+        Offline,
+        Connected,
+        Streaming
+    }
+
     public class SerialConfigMessage
     {
         public string               AgentId   { get; set; } = string.Empty;
@@ -21,7 +28,7 @@ namespace HeatingCameraSystem.Core.Models
     {
         public string AgentId { get; set; } = string.Empty;
         public int CameraIndex { get; set; }
-        public bool IsCameraReady { get; set; }
+        public CameraStatus CameraStatus { get; set; }
         public DateTime Timestamp { get; set; }
     }
 

@@ -45,7 +45,7 @@ namespace HeatingCameraSystem.Agent
                 {
                     AgentId = config.AgentId,
                     CameraIndex = config.CameraIndex,
-                    IsCameraReady = cameraReady,
+                    CameraStatus = cameraReady ? CameraStatus.Connected : CameraStatus.Offline,
                     Timestamp = DateTime.UtcNow
                 });
             }, null, TimeSpan.Zero, TimeSpan.FromSeconds(config.HeartbeatIntervalSeconds));
