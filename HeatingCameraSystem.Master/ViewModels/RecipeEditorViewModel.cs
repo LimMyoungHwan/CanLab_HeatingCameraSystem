@@ -1,10 +1,13 @@
 using System;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Master.Services;
+using Microsoft.Win32;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
@@ -118,6 +121,51 @@ namespace HeatingCameraSystem.Master.ViewModels
                 SelectedRecipe.Steps.Move(oldIdx, newIdx);
                 for (int i = 0; i < SelectedRecipe.Steps.Count; i++)
                     SelectedRecipe.Steps[i].StepNumber = i + 1;
+            }
+        }
+
+        [RelayCommand]
+        private void ExportRecipe()
+        {
+            if (SelectedRecipe == null) return;
+
+            var dlg = new SaveFileDialog
+            {
+                Filter = "JSON files (*.json)|*.json",
+                FileName = $"{SelectedRecipe.Name}.json"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            var recipe = ToDomain(SelectedRecipe);
+            var json = JsonSerializer.Serialize(recipe, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(dlg.FileName, json);
+        }
+
+        [RelayCommand]
+        private void ImportRecipe()
+        {
+            var dlg = new OpenFileDialog
+            {
+                Filter = "JSON files (*.json)|*.json"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                var json = File.ReadAllText(dlg.FileName);
+                var recipe = JsonSerializer.Deserialize<Recipe>(json);
+                if (recipe == null) return;
+
+                recipe.Id = Guid.NewGuid().ToString();
+                AppServices.RecipeRepo.SaveAsync(recipe).GetAwaiter().GetResult();
+
+                var vm = FromDomain(recipe);
+                Recipes.Add(vm);
+                SelectRecipe(vm);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RecipeEditor] Import failed: {ex.Message}");
             }
         }
 

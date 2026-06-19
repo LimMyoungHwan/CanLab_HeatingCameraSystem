@@ -237,6 +237,8 @@
                         </StackPanel>
                         
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="IMPORT" Command="{Binding ImportRecipeCommand}" Background="Transparent" Foreground="{StaticResource Primary}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="24,8" Margin="0,0,8,0" FontWeight="Bold"/>
+                            <Button Content="EXPORT" Command="{Binding ExportRecipeCommand}" Background="Transparent" Foreground="{StaticResource Primary}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="24,8" Margin="0,0,16,0" FontWeight="Bold"/>
                             <Button Content="CANCEL" Background="Transparent" Foreground="{StaticResource TextOnSurfaceVariant}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="24,8" Margin="0,0,16,0" FontWeight="Bold"/>
                             <Button Content="SAVE RECIPE" Background="{StaticResource Secondary}" Foreground="#00210c" BorderThickness="0" Padding="32,8" FontWeight="Bold"/>
                         </StackPanel>
