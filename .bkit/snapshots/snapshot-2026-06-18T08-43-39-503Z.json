@@ -1,6 +1,6 @@
 {
-  "version": "3.0",
-  "lastUpdated": "2026-06-18T11:02:19.828Z",
+  "version": "2.0",
+  "lastUpdated": "2026-06-18T08:43:38.159Z",
   "activeFeatures": [],
   "features": {},
   "primaryFeature": null,
@@ -12,7 +12,7 @@
   },
   "session": {
     "startedAt": "2026-06-10T23:54:41.426Z",
-    "lastActivity": "2026-06-18T11:02:19.828Z",
+    "lastActivity": "2026-06-18T08:43:38.159Z",
     "onboardingCompleted": false
   },
   "history": [
@@ -159,28 +159,9 @@
       "action": "session_end",
       "feature": null,
       "details": "Session ended"
-    },
-    {
-      "timestamp": "2026-06-18T08:43:58.188Z",
-      "action": "session_end",
-      "feature": null,
-      "details": "Session ended"
     }
   ],
-  "stateMachine": {
-    "defaultWorkflow": "default",
-    "activeWorkflows": {},
-    "totalTransitions": 0
-  },
-  "automation": {
-    "globalLevel": 2,
-    "trustScore": 38,
-    "pendingApprovals": 0,
-    "lastGateResult": null
-  },
-  "team": {
-    "enabled": true,
-    "stateFile": ".bkit/runtime/agent-state.json",
-    "eventsFile": ".bkit/runtime/agent-events.jsonl"
-  }
+  "_snapshotTimestamp": "2026-06-18T08:43:39.503Z",
+  "_reason": "pre-compress",
+  "_jitPartial": false
 }
