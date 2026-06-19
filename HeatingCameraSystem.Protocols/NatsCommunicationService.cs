@@ -118,6 +118,44 @@ namespace HeatingCameraSystem.Protocols
             await Task.CompletedTask;
         }
 
+        public async Task PublishSerialConfigAsync(SerialConfigMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"master.config.serial.{message.AgentId}", message);
+        }
+
+        public Task SubscribeSerialConfigAsync(string agentId, Action<SerialConfigMessage> onMessageReceived)
+        {
+            CheckConnection();
+            _ = Task.Run(async () =>
+            {
+                await foreach (var msg in _connection!.SubscribeAsync<SerialConfigMessage>($"master.config.serial.{agentId}"))
+                {
+                    if (msg.Data != null) onMessageReceived(msg.Data);
+                }
+            });
+            return Task.CompletedTask;
+        }
+
+        public async Task PublishSerialConfigAckAsync(SerialConfigAckMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"agent.config.serial.ack.{message.AgentId}", message);
+        }
+
+        public Task SubscribeSerialConfigAckAsync(string agentId, Action<SerialConfigAckMessage> onMessageReceived)
+        {
+            CheckConnection();
+            _ = Task.Run(async () =>
+            {
+                await foreach (var msg in _connection!.SubscribeAsync<SerialConfigAckMessage>($"agent.config.serial.ack.{agentId}"))
+                {
+                    if (msg.Data != null) onMessageReceived(msg.Data);
+                }
+            });
+            return Task.CompletedTask;
+        }
+
         private void CheckConnection()
         {
             if (_connection == null)

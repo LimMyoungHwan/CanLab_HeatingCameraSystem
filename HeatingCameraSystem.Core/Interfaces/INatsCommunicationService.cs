@@ -19,5 +19,13 @@ namespace HeatingCameraSystem.Core.Interfaces
         // Agent -> Master (Result)
         Task PublishCaptureResultAsync(CaptureResultMessage message);
         Task SubscribeCaptureResultAsync(Action<CaptureResultMessage> onMessageReceived);
+
+        // Master -> Agent (Serial Config): master.config.serial.{AgentId}
+        Task PublishSerialConfigAsync(SerialConfigMessage message);
+        Task SubscribeSerialConfigAsync(string agentId, Action<SerialConfigMessage> onMessageReceived);
+
+        // Agent -> Master (Serial Config ACK): agent.config.serial.ack.{AgentId}
+        Task PublishSerialConfigAckAsync(SerialConfigAckMessage message);
+        Task SubscribeSerialConfigAckAsync(string agentId, Action<SerialConfigAckMessage> onMessageReceived);
     }
 }

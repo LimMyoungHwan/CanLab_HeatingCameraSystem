@@ -19,6 +19,7 @@ namespace HeatingCameraSystem.Master.Services
         public static IRecipeRepository RecipeRepo { get; private set; } = null!;
         public static ICameraMappingRepository MappingRepo { get; private set; } = null!;
         public static ICaptureHistoryRepository HistoryRepo { get; private set; } = null!;
+        public static ICameraSerialSettingsRepository CameraSerialSettingsRepo { get; private set; } = null!;
         public static NatsCommunicationService? NatsService { get; private set; }
         public static PlcModbusClient? PlcController { get; private set; }
         public static ISerialShutterController? ShutterController { get; private set; }
@@ -38,6 +39,7 @@ namespace HeatingCameraSystem.Master.Services
             RecipeRepo = new LiteDbRecipeRepository(Db);
             MappingRepo = new LiteDbCameraMappingRepository(Db);
             HistoryRepo = new LiteDbCaptureHistoryRepository(Db);
+            CameraSerialSettingsRepo = new LiteDbCameraSerialSettingsRepository(Db);
 
             NatsService = new NatsCommunicationService();
             PlcController = new PlcModbusClient(Settings.Plc);
@@ -67,6 +69,27 @@ namespace HeatingCameraSystem.Master.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[AppServices] PLC connect failed: {ex.Message}");
+            }
+        }
+
+        public static async Task ApplySerialSettingsLocallyAsync(Core.Models.CameraSerialSettings s)
+        {
+            ShutterController?.Dispose();
+            ShutterController = new SerialShutterController(new Core.Config.SerialSettings
+            {
+                PortName = s.PortName,
+                BaudRate = s.BaudRate,
+                DataBits = s.DataBits,
+                Parity   = s.Parity,
+                StopBits = s.StopBits
+            });
+            try
+            {
+                await ShutterController.ConnectAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AppServices] Local shutter reconnect failed: {ex.Message}");
             }
         }
 

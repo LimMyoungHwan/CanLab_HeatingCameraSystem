@@ -44,5 +44,12 @@ namespace HeatingCameraSystem.Master.ViewModels
             CurrentViewTitle = "이력 조회 (History Logs)";
             CurrentViewModel = new HistoryViewModel();
         }
+
+        [RelayCommand]
+        private void NavigateToSettings()
+        {
+            CurrentViewTitle = "시리얼 설정 (Serial Settings)";
+            CurrentViewModel = new SettingsViewModel();
+        }
     }
 }

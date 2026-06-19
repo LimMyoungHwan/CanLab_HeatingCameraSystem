@@ -33,6 +33,12 @@ namespace HeatingCameraSystem.Agent
                 _ = HandleCaptureAsync(cmd, cameraService, nats, config.AgentId);
             });
 
+            SerialShutterController? shutterController = null;
+            await nats.SubscribeSerialConfigAsync(config.AgentId, msg =>
+            {
+                _ = ApplySerialConfigAsync(msg);
+            });
+
             using var heartbeat = new Timer(async _ =>
             {
                 await nats.PublishAgentStatusAsync(new AgentStatusMessage
@@ -52,7 +58,42 @@ namespace HeatingCameraSystem.Agent
             await Task.Delay(Timeout.Infinite, cts.Token).ContinueWith(_ => { });
 
             Console.WriteLine($"[{config.AgentId}] Shutting down.");
+            shutterController?.Dispose();
             cameraService.Stop();
+
+            async Task ApplySerialConfigAsync(SerialConfigMessage msg)
+            {
+                bool   success = true;
+                string error   = string.Empty;
+                try
+                {
+                    shutterController?.Disconnect();
+                    shutterController = new SerialShutterController(new SerialSettings
+                    {
+                        PortName = msg.Settings.PortName,
+                        BaudRate = msg.Settings.BaudRate,
+                        DataBits = msg.Settings.DataBits,
+                        Parity   = msg.Settings.Parity,
+                        StopBits = msg.Settings.StopBits
+                    });
+                    await shutterController.ConnectAsync();
+                }
+                catch (Exception ex)
+                {
+                    success = false;
+                    error   = ex.Message;
+                }
+
+                await nats.PublishSerialConfigAckAsync(new SerialConfigAckMessage
+                {
+                    AgentId      = config.AgentId,
+                    IsSuccess    = success,
+                    ErrorMessage = error,
+                    Timestamp    = DateTime.UtcNow
+                });
+
+                Console.WriteLine($"[{config.AgentId}] Serial config {msg.Settings.PortName}: {(success ? "OK" : "FAIL")}");
+            }
         }
 
         private static AgentConfig LoadOrCreateConfig(string[] args)
