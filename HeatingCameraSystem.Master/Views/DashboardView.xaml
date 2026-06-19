@@ -342,6 +342,8 @@
                         </Grid>
                         <TextBlock Text="{Binding RecipeStatus}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,8"/>
                         <Button Content="START" Background="{StaticResource Secondary}" Foreground="#00210c" FontSize="20" FontWeight="Bold" Padding="0,12" Margin="0,0,0,8" BorderThickness="0" Command="{Binding StartRecipeCommand}"/>
+                        <ProgressBar Value="{Binding RecipeProgressValue}" Height="6" Foreground="{StaticResource Secondary}" Background="{StaticResource BgSurface}" BorderThickness="0" Margin="0,0,0,4"/>
+                        <TextBlock Text="{Binding RecipePhaseText}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,8"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>

@@ -66,6 +66,12 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         [ObservableProperty]
         private string _recipeStatus = "대기 중";
+
+        [ObservableProperty]
+        private double _recipeProgressValue = 0;
+
+        [ObservableProperty]
+        private string _recipePhaseText = string.Empty;
         
         [ObservableProperty]
         private int _currentViewMode = 1;
@@ -306,10 +312,20 @@ namespace HeatingCameraSystem.Master.ViewModels
             _recipeCts?.Cancel();
             _recipeCts = new CancellationTokenSource();
             RecipeStatus = $"실행 중: {SelectedRecipe.Name}";
+            RecipeProgressValue = 0;
+            RecipePhaseText = string.Empty;
+
+            var progress = new Progress<RecipeProgress>(p =>
+            {
+                RecipeProgressValue = p.TotalSteps > 0
+                    ? (double)p.CurrentStep / p.TotalSteps * 100
+                    : 0;
+                RecipePhaseText = p.CurrentPhase;
+            });
 
             try
             {
-                await AppServices.RecipeEngine.ExecuteRecipeAsync(SelectedRecipe, _recipeCts.Token);
+                await AppServices.RecipeEngine.ExecuteRecipeAsync(SelectedRecipe, _recipeCts.Token, progress);
                 RecipeStatus = "완료";
             }
             catch (OperationCanceledException)

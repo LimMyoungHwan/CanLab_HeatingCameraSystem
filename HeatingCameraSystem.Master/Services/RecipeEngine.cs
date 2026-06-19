@@ -24,8 +24,9 @@ namespace HeatingCameraSystem.Master.Services
             _historyRepo = historyRepo;
         }
 
-        public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default)
+        public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null)
         {
+            int totalSteps = recipe.Steps.Count;
             var resultWaiters = new ConcurrentDictionary<string, TaskCompletionSource<CaptureResultMessage>>();
 
             await _natsService.SubscribeCaptureResultAsync(result =>
@@ -35,6 +36,8 @@ namespace HeatingCameraSystem.Master.Services
             });
 
             Console.WriteLine($"[RecipeEngine] Starting recipe: {recipe.Name}");
+
+            progress?.Report(new RecipeProgress { CurrentStep = 0, TotalSteps = totalSteps, CurrentPhase = "챔버 안정화" });
 
             await _plcController.StartChamberAsync();
             await _plcController.SetTargetTemperatureAsync(recipe.GlobalTargetTemperature);
@@ -49,10 +52,12 @@ namespace HeatingCameraSystem.Master.Services
 
             Console.WriteLine("[RecipeEngine] Chamber ready. Executing steps...");
 
-            foreach (var step in recipe.Steps)
+            for (int i = 0; i < recipe.Steps.Count; i++)
             {
+                var step = recipe.Steps[i];
                 cancellationToken.ThrowIfCancellationRequested();
 
+                progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"서보 이동 ({i + 1}/{totalSteps})" });
                 await _plcController.MoveServoToPositionAsync(step.TargetPositionIndex);
                 while (!cancellationToken.IsCancellationRequested)
                 {
@@ -60,6 +65,7 @@ namespace HeatingCameraSystem.Master.Services
                     await Task.Delay(500, cancellationToken);
                 }
 
+                progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"BB 안정화 ({i + 1}/{totalSteps})" });
                 const int activeBB = 0;
                 await _plcController.SetBlackBodyTemperatureAsync(activeBB, step.TargetBlackBodyTemperature);
                 while (!cancellationToken.IsCancellationRequested)
@@ -69,6 +75,7 @@ namespace HeatingCameraSystem.Master.Services
                     await Task.Delay(1000, cancellationToken);
                 }
 
+                progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"캡처 ({i + 1}/{totalSteps})" });
                 var tcs = new TaskCompletionSource<CaptureResultMessage>(
                     TaskCreationOptions.RunContinuationsAsynchronously);
                 resultWaiters[step.StepId] = tcs;
@@ -121,6 +128,7 @@ namespace HeatingCameraSystem.Master.Services
             }
 
             await _plcController.StopChamberAsync();
+            progress?.Report(new RecipeProgress { CurrentStep = totalSteps, TotalSteps = totalSteps, CurrentPhase = "완료" });
             Console.WriteLine($"[RecipeEngine] Recipe '{recipe.Name}' completed.");
         }
     }
