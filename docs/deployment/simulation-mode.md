@@ -82,6 +82,8 @@ Master Dashboard → Agents 패널:
 - 각 Agent 아래 `CAM-00`, `CAM-01`, `CAM-02` (cyan/green 점)
 
 > **주의**: `CameraIndex` 는 Recipe 의 `RecipeStep.CameraIndex` 와 일치해야 NATS 토픽 `master.cmd.capture.Agent_{CameraIndex}` 로 라우팅된다. AgentId 와 CameraIndex 의 숫자 부분이 같도록 맞춘다.
+>
+> v2.1+ 부터 CLI 인수를 모두 넘기는 다중 인스턴스 기동은 `agent.json` 을 쓰지 않으므로 **동시 기동 race 없음**. 순차 기동 / 3초 대기 불필요.
 
 ## 3단계 — Recipe 실행
 

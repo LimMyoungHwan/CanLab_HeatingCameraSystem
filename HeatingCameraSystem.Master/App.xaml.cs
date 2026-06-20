@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using HeatingCameraSystem.Master.Services;
 
@@ -20,14 +21,25 @@ public partial class App : Application
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "HeatingCameraSystem", "ImageStorage");
         _cleanupService = new BackgroundDataCleanupService(
-            AppServices.HistoryRepo, imageDir, retentionDays: 30);
+            AppServices.HistoryRepo, imageDir, retentionDays: AppServices.Settings.DataRetentionDays);
         _cleanupService.Start();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         _cleanupService?.Stop();
-        AppServices.DisposeAsync().GetAwaiter().GetResult();
+        try
+        {
+            var disposeTask = Task.Run(async () => await AppServices.DisposeAsync());
+            if (!disposeTask.Wait(TimeSpan.FromSeconds(5)))
+            {
+                System.Diagnostics.Debug.WriteLine("[App] AppServices.DisposeAsync timed out after 5s — forcing exit.");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[App] AppServices.DisposeAsync threw: {ex.GetType().Name}: {ex.Message}");
+        }
         base.OnExit(e);
     }
 }

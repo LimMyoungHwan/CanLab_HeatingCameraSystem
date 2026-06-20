@@ -114,20 +114,25 @@ namespace HeatingCameraSystem.Agent
 
             if (File.Exists(path))
             {
+                config = TryReadConfig(path, opts) ?? new AgentConfig();
+            }
+            else if (args.Length == 0)
+            {
+                config = new AgentConfig { AgentId = Environment.MachineName };
                 try
                 {
-                    config = JsonSerializer.Deserialize<AgentConfig>(File.ReadAllText(path), opts) ?? new AgentConfig();
+                    File.WriteAllText(path, JsonSerializer.Serialize(config, opts));
+                    Console.WriteLine($"Created default agent.json at {path}");
                 }
-                catch
+                catch (IOException ex)
                 {
-                    config = new AgentConfig();
+                    Console.WriteLine($"[Agent] agent.json not written ({ex.Message}); using in-memory defaults");
                 }
             }
             else
             {
-                config = new AgentConfig { AgentId = Environment.MachineName };
-                File.WriteAllText(path, JsonSerializer.Serialize(config, opts));
-                Console.WriteLine($"Created default agent.json at {path}");
+                config = new AgentConfig();
+                Console.WriteLine("[Agent] No agent.json — using CLI args + defaults (multi-instance safe).");
             }
 
             if (string.IsNullOrWhiteSpace(config.AgentId))
@@ -140,6 +145,28 @@ namespace HeatingCameraSystem.Agent
             if (args.Length > 4 && bool.TryParse(args[4], out var sim))   config.SimulationMode = sim;
 
             return config;
+        }
+
+        private static AgentConfig? TryReadConfig(string path, JsonSerializerOptions opts)
+        {
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var reader = new StreamReader(stream);
+                    return JsonSerializer.Deserialize<AgentConfig>(reader.ReadToEnd(), opts);
+                }
+                catch (IOException)
+                {
+                    Thread.Sleep(150);
+                }
+                catch (JsonException)
+                {
+                    return null;
+                }
+            }
+            return null;
         }
 
         private static async Task HandleCaptureAsync(

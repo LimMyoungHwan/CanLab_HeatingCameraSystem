@@ -33,37 +33,12 @@ namespace HeatingCameraSystem.Protocols
             await _connection!.PublishAsync(subject, message);
         }
 
-        public async Task SubscribeCaptureCommandAsync(string agentId, Action<CaptureCommandMessage> onMessageReceived)
+        public Task SubscribeCaptureCommandAsync(string agentId, Action<CaptureCommandMessage> onMessageReceived)
         {
             CheckConnection();
-            string subject = $"master.cmd.capture.{agentId}";
-            
-            // Subscribing in the background
-            _ = Task.Run(async () =>
-            {
-                await foreach (var msg in _connection!.SubscribeAsync<CaptureCommandMessage>(subject))
-                {
-                    if (msg.Data != null)
-                    {
-                        onMessageReceived(msg.Data);
-                    }
-                }
-            });
-            
-            // Also subscribe to 'all' for broadcasts
-            string broadcastSubject = "master.cmd.capture.all";
-            _ = Task.Run(async () =>
-            {
-                await foreach (var msg in _connection!.SubscribeAsync<CaptureCommandMessage>(broadcastSubject))
-                {
-                    if (msg.Data != null)
-                    {
-                        onMessageReceived(msg.Data);
-                    }
-                }
-            });
-
-            await Task.CompletedTask;
+            RunSubscriptionLoop($"master.cmd.capture.{agentId}", onMessageReceived);
+            RunSubscriptionLoop("master.cmd.capture.all", onMessageReceived);
+            return Task.CompletedTask;
         }
 
         public async Task PublishAgentStatusAsync(AgentStatusMessage message)
@@ -73,23 +48,11 @@ namespace HeatingCameraSystem.Protocols
             await _connection!.PublishAsync(subject, message);
         }
 
-        public async Task SubscribeAgentStatusAsync(Action<AgentStatusMessage> onMessageReceived)
+        public Task SubscribeAgentStatusAsync(Action<AgentStatusMessage> onMessageReceived)
         {
             CheckConnection();
-            string subject = "agent.status.>"; // Receive from all agents
-            
-            _ = Task.Run(async () =>
-            {
-                await foreach (var msg in _connection!.SubscribeAsync<AgentStatusMessage>(subject))
-                {
-                    if (msg.Data != null)
-                    {
-                        onMessageReceived(msg.Data);
-                    }
-                }
-            });
-
-            await Task.CompletedTask;
+            RunSubscriptionLoop("agent.status.>", onMessageReceived);
+            return Task.CompletedTask;
         }
 
         public async Task PublishCaptureResultAsync(CaptureResultMessage message)
@@ -99,23 +62,11 @@ namespace HeatingCameraSystem.Protocols
             await _connection!.PublishAsync(subject, message);
         }
 
-        public async Task SubscribeCaptureResultAsync(Action<CaptureResultMessage> onMessageReceived)
+        public Task SubscribeCaptureResultAsync(Action<CaptureResultMessage> onMessageReceived)
         {
             CheckConnection();
-            string subject = "agent.result.capture.>"; // Receive from all agents
-            
-            _ = Task.Run(async () =>
-            {
-                await foreach (var msg in _connection!.SubscribeAsync<CaptureResultMessage>(subject))
-                {
-                    if (msg.Data != null)
-                    {
-                        onMessageReceived(msg.Data);
-                    }
-                }
-            });
-
-            await Task.CompletedTask;
+            RunSubscriptionLoop("agent.result.capture.>", onMessageReceived);
+            return Task.CompletedTask;
         }
 
         public async Task PublishSerialConfigAsync(SerialConfigMessage message)
@@ -127,13 +78,7 @@ namespace HeatingCameraSystem.Protocols
         public Task SubscribeSerialConfigAsync(string agentId, Action<SerialConfigMessage> onMessageReceived)
         {
             CheckConnection();
-            _ = Task.Run(async () =>
-            {
-                await foreach (var msg in _connection!.SubscribeAsync<SerialConfigMessage>($"master.config.serial.{agentId}"))
-                {
-                    if (msg.Data != null) onMessageReceived(msg.Data);
-                }
-            });
+            RunSubscriptionLoop($"master.config.serial.{agentId}", onMessageReceived);
             return Task.CompletedTask;
         }
 
@@ -146,14 +91,34 @@ namespace HeatingCameraSystem.Protocols
         public Task SubscribeSerialConfigAckAsync(string agentId, Action<SerialConfigAckMessage> onMessageReceived)
         {
             CheckConnection();
+            RunSubscriptionLoop($"agent.config.serial.ack.{agentId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
+        private void RunSubscriptionLoop<T>(string subject, Action<T> onMessageReceived)
+        {
             _ = Task.Run(async () =>
             {
-                await foreach (var msg in _connection!.SubscribeAsync<SerialConfigAckMessage>($"agent.config.serial.ack.{agentId}"))
+                try
                 {
-                    if (msg.Data != null) onMessageReceived(msg.Data);
+                    await foreach (var msg in _connection!.SubscribeAsync<T>(subject))
+                    {
+                        if (msg.Data == null) continue;
+                        try
+                        {
+                            onMessageReceived(msg.Data);
+                        }
+                        catch (Exception cbEx)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[NATS] subscriber callback threw on {subject}: {cbEx.GetType().Name}: {cbEx.Message}");
+                        }
+                    }
+                }
+                catch (Exception loopEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[NATS] subscription loop ended on {subject}: {loopEx.GetType().Name}: {loopEx.Message}");
                 }
             });
-            return Task.CompletedTask;
         }
 
         private void CheckConnection()

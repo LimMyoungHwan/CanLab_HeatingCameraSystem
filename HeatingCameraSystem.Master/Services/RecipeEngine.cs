@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
+using HeatingCameraSystem.Core.Config;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
 
@@ -12,16 +13,21 @@ namespace HeatingCameraSystem.Master.Services
         private readonly IPlcController _plcController;
         private readonly INatsCommunicationService _natsService;
         private readonly ICaptureHistoryRepository _historyRepo;
-        private readonly float _tempTolerance = 0.5f;
+        private readonly float _tempTolerance;
+        private readonly TimeSpan _captureTimeout;
 
         public RecipeEngine(
             IPlcController plcController,
             INatsCommunicationService natsService,
-            ICaptureHistoryRepository historyRepo)
+            ICaptureHistoryRepository historyRepo,
+            RecipeEngineSettings? settings = null)
         {
             _plcController = plcController;
             _natsService = natsService;
             _historyRepo = historyRepo;
+            var s = settings ?? new RecipeEngineSettings();
+            _tempTolerance  = s.TemperatureTolerance;
+            _captureTimeout = TimeSpan.FromSeconds(s.CaptureResultTimeoutSeconds);
         }
 
         public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null)
@@ -87,7 +93,7 @@ namespace HeatingCameraSystem.Master.Services
                     Timestamp     = DateTime.UtcNow
                 });
 
-                var done = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30), cancellationToken));
+                var done = await Task.WhenAny(tcs.Task, Task.Delay(_captureTimeout, cancellationToken));
                 if (done == tcs.Task)
                 {
                     var captureResult = tcs.Task.Result;
@@ -121,7 +127,7 @@ namespace HeatingCameraSystem.Master.Services
                 }
                 else
                 {
-                    Console.WriteLine($"[RecipeEngine] Step {step.StepId}: capture timeout (30s).");
+                    Console.WriteLine($"[RecipeEngine] Step {step.StepId}: capture timeout ({_captureTimeout.TotalSeconds:0}s).");
                 }
 
                 resultWaiters.TryRemove(step.StepId, out _);

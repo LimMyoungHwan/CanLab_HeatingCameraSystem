@@ -120,7 +120,7 @@ PowerShell 3 터미널:
 .\HeatingCameraSystem.Agent.exe Agent_2 nats://127.0.0.1:4222 2 ImageStorage_2 true
 ```
 
-> ⚠ 같은 폴더 동시 첫 실행 시 `agent.json` 생성 race 가 있다. **첫 인스턴스 기동 → 3 초 대기 → 두 번째 기동** 순서로 띄울 것 (또는 `agent.json` 을 미리 한 번 생성). 자동 러너 `docs/deployment/run-e2e-simulation.ps1` 가 이 패턴을 따른다.
+> CLI 인수를 모두 넘기면 `agent.json` 을 생성·읽지 않으므로 동시 기동해도 안전. 파일 기반 단일 인스턴스 모드와 CLI 기반 다중 인스턴스 모드를 명확히 분리한다.
 
 ### 4-4. 배포 — 운영 환경 N 대 PC
 

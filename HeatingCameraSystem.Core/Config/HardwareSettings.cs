@@ -9,6 +9,12 @@ namespace HeatingCameraSystem.Core.Config
         /// </summary>
         public bool SimulationMode { get; set; } = false;
 
+        /// <summary>
+        /// BackgroundDataCleanupService 가 캡처 이미지/DB 이력을 보관할 일수.
+        /// 기본 30일. 0 이면 정리 안 함(주의: 무한 증가).
+        /// </summary>
+        public int DataRetentionDays { get; set; } = 30;
+
         public PlcSettings Plc { get; set; } = new();
         public NatsSettings Nats { get; set; } = new();
         public SerialSettings Serial { get; set; } = new();

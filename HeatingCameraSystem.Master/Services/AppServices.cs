@@ -56,7 +56,7 @@ namespace HeatingCameraSystem.Master.Services
                 ShutterController = new SerialShutterController(Settings.Serial);
             }
 
-            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo);
+            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine);
             ConnectionMonitor = new ConnectionMonitorService(PlcController, ShutterController, Settings);
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
         }

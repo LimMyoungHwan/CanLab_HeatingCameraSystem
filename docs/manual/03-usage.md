@@ -86,7 +86,7 @@ C:\HeatingCameraSystem\Agent\HeatingCameraSystem.Agent.exe
 .\Agent.exe Agent_2 nats://127.0.0.1:4222 2 ImageStorage_2 true   # 합성
 ```
 
-**순서 주의**: 첫 인스턴스 기동 → 3 초 대기 → 두 번째 (같은 폴더 `agent.json` race 방지). 자동 러너 사용 권장: `docs/deployment/run-e2e-simulation.ps1`.
+CLI 인수를 모두 넘기는 다중 인스턴스 기동은 `agent.json` 을 사용하지 않으므로 동시 기동해도 안전 (v2.1+). 자동 러너: `docs/deployment/run-e2e-simulation.ps1`.
 
 ### 3.3 원격 시리얼 설정 전송
 

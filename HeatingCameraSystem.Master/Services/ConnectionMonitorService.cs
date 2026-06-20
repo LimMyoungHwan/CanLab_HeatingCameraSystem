@@ -13,12 +13,19 @@ namespace HeatingCameraSystem.Master.Services
     /// </summary>
     public sealed class ConnectionMonitorService : IDisposable
     {
+        private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(5);
+
         private readonly IPlcController _plc;
         private readonly ISerialShutterController? _shutter;
         private readonly HardwareSettings _settings;
         private readonly TimeSpan _interval;
         private Timer? _timer;
         private int _running;
+
+        private int _plcFails;
+        private DateTime _plcNextAttemptUtc = DateTime.MinValue;
+        private int _shutterFails;
+        private DateTime _shutterNextAttemptUtc = DateTime.MinValue;
 
         public ConnectionMonitorService(
             IPlcController plc,
@@ -44,29 +51,43 @@ namespace HeatingCameraSystem.Master.Services
             if (Interlocked.CompareExchange(ref _running, 1, 0) != 0) return;
             try
             {
-                if (!_plc.IsConnected)
+                var now = DateTime.UtcNow;
+
+                if (!_plc.IsConnected && now >= _plcNextAttemptUtc)
                 {
                     try
                     {
                         await _plc.ConnectAsync(_settings.Plc.IpAddress, _settings.Plc.Port);
+                        _plcFails = 0;
+                        _plcNextAttemptUtc = DateTime.MinValue;
                         System.Diagnostics.Debug.WriteLine("[ConnMon] PLC reconnected.");
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[ConnMon] PLC reconnect failed: {ex.Message}");
+                        _plcFails++;
+                        var wait = ComputeBackoff(_plcFails);
+                        _plcNextAttemptUtc = now + wait;
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[ConnMon] PLC reconnect failed ({_plcFails}x, next in {wait.TotalSeconds:0}s): {ex.Message}");
                     }
                 }
 
-                if (_shutter != null && !_shutter.IsConnected)
+                if (_shutter != null && !_shutter.IsConnected && now >= _shutterNextAttemptUtc)
                 {
                     try
                     {
                         await _shutter.ConnectAsync();
+                        _shutterFails = 0;
+                        _shutterNextAttemptUtc = DateTime.MinValue;
                         System.Diagnostics.Debug.WriteLine("[ConnMon] Serial reconnected.");
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[ConnMon] Serial reconnect failed: {ex.Message}");
+                        _shutterFails++;
+                        var wait = ComputeBackoff(_shutterFails);
+                        _shutterNextAttemptUtc = now + wait;
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[ConnMon] Serial reconnect failed ({_shutterFails}x, next in {wait.TotalSeconds:0}s): {ex.Message}");
                     }
                 }
             }
@@ -74,6 +95,12 @@ namespace HeatingCameraSystem.Master.Services
             {
                 Interlocked.Exchange(ref _running, 0);
             }
+        }
+
+        private TimeSpan ComputeBackoff(int failures)
+        {
+            double seconds = _interval.TotalSeconds * Math.Pow(2, Math.Min(failures - 1, 10));
+            return TimeSpan.FromSeconds(Math.Min(seconds, MaxBackoff.TotalSeconds));
         }
     }
 }
