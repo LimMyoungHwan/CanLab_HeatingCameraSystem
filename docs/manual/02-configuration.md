@@ -11,7 +11,8 @@
 | `hardware.json` | `%LOCALAPPDATA%\HeatingCameraSystem\hardware.json` | Master | ✅ 최초 기동 시 |
 | `data.db` | `%LOCALAPPDATA%\HeatingCameraSystem\data.db` | Master (LiteDB) | ✅ 최초 기동 시 (빈 상태) |
 | `agent.json` | Agent exe 폴더 | Agent | ✅ 최초 기동 시 |
-| 캡처 이미지 | `<StoragePath>` (절대경로 또는 Agent exe 폴더 기준 상대경로) | Agent | ✅ 폴더 없으면 생성 |
+| 캡처 이미지 (Agent local) | `<StoragePath>` (절대경로 또는 Agent exe 폴더 기준 상대경로) | Agent | ✅ 폴더 없으면 생성 |
+| 캡처 이미지 (Master cache) | `%LOCALAPPDATA%\HeatingCameraSystem\ImageCache\` | Master (NATS 로 받은 ImageBytes 저장) | ✅ Initialize 시 생성 |
 
 샘플 파일은 [`docs/samples/`](../samples/) 에 — `hardware.json`, `hardware.simulation.json`, `agent.json`, `agent.simulation.json`, `agent.webcam.json`.
 

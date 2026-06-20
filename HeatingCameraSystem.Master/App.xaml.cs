@@ -17,11 +17,8 @@ public partial class App : Application
         AppServices.Initialize();
         _ = AppServices.TryConnectServicesAsync();
 
-        string imageDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HeatingCameraSystem", "ImageStorage");
         _cleanupService = new BackgroundDataCleanupService(
-            AppServices.HistoryRepo, imageDir, retentionDays: AppServices.Settings.DataRetentionDays);
+            AppServices.HistoryRepo, AppServices.ImageCacheDir, retentionDays: AppServices.Settings.DataRetentionDays);
         _cleanupService.Start();
     }
 

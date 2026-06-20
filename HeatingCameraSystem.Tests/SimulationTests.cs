@@ -201,5 +201,103 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal(30.0f, await plc.GetCurrentTemperatureAsync());
             Assert.Equal(40.0f, await plc.GetCurrentBlackBodyTemperatureAsync(0));
         }
+
+        [Fact]
+        public async Task RecipeRun_WithImageBytes_WritesCachedFile_AndHistoryPointsToIt()
+        {
+            string cacheDir = Path.Combine(Path.GetTempPath(), "HCS_CacheTest_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var plc = new FakePlcController();
+                await plc.ConnectAsync("any");
+
+                var mockNats    = new Mock<INatsCommunicationService>();
+                var mockHistory = new Mock<ICaptureHistoryRepository>();
+                var stored      = new List<CaptureHistoryRecord>();
+                mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>()))
+                           .Callback<CaptureHistoryRecord>(r => stored.Add(r))
+                           .Returns(Task.CompletedTask);
+
+                byte[] fakeJpeg = { 0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4, 0xFF, 0xD9 };
+                Action<CaptureResultMessage>? resultCb = null;
+                mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>()))
+                        .Callback<Action<CaptureResultMessage>>(cb => resultCb = cb)
+                        .Returns(Task.CompletedTask);
+                mockNats.Setup(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()))
+                        .Callback<CaptureCommandMessage>(cmd => resultCb?.Invoke(new CaptureResultMessage
+                        {
+                            AgentId      = cmd.TargetAgentId,
+                            RecipeStepId = cmd.RecipeStepId,
+                            IsSuccess    = true,
+                            ImagePath    = @"C:\agent\local\img.jpg",
+                            ImageBytes   = fakeJpeg,
+                            Timestamp    = DateTime.UtcNow
+                        }))
+                        .Returns(Task.CompletedTask);
+
+                var engine = new RecipeEngine(plc, mockNats.Object, mockHistory.Object, null, cacheDir);
+                var recipe = new Recipe
+                {
+                    Name = "CacheTest",
+                    GlobalTargetTemperature = 25.0f,
+                    GlobalTargetHumidity    = 50.0f,
+                    Steps = { new RecipeStep { CameraIndex = 0, TargetPositionIndex = 1, TargetBlackBodyTemperature = 30.0f } }
+                };
+
+                await engine.ExecuteRecipeAsync(recipe, CancellationToken.None);
+
+                Assert.Single(stored);
+                var rec = stored[0];
+                Assert.StartsWith(cacheDir, rec.ImagePath);
+                Assert.True(File.Exists(rec.ImagePath), $"cache file missing: {rec.ImagePath}");
+                Assert.Equal(fakeJpeg, File.ReadAllBytes(rec.ImagePath));
+            }
+            finally
+            {
+                if (Directory.Exists(cacheDir)) Directory.Delete(cacheDir, recursive: true);
+            }
+        }
+
+        [Fact]
+        public async Task RecipeRun_WithoutImageBytes_FallsBackToAgentPath()
+        {
+            var plc = new FakePlcController();
+            await plc.ConnectAsync("any");
+
+            var mockNats    = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+            CaptureHistoryRecord? stored = null;
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>()))
+                       .Callback<CaptureHistoryRecord>(r => stored = r)
+                       .Returns(Task.CompletedTask);
+
+            Action<CaptureResultMessage>? resultCb = null;
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>()))
+                    .Callback<Action<CaptureResultMessage>>(cb => resultCb = cb)
+                    .Returns(Task.CompletedTask);
+            mockNats.Setup(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()))
+                    .Callback<CaptureCommandMessage>(cmd => resultCb?.Invoke(new CaptureResultMessage
+                    {
+                        AgentId      = cmd.TargetAgentId,
+                        RecipeStepId = cmd.RecipeStepId,
+                        IsSuccess    = true,
+                        ImagePath    = "/agent/legacy/path.jpg",
+                        ImageBytes   = null,
+                        Timestamp    = DateTime.UtcNow
+                    }))
+                    .Returns(Task.CompletedTask);
+
+            var engine = new RecipeEngine(plc, mockNats.Object, mockHistory.Object, null, imageCacheDir: null);
+            var recipe = new Recipe
+            {
+                Name = "FallbackTest",
+                Steps = { new RecipeStep { CameraIndex = 0, TargetPositionIndex = 1, TargetBlackBodyTemperature = 30.0f } }
+            };
+
+            await engine.ExecuteRecipeAsync(recipe, CancellationToken.None);
+
+            Assert.NotNull(stored);
+            Assert.Equal("/agent/legacy/path.jpg", stored!.ImagePath);
+        }
     }
 }

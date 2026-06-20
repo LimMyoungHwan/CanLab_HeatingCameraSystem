@@ -16,6 +16,7 @@ namespace HeatingCameraSystem.Master.Services
         private static readonly JsonSerializerOptions _jsonOpts = new() { WriteIndented = true };
 
         public static HardwareSettings Settings { get; private set; } = new();
+        public static string ImageCacheDir { get; private set; } = string.Empty;
         public static LiteDatabase Db { get; private set; } = null!;
         public static IRecipeRepository RecipeRepo { get; private set; } = null!;
         public static ICameraMappingRepository MappingRepo { get; private set; } = null!;
@@ -35,6 +36,8 @@ namespace HeatingCameraSystem.Master.Services
             Directory.CreateDirectory(dir);
 
             Settings = LoadOrCreateSettings(dir);
+            ImageCacheDir = Path.Combine(dir, "ImageCache");
+            Directory.CreateDirectory(ImageCacheDir);
 
             Db = new LiteDatabase(Path.Combine(dir, "data.db"));
             RecipeRepo = new LiteDbRecipeRepository(Db);
@@ -56,7 +59,7 @@ namespace HeatingCameraSystem.Master.Services
                 ShutterController = new SerialShutterController(Settings.Serial);
             }
 
-            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine);
+            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir);
             ConnectionMonitor = new ConnectionMonitorService(PlcController, ShutterController, Settings);
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
         }

@@ -46,5 +46,6 @@ namespace HeatingCameraSystem.Core.Models
         public bool IsSuccess { get; set; }
         public string ImagePath { get; set; } = string.Empty;
         public DateTime Timestamp { get; set; }
+        public byte[]? ImageBytes { get; set; }
     }
 }

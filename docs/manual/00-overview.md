@@ -58,7 +58,7 @@
 | `master.cmd.capture.{AgentId}` | Master → 특정 Agent | `CaptureCommandMessage` |
 | `master.cmd.capture.all` | Master → 전체 Agent | `CaptureCommandMessage` (브로드캐스트) |
 | `master.config.serial.{AgentId}` | Master → 특정 Agent | `SerialConfigMessage` |
-| `agent.result.capture.{AgentId}` | Agent → Master | `CaptureResultMessage` (이미지 경로 + 성공여부) |
+| `agent.result.capture.{AgentId}` | Agent → Master | `CaptureResultMessage` (성공여부 + 원본 경로 + 옵션 ImageBytes) |
 | `agent.status.{AgentId}` | Agent → Master (5초 주기) | `AgentStatusMessage` (CameraStatus enum) |
 | `agent.config.serial.ack.{AgentId}` | Agent → Master | `SerialConfigAckMessage` |
 

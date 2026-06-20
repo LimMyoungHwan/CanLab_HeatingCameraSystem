@@ -27,6 +27,7 @@ namespace HeatingCameraSystem.Agent
             using var cameraDisposable = cameraService as IDisposable;
 
             bool cameraReady = cameraService.InitializeCamera(config.CameraIndex);
+            var statusBox = new StatusBox(cameraReady ? CameraStatus.Connected : CameraStatus.Offline);
             if (!cameraReady)
                 Console.WriteLine($"[{config.AgentId}] Camera {config.CameraIndex} unavailable — capture commands will report failure.");
             else
@@ -38,7 +39,7 @@ namespace HeatingCameraSystem.Agent
 
             await nats.SubscribeCaptureCommandAsync(config.AgentId, cmd =>
             {
-                _ = HandleCaptureAsync(cmd, cameraService, nats, config.AgentId);
+                _ = HandleCaptureAsync(cmd, cameraService, nats, config.AgentId, statusBox);
             });
 
             ISerialShutterController? shutterController = null;
@@ -51,10 +52,10 @@ namespace HeatingCameraSystem.Agent
             {
                 await nats.PublishAgentStatusAsync(new AgentStatusMessage
                 {
-                    AgentId = config.AgentId,
-                    CameraIndex = config.CameraIndex,
-                    CameraStatus = cameraReady ? CameraStatus.Connected : CameraStatus.Offline,
-                    Timestamp = DateTime.UtcNow
+                    AgentId      = config.AgentId,
+                    CameraIndex  = config.CameraIndex,
+                    CameraStatus = statusBox.Current,
+                    Timestamp    = DateTime.UtcNow
                 });
             }, null, TimeSpan.Zero, TimeSpan.FromSeconds(config.HeartbeatIntervalSeconds));
 
@@ -173,18 +174,50 @@ namespace HeatingCameraSystem.Agent
             CaptureCommandMessage cmd,
             ICameraCaptureService camera,
             NatsCommunicationService nats,
-            string agentId)
+            string agentId,
+            StatusBox status)
         {
-            bool success = camera.CaptureFrame(out string savedPath);
-            await nats.PublishCaptureResultAsync(new CaptureResultMessage
+            var prev = status.Current;
+            if (prev != CameraStatus.Offline) status.Current = CameraStatus.Streaming;
+            try
             {
-                AgentId      = agentId,
-                RecipeStepId = cmd.RecipeStepId,
-                IsSuccess    = success,
-                ImagePath    = savedPath,
-                Timestamp    = DateTime.UtcNow
-            });
-            Console.WriteLine($"[{agentId}] Step {cmd.RecipeStepId}: {(success ? "OK" : "FAIL")} -> {savedPath}");
+                bool success = camera.CaptureFrame(out string savedPath);
+                byte[]? bytes = null;
+                if (success && !string.IsNullOrEmpty(savedPath) && File.Exists(savedPath))
+                {
+                    try { bytes = File.ReadAllBytes(savedPath); }
+                    catch (IOException ex)
+                    {
+                        Console.WriteLine($"[{agentId}] failed reading captured file for NATS payload: {ex.Message}");
+                    }
+                }
+
+                await nats.PublishCaptureResultAsync(new CaptureResultMessage
+                {
+                    AgentId      = agentId,
+                    RecipeStepId = cmd.RecipeStepId,
+                    IsSuccess    = success,
+                    ImagePath    = savedPath,
+                    ImageBytes   = bytes,
+                    Timestamp    = DateTime.UtcNow
+                });
+                Console.WriteLine($"[{agentId}] Step {cmd.RecipeStepId}: {(success ? "OK" : "FAIL")} -> {savedPath} ({(bytes?.Length ?? 0)} bytes)");
+            }
+            finally
+            {
+                if (prev != CameraStatus.Offline) status.Current = prev;
+            }
+        }
+
+        private sealed class StatusBox
+        {
+            private int _current;
+            public StatusBox(CameraStatus initial) { _current = (int)initial; }
+            public CameraStatus Current
+            {
+                get => (CameraStatus)Volatile.Read(ref _current);
+                set => Volatile.Write(ref _current, (int)value);
+            }
         }
     }
 }

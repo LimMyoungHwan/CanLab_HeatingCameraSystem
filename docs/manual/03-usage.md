@@ -16,7 +16,7 @@ Master 실행 후 좌측 사이드바에 5개 탭:
 | **History** | `HistoryView.xaml` | 캡처 이력 조회, 이미지 미리보기 |
 | **Settings** | `SettingsView.xaml` | 카메라별 시리얼 포트 설정을 Agent 로 원격 전송 + ACK 대기 |
 
-상단 좌상단에 PLC 온도/습도가 실시간 표시(2초 폴링). 우측에 Agent 트리 — 녹색 점은 5초 이내 하트비트, 회색은 15초 무응답.
+상단 좌상단에 PLC 온도/습도가 실시간 표시(2초 폴링). 우측에 Agent 트리 — 녹색 점은 5초 이내 하트비트, 회색은 15초 무응답. 카메라 점은 cyan(Streaming, 캡처 중) / green(Connected) / gray(Offline) 3단계.
 
 ## 2. Recipe 워크플로
 
@@ -154,9 +154,11 @@ dotnet test --no-build
   - `Temperature` / `Humidity` (캡처 직후 PLC 값)
 - 더블클릭 → 이미지 미리보기 (이미지 파일이 Master PC 에서도 접근 가능한 경로여야 함 — 보통 Agent PC 의 공유 폴더 또는 동일 PC 시뮬 환경)
 
-> ⚠ Agent 가 별도 PC 면 `ImagePath` 는 그 PC 의 로컬 경로다. Master 에서 이미지를 열어보려면 SMB 공유나 별도 동기화 필요. 현재 자동 가져오기 기능은 미구현.
+> v2.2+ 부터 Agent 가 캡처 직후 JPEG 바이트를 `CaptureResultMessage.ImageBytes` 로 NATS 에 같이 실어 보내고, Master `RecipeEngine` 이 `%LOCALAPPDATA%\HeatingCameraSystem\ImageCache\` 에 자동 저장한다. `CaptureHistoryRecord.ImagePath` 는 Master 로컬 경로라 History 탭에서 바로 미리보기 가능.
+>
+> Agent 가 보낸 바이트가 비어있으면 (구버전 Agent 또는 캡처 파일 읽기 실패) 기존 `ImagePath` (Agent PC 로컬 경로) 가 그대로 기록됨 — 이 경우는 Master 에서 자동 미리보기 불가, SMB 공유 등 별도 수단 필요.
 
-이미지가 30일 지나면 `BackgroundDataCleanupService` 가 자동 삭제 (Master 가 직접 관리하는 폴더만). Agent 측은 보관 정책 없음.
+이미지가 30일 지나면 `BackgroundDataCleanupService` 가 자동 삭제 (`%LOCALAPPDATA%\HeatingCameraSystem\ImageCache\` 만 청소). Agent 측 `<StoragePath>` 폴더는 Agent 가 직접 관리 — 보관 정책 없음.
 
 ## 6. 시작 → 종료 시퀀스 (운영 기준)
 

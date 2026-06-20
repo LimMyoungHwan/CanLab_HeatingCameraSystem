@@ -15,12 +15,14 @@ namespace HeatingCameraSystem.Master.Services
         private readonly ICaptureHistoryRepository _historyRepo;
         private readonly float _tempTolerance;
         private readonly TimeSpan _captureTimeout;
+        private readonly string? _imageCacheDir;
 
         public RecipeEngine(
             IPlcController plcController,
             INatsCommunicationService natsService,
             ICaptureHistoryRepository historyRepo,
-            RecipeEngineSettings? settings = null)
+            RecipeEngineSettings? settings = null,
+            string? imageCacheDir = null)
         {
             _plcController = plcController;
             _natsService = natsService;
@@ -28,6 +30,7 @@ namespace HeatingCameraSystem.Master.Services
             var s = settings ?? new RecipeEngineSettings();
             _tempTolerance  = s.TemperatureTolerance;
             _captureTimeout = TimeSpan.FromSeconds(s.CaptureResultTimeoutSeconds);
+            _imageCacheDir  = imageCacheDir;
         }
 
         public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null)
@@ -110,10 +113,12 @@ namespace HeatingCameraSystem.Master.Services
                             System.Diagnostics.Debug.WriteLine($"[RecipeEngine] PLC read failed: {ex.Message}");
                         }
 
+                        string storedImagePath = TryStoreImageLocally(captureResult) ?? captureResult.ImagePath;
+
                         await _historyRepo.InsertAsync(new CaptureHistoryRecord
                         {
                             CameraId     = $"CAM-{step.CameraIndex:D2}",
-                            ImagePath    = captureResult.ImagePath,
+                            ImagePath    = storedImagePath,
                             RecipeStepId = captureResult.RecipeStepId,
                             Timestamp    = captureResult.Timestamp,
                             Temperature  = temp,
@@ -136,6 +141,29 @@ namespace HeatingCameraSystem.Master.Services
             await _plcController.StopChamberAsync();
             progress?.Report(new RecipeProgress { CurrentStep = totalSteps, TotalSteps = totalSteps, CurrentPhase = "완료" });
             Console.WriteLine($"[RecipeEngine] Recipe '{recipe.Name}' completed.");
+        }
+
+        private string? TryStoreImageLocally(CaptureResultMessage result)
+        {
+            if (result.ImageBytes == null || result.ImageBytes.Length == 0) return null;
+            if (string.IsNullOrEmpty(_imageCacheDir)) return null;
+            try
+            {
+                System.IO.Directory.CreateDirectory(_imageCacheDir);
+                string ext = System.IO.Path.GetExtension(result.ImagePath);
+                if (string.IsNullOrEmpty(ext)) ext = ".jpg";
+                string filename = $"{result.AgentId}_{result.Timestamp:yyyyMMdd_HHmmss_fff}_{result.RecipeStepId}{ext}";
+                foreach (char c in System.IO.Path.GetInvalidFileNameChars())
+                    filename = filename.Replace(c, '_');
+                string fullPath = System.IO.Path.Combine(_imageCacheDir, filename);
+                System.IO.File.WriteAllBytes(fullPath, result.ImageBytes);
+                return fullPath;
+            }
+            catch (System.Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RecipeEngine] cache image write failed: {ex.Message}");
+                return null;
+            }
         }
     }
 }
