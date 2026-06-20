@@ -129,6 +129,71 @@ namespace HeatingCameraSystem.Protocols
             }
         }
 
+        public async Task PublishCameraInventoryAsync(CameraInventoryMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"agent-mgr.inventory.{message.PCId}", message);
+        }
+
+        public Task SubscribeCameraInventoryAsync(Action<CameraInventoryMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop("agent-mgr.inventory.>", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
+        public async Task PublishManagerCommandAsync(ManagerCommandMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"server.cmd.mgr.{message.PCId}", message);
+        }
+
+        public Task SubscribeManagerCommandAsync(string pcId, Action<ManagerCommandMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop($"server.cmd.mgr.{pcId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
+        public async Task PublishLogAlertAsync(LogAlertMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"agent-mgr.log.alert.{message.PCId}", message);
+        }
+
+        public Task SubscribeLogAlertAsync(Action<LogAlertMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop("agent-mgr.log.alert.>", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
+        public async Task PublishLogDumpRequestAsync(LogDumpRequestMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"server.req.log.{message.PCId}", message);
+        }
+
+        public Task SubscribeLogDumpRequestAsync(string pcId, Action<LogDumpRequestMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop($"server.req.log.{pcId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
+        public async Task PublishLogDumpAsync(LogDumpMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"agent-mgr.log.dump.{message.PCId}", message);
+        }
+
+        public Task SubscribeLogDumpAsync(string pcId, Action<LogDumpMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop($"agent-mgr.log.dump.{pcId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
         public async ValueTask DisposeAsync()
         {
             if (_connection != null)

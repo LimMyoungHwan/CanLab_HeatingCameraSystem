@@ -16,13 +16,15 @@ namespace HeatingCameraSystem.Master.Services
         private readonly float _tempTolerance;
         private readonly TimeSpan _captureTimeout;
         private readonly string? _imageCacheDir;
+        private readonly ICameraDeviceRepository? _deviceRepo;
 
         public RecipeEngine(
             IPlcController plcController,
             INatsCommunicationService natsService,
             ICaptureHistoryRepository historyRepo,
             RecipeEngineSettings? settings = null,
-            string? imageCacheDir = null)
+            string? imageCacheDir = null,
+            ICameraDeviceRepository? deviceRepo = null)
         {
             _plcController = plcController;
             _natsService = natsService;
@@ -31,6 +33,7 @@ namespace HeatingCameraSystem.Master.Services
             _tempTolerance  = s.TemperatureTolerance;
             _captureTimeout = TimeSpan.FromSeconds(s.CaptureResultTimeoutSeconds);
             _imageCacheDir  = imageCacheDir;
+            _deviceRepo     = deviceRepo;
         }
 
         public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null)
@@ -89,9 +92,11 @@ namespace HeatingCameraSystem.Master.Services
                     TaskCreationOptions.RunContinuationsAsynchronously);
                 resultWaiters[step.StepId] = tcs;
 
+                string targetAgentId = await ResolveAgentIdAsync(step);
+
                 await _natsService.PublishCaptureCommandAsync(new CaptureCommandMessage
                 {
-                    TargetAgentId = $"Agent_{step.CameraIndex}",
+                    TargetAgentId = targetAgentId,
                     RecipeStepId  = step.StepId,
                     Timestamp     = DateTime.UtcNow
                 });
@@ -141,6 +146,19 @@ namespace HeatingCameraSystem.Master.Services
             await _plcController.StopChamberAsync();
             progress?.Report(new RecipeProgress { CurrentStep = totalSteps, TotalSteps = totalSteps, CurrentPhase = "완료" });
             Console.WriteLine($"[RecipeEngine] Recipe '{recipe.Name}' completed.");
+        }
+
+        private async Task<string> ResolveAgentIdAsync(RecipeStep step)
+        {
+            if (!string.IsNullOrEmpty(step.CameraAlias) && _deviceRepo != null)
+            {
+                var device = await _deviceRepo.GetByAliasAsync(step.CameraAlias);
+                if (device != null && !string.IsNullOrEmpty(device.AgentId))
+                    return device.AgentId;
+
+                Console.WriteLine($"[RecipeEngine] Alias '{step.CameraAlias}' not found, falling back to CameraIndex");
+            }
+            return $"Agent_{step.CameraIndex}";
         }
 
         private string? TryStoreImageLocally(CaptureResultMessage result)

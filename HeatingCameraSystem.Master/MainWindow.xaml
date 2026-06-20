@@ -29,6 +29,10 @@
         <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
             <views:SettingsView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:DevicesViewModel}">
+            <views:DevicesView />
+        </DataTemplate>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </Window.Resources>
 
     <Grid>
@@ -55,6 +59,9 @@
                         Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
 
                 <Button Content="Serial Settings" Command="{Binding NavigateToSettingsCommand}" 
+                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+
+                <Button Content="Devices" Command="{Binding NavigateToDevicesCommand}" 
                         Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
             </StackPanel>
         </Border>

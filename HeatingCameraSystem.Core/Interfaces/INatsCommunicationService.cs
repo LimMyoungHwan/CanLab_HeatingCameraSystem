@@ -27,5 +27,25 @@ namespace HeatingCameraSystem.Core.Interfaces
         // Agent -> Master (Serial Config ACK): agent.config.serial.ack.{AgentId}
         Task PublishSerialConfigAckAsync(SerialConfigAckMessage message);
         Task SubscribeSerialConfigAckAsync(string agentId, Action<SerialConfigAckMessage> onMessageReceived);
+
+        // Manager -> Server (Inventory): agent-mgr.inventory.{PCId}
+        Task PublishCameraInventoryAsync(CameraInventoryMessage message);
+        Task SubscribeCameraInventoryAsync(Action<CameraInventoryMessage> onMessageReceived);
+
+        // Server -> Manager (Command): server.cmd.mgr.{PCId}
+        Task PublishManagerCommandAsync(ManagerCommandMessage message);
+        Task SubscribeManagerCommandAsync(string pcId, Action<ManagerCommandMessage> onMessageReceived);
+
+        // Manager -> Server (Log Alert): agent-mgr.log.alert.{PCId}
+        Task PublishLogAlertAsync(LogAlertMessage message);
+        Task SubscribeLogAlertAsync(Action<LogAlertMessage> onMessageReceived);
+
+        // Server -> Manager (Log Dump Request): server.req.log.{PCId}
+        Task PublishLogDumpRequestAsync(LogDumpRequestMessage message);
+        Task SubscribeLogDumpRequestAsync(string pcId, Action<LogDumpRequestMessage> onMessageReceived);
+
+        // Manager -> Server (Log Dump): agent-mgr.log.dump.{PCId}
+        Task PublishLogDumpAsync(LogDumpMessage message);
+        Task SubscribeLogDumpAsync(string pcId, Action<LogDumpMessage> onMessageReceived);
     }
 }

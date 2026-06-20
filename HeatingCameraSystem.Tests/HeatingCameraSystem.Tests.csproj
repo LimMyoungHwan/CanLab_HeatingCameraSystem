@@ -27,6 +27,7 @@
     <ProjectReference Include="..\HeatingCameraSystem.Protocols\HeatingCameraSystem.Protocols.csproj" />
     <ProjectReference Include="..\HeatingCameraSystem.Master\HeatingCameraSystem.Master.csproj" />
     <ProjectReference Include="..\HeatingCameraSystem.Agent\HeatingCameraSystem.Agent.csproj" />
+    <ProjectReference Include="..\HeatingCameraSystem.AgentManager\HeatingCameraSystem.AgentManager.csproj" />
   </ItemGroup>
 
 </Project>

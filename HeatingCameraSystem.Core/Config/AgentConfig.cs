@@ -13,5 +13,7 @@ namespace HeatingCameraSystem.Core.Config
         /// 카메라/웹캠이 없는 환경에서 E2E 테스트용.
         /// </summary>
         public bool SimulationMode { get; set; } = false;
+
+        public string LogPath { get; set; } = "";
     }
 }

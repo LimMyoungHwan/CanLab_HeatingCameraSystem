@@ -9,6 +9,9 @@ using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Protocols;
 using HeatingCameraSystem.Protocols.Simulation;
+using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Formatting.Compact;
 
 namespace HeatingCameraSystem.Agent
 {
@@ -17,6 +20,28 @@ namespace HeatingCameraSystem.Agent
         static async Task Main(string[] args)
         {
             var config = LoadOrCreateConfig(args);
+
+            // Serilog NDJSON file sink (Manager LogTailService가 tail)
+            string logDir = string.IsNullOrEmpty(config.LogPath)
+                ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs")
+                : config.LogPath;
+            Directory.CreateDirectory(logDir);
+
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .Enrich.WithProperty("AgentId", config.AgentId)
+                .WriteTo.Console()
+                .WriteTo.File(
+                    new CompactJsonFormatter(),
+                    Path.Combine(logDir, "agent-.log"),
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 7,
+                    shared: true)
+                .CreateLogger();
+
+            using var loggerFactory = LoggerFactory.Create(b => b.AddSerilog(dispose: false));
+            var logger = loggerFactory.CreateLogger<Program>();
+
             string storagePath = Path.IsPathRooted(config.StoragePath)
                 ? config.StoragePath
                 : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, config.StoragePath);
@@ -144,6 +169,7 @@ namespace HeatingCameraSystem.Agent
             if (args.Length > 2 && int.TryParse(args[2], out var camIdx)) config.CameraIndex = camIdx;
             if (args.Length > 3) config.StoragePath = args[3];
             if (args.Length > 4 && bool.TryParse(args[4], out var sim))   config.SimulationMode = sim;
+            if (args.Length > 5) config.LogPath = args[5];
 
             return config;
         }

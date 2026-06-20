@@ -51,5 +51,12 @@ namespace HeatingCameraSystem.Master.ViewModels
             CurrentViewTitle = "시리얼 설정 (Serial Settings)";
             CurrentViewModel = new SettingsViewModel();
         }
+
+        [RelayCommand]
+        private void NavigateToDevices()
+        {
+            CurrentViewTitle = "디바이스 관리 (Devices)";
+            CurrentViewModel = new DevicesViewModel();
+        }
     }
 }

@@ -22,6 +22,7 @@ namespace HeatingCameraSystem.Master.Services
         public static ICameraMappingRepository MappingRepo { get; private set; } = null!;
         public static ICaptureHistoryRepository HistoryRepo { get; private set; } = null!;
         public static ICameraSerialSettingsRepository CameraSerialSettingsRepo { get; private set; } = null!;
+        public static ICameraDeviceRepository CameraDeviceRepo { get; private set; } = null!;
         public static NatsCommunicationService? NatsService { get; private set; }
         public static IPlcController? PlcController { get; private set; }
         public static ISerialShutterController? ShutterController { get; private set; }
@@ -44,6 +45,11 @@ namespace HeatingCameraSystem.Master.Services
             MappingRepo = new LiteDbCameraMappingRepository(Db);
             HistoryRepo = new LiteDbCaptureHistoryRepository(Db);
             CameraSerialSettingsRepo = new LiteDbCameraSerialSettingsRepository(Db);
+            CameraDeviceRepo = new LiteDbCameraDeviceRepository(Db);
+
+            string dbPath = Path.Combine(dir, "data.db");
+            MigrationService.BackupDatabase(dbPath);
+            MigrationService.Run(Db, CameraDeviceRepo);
 
             NatsService = new NatsCommunicationService();
 
@@ -59,7 +65,7 @@ namespace HeatingCameraSystem.Master.Services
                 ShutterController = new SerialShutterController(Settings.Serial);
             }
 
-            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir);
+            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo);
             ConnectionMonitor = new ConnectionMonitorService(PlcController, ShutterController, Settings);
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
         }

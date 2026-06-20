@@ -48,7 +48,8 @@
 | `HeatingCameraSystem.Protocols` | `net8.0` | FluentModbus / NATS.Net / System.IO.Ports 구현체. `Simulation/` 폴더에 Fake 구현 포함 |
 | `HeatingCameraSystem.Master` | `net8.0-windows` | WPF GUI. `AppServices` 정적 서비스 로케이터 |
 | `HeatingCameraSystem.Agent` | `net8.0` | 카메라 PC 콘솔 앱 |
-| `HeatingCameraSystem.Tests` | `net8.0-windows` | xUnit + Moq (38건) |
+| `HeatingCameraSystem.AgentManager` | `net8.0` (win-x64) | PC당 1개 Windows Service. WMI 카메라 자동 발견 + Agent 프로세스 supervisor + NDJSON 로그 수집 |
+| `HeatingCameraSystem.Tests` | `net8.0-windows` | xUnit + Moq (59건) |
 | `HeatingCameraSystem.E2EDriver` | `net8.0` | 헤드리스 E2E 시뮬 드라이버 |
 
 ## 4. NATS 토픽 맵
@@ -61,8 +62,13 @@
 | `agent.result.capture.{AgentId}` | Agent → Master | `CaptureResultMessage` (성공여부 + 원본 경로 + 옵션 ImageBytes) |
 | `agent.status.{AgentId}` | Agent → Master (5초 주기) | `AgentStatusMessage` (CameraStatus enum) |
 | `agent.config.serial.ack.{AgentId}` | Agent → Master | `SerialConfigAckMessage` |
+| `agent-mgr.inventory.{PCId}` | Manager → Master | `CameraInventoryMessage` (카메라 목록 + 상태) |
+| `server.cmd.mgr.{PCId}` | Master → Manager | `ManagerCommandMessage` (Approve/Reject/Rename/SetSerial/Restart/Disable) |
+| `agent-mgr.log.alert.{PCId}` | Manager → Master | `LogAlertMessage` (ERROR/FATAL 즉시 push) |
+| `server.req.log.{PCId}` | Master → Manager | `LogDumpRequestMessage` (로그 요청) |
+| `agent-mgr.log.dump.{PCId}` | Manager → Master | `LogDumpMessage` (gzip 로그 응답) |
 
-`{AgentId}` 의 숫자 부분과 `RecipeStep.CameraIndex` 가 일치해야 라우팅됨. 자세한 매핑 규칙은 매뉴얼 02 §4.
+`{AgentId}` 형식: 기존 `Agent_{CameraIndex}` 또는 Manager 부여 `{PCId}_{HardwareIdHash8}`. `RecipeStep.CameraAlias` 설정 시 Alias → DB lookup → AgentId 변환. 미설정 시 `Agent_{CameraIndex}` 폴백. 자세한 매핑 규칙은 매뉴얼 02 §4.
 
 ## 5. 데이터 흐름 — 캡처 1회
 
@@ -100,6 +106,9 @@
 | `data.db` | `%LOCALAPPDATA%\HeatingCameraSystem\` | LiteDB |
 | `agent.json` | Agent exe 폴더 | Agent 기동 시 없으면 자동 생성 |
 | 캡처 이미지 | Agent exe 폴더 `\ImageStorage\` | `agent.json` `StoragePath` 로 변경 |
+| `manager-settings.json` | `C:\HeatingCameraSystem\Manager\` | Manager 서비스 설정 (PCId, NatsUrl, SimulationMode) |
+| `manager-state.json` | `C:\HeatingCameraSystem\Manager\` | 등록된 카메라 + Alias + Approve 상태 |
+| Agent NDJSON 로그 | `C:\HeatingCameraSystem\logs\{AgentId}\` | Serilog 일일 롤링, 7일 보관 |
 
 ## 7. 다음 단계
 
