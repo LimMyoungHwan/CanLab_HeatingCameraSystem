@@ -7,6 +7,7 @@
              d:DesignHeight="768" d:DesignWidth="1024" Background="#0e1321" Foreground="#dee2f7">
 
     <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <SolidColorBrush x:Key="BgSurface"              Color="#0e1321"/>
         <SolidColorBrush x:Key="BgSurfaceContainer"     Color="#1a1f2e"/>
         <SolidColorBrush x:Key="BgSurfaceContainerHigh" Color="#252a39"/>

@@ -66,8 +66,28 @@ namespace HeatingCameraSystem.AgentManager.Services
                     break;
 
                 case ManagerCommandOp.SetSerial:
-                    // Payload = JSON serialized CameraSerialSettings — forward to Agent via NATS
-                    // (Agent already handles master.config.serial.{AgentId} topic)
+                    if (entry is not null && !string.IsNullOrEmpty(entry.AgentId) &&
+                        !string.IsNullOrEmpty(cmd.Payload))
+                    {
+                        try
+                        {
+                            var serialSettings = JsonSerializer.Deserialize<Core.Models.CameraSerialSettings>(cmd.Payload);
+                            if (serialSettings is not null)
+                            {
+                                await _nats.PublishSerialConfigAsync(new Core.Models.SerialConfigMessage
+                                {
+                                    AgentId   = entry.AgentId,
+                                    Settings  = serialSettings,
+                                    Timestamp = DateTime.UtcNow,
+                                });
+                                _logger.LogInformation("SetSerial forwarded to {AgentId}", entry.AgentId);
+                            }
+                        }
+                        catch (JsonException ex)
+                        {
+                            _logger.LogWarning(ex, "SetSerial: invalid Payload JSON for {HwId}", cmd.HardwareId);
+                        }
+                    }
                     break;
 
                 case ManagerCommandOp.Restart:
