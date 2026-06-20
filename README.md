@@ -2,6 +2,8 @@
 
 열화상 카메라 모니터링 시스템 — WPF Master PC ↔ NATS ↔ 다수의 Agent (카메라 PC)
 
+> 📘 **운영자/개발자 매뉴얼**: [`docs/manual/`](docs/manual/README.md) — 개요 / 설치 / 설정 / 사용법 통합본. 처음이라면 [5분 Quick Start](docs/manual/README.md#5분-quick-start-시뮬레이션) 부터.
+
 ## 아키텍처
 
 ```
@@ -96,9 +98,14 @@ agent.config.serial.ack.{AgentId}     Agent → Master (설정 적용 ACK)
 
 ## 배포 가이드
 
-- [Master PC 설치](docs/deployment/master-setup.md)
-- [Agent PC 설치](docs/deployment/agent-setup.md)
-- [NATS 서버 설정](docs/deployment/docker-compose.yml)
+➡ 통합 매뉴얼로 이전: [`docs/manual/`](docs/manual/README.md)
+
+- [00 — 시스템 개요](docs/manual/00-overview.md)
+- [01 — 설치](docs/manual/01-installation.md)
+- [02 — 설정](docs/manual/02-configuration.md)
+- [03 — 사용법](docs/manual/03-usage.md)
+- [시뮬레이션 모드 전체 가이드](docs/deployment/simulation-mode.md)
+- [NATS docker-compose](docs/deployment/docker-compose.yml)
 
 ## 라이선스
 
