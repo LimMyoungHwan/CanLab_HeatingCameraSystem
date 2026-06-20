@@ -2,6 +2,13 @@ namespace HeatingCameraSystem.Core.Config
 {
     public class HardwareSettings
     {
+        /// <summary>
+        /// true이면 PLC / Serial Shutter를 가짜(Fake) 구현으로 대체한다.
+        /// 실제 하드웨어가 없는 개발/시연/CI 환경에서 사용.
+        /// 카메라(Agent 측)와 NATS는 별도. 카메라 시뮬은 agent.json 의 SimulationMode 로 켠다.
+        /// </summary>
+        public bool SimulationMode { get; set; } = false;
+
         public PlcSettings Plc { get; set; } = new();
         public NatsSettings Nats { get; set; } = new();
         public SerialSettings Serial { get; set; } = new();

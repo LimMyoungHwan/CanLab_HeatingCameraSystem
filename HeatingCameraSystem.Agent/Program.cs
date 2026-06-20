@@ -5,8 +5,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Agent.Services;
 using HeatingCameraSystem.Core.Config;
+using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Protocols;
+using HeatingCameraSystem.Protocols.Simulation;
 
 namespace HeatingCameraSystem.Agent
 {
@@ -19,10 +21,16 @@ namespace HeatingCameraSystem.Agent
                 ? config.StoragePath
                 : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, config.StoragePath);
 
-            using var cameraService = new CameraCaptureService(storagePath);
+            ICameraCaptureService cameraService = config.SimulationMode
+                ? new FakeCameraCaptureService(storagePath, config.AgentId)
+                : new CameraCaptureService(storagePath);
+            using var cameraDisposable = cameraService as IDisposable;
+
             bool cameraReady = cameraService.InitializeCamera(config.CameraIndex);
             if (!cameraReady)
                 Console.WriteLine($"[{config.AgentId}] Camera {config.CameraIndex} unavailable — capture commands will report failure.");
+            else
+                Console.WriteLine($"[{config.AgentId}] Camera idx={config.CameraIndex} ready ({(config.SimulationMode ? "SIM" : "REAL")})");
 
             await using var nats = new NatsCommunicationService();
             await nats.ConnectAsync(config.NatsUrl);
@@ -33,7 +41,7 @@ namespace HeatingCameraSystem.Agent
                 _ = HandleCaptureAsync(cmd, cameraService, nats, config.AgentId);
             });
 
-            SerialShutterController? shutterController = null;
+            ISerialShutterController? shutterController = null;
             await nats.SubscribeSerialConfigAsync(config.AgentId, msg =>
             {
                 _ = ApplySerialConfigAsync(msg);
@@ -68,14 +76,16 @@ namespace HeatingCameraSystem.Agent
                 try
                 {
                     shutterController?.Disconnect();
-                    shutterController = new SerialShutterController(new SerialSettings
-                    {
-                        PortName = msg.Settings.PortName,
-                        BaudRate = msg.Settings.BaudRate,
-                        DataBits = msg.Settings.DataBits,
-                        Parity   = msg.Settings.Parity,
-                        StopBits = msg.Settings.StopBits
-                    });
+                    shutterController = config.SimulationMode
+                        ? new FakeSerialShutterController()
+                        : new SerialShutterController(new SerialSettings
+                        {
+                            PortName = msg.Settings.PortName,
+                            BaudRate = msg.Settings.BaudRate,
+                            DataBits = msg.Settings.DataBits,
+                            Parity   = msg.Settings.Parity,
+                            StopBits = msg.Settings.StopBits
+                        });
                     await shutterController.ConnectAsync();
                 }
                 catch (Exception ex)
@@ -125,13 +135,16 @@ namespace HeatingCameraSystem.Agent
 
             if (args.Length > 0) config.AgentId = args[0];
             if (args.Length > 1) config.NatsUrl = args[1];
+            if (args.Length > 2 && int.TryParse(args[2], out var camIdx)) config.CameraIndex = camIdx;
+            if (args.Length > 3) config.StoragePath = args[3];
+            if (args.Length > 4 && bool.TryParse(args[4], out var sim))   config.SimulationMode = sim;
 
             return config;
         }
 
         private static async Task HandleCaptureAsync(
             CaptureCommandMessage cmd,
-            CameraCaptureService camera,
+            ICameraCaptureService camera,
             NatsCommunicationService nats,
             string agentId)
         {

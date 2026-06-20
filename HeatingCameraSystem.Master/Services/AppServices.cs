@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Config;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Protocols;
+using HeatingCameraSystem.Protocols.Simulation;
 using LiteDB;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 using JsonSerializerOptions = System.Text.Json.JsonSerializerOptions;
@@ -21,7 +22,7 @@ namespace HeatingCameraSystem.Master.Services
         public static ICaptureHistoryRepository HistoryRepo { get; private set; } = null!;
         public static ICameraSerialSettingsRepository CameraSerialSettingsRepo { get; private set; } = null!;
         public static NatsCommunicationService? NatsService { get; private set; }
-        public static PlcModbusClient? PlcController { get; private set; }
+        public static IPlcController? PlcController { get; private set; }
         public static ISerialShutterController? ShutterController { get; private set; }
         public static RecipeEngine? RecipeEngine { get; private set; }
         public static ConnectionMonitorService? ConnectionMonitor { get; private set; }
@@ -42,11 +43,22 @@ namespace HeatingCameraSystem.Master.Services
             CameraSerialSettingsRepo = new LiteDbCameraSerialSettingsRepository(Db);
 
             NatsService = new NatsCommunicationService();
-            PlcController = new PlcModbusClient(Settings.Plc);
-            ShutterController = new SerialShutterController(Settings.Serial);
+
+            if (Settings.SimulationMode)
+            {
+                PlcController     = new FakePlcController();
+                ShutterController = new FakeSerialShutterController();
+                System.Diagnostics.Debug.WriteLine("[AppServices] SimulationMode=true -> using Fake PLC + Fake Shutter");
+            }
+            else
+            {
+                PlcController     = new PlcModbusClient(Settings.Plc);
+                ShutterController = new SerialShutterController(Settings.Serial);
+            }
+
             RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo);
             ConnectionMonitor = new ConnectionMonitorService(PlcController, ShutterController, Settings);
-            ConnectionMonitor.Start();
+            if (!Settings.SimulationMode) ConnectionMonitor.Start();
         }
 
         public static async Task TryConnectServicesAsync()
@@ -70,19 +82,41 @@ namespace HeatingCameraSystem.Master.Services
             {
                 System.Diagnostics.Debug.WriteLine($"[AppServices] PLC connect failed: {ex.Message}");
             }
+
+            if (Settings.SimulationMode && ShutterController is { IsConnected: false })
+            {
+                try
+                {
+                    await ShutterController.ConnectAsync();
+                    System.Diagnostics.Debug.WriteLine("[AppServices] Fake shutter connected.");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AppServices] Fake shutter connect failed: {ex.Message}");
+                }
+            }
         }
 
         public static async Task ApplySerialSettingsLocallyAsync(Core.Models.CameraSerialSettings s)
         {
             ShutterController?.Dispose();
-            ShutterController = new SerialShutterController(new Core.Config.SerialSettings
+
+            if (Settings.SimulationMode)
             {
-                PortName = s.PortName,
-                BaudRate = s.BaudRate,
-                DataBits = s.DataBits,
-                Parity   = s.Parity,
-                StopBits = s.StopBits
-            });
+                ShutterController = new FakeSerialShutterController();
+            }
+            else
+            {
+                ShutterController = new SerialShutterController(new Core.Config.SerialSettings
+                {
+                    PortName = s.PortName,
+                    BaudRate = s.BaudRate,
+                    DataBits = s.DataBits,
+                    Parity   = s.Parity,
+                    StopBits = s.StopBits
+                });
+            }
+
             try
             {
                 await ShutterController.ConnectAsync();
@@ -98,7 +132,7 @@ namespace HeatingCameraSystem.Master.Services
             ConnectionMonitor?.Dispose();
             ShutterController?.Dispose();
             if (NatsService != null) await NatsService.DisposeAsync();
-            PlcController?.Dispose();
+            (PlcController as IDisposable)?.Dispose();
             Db?.Dispose();
         }
 

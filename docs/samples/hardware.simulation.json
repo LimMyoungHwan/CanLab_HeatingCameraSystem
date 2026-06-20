@@ -1,0 +1,34 @@
+{
+  "SimulationMode": true,
+  "Plc": {
+    "IpAddress": "0.0.0.0",
+    "Port": 502,
+    "UnitId": 0,
+    "RegTempPv": 100,
+    "RegTempSv": 101,
+    "RegHumPv": 102,
+    "RegHumSv": 103,
+    "RegServoPosSv": 104,
+    "RegBb1TempSv": 105,
+    "RegBb2TempSv": 106,
+    "RegBb1TempPv": 107,
+    "RegBb2TempPv": 108,
+    "CoilRunStop": 10,
+    "CoilServoArrival": 11,
+    "CoilEStop": 12
+  },
+  "Nats": {
+    "Url": "nats://127.0.0.1:4222"
+  },
+  "Serial": {
+    "PortName": "COM_FAKE",
+    "BaudRate": 9600,
+    "DataBits": 8,
+    "Parity": "None",
+    "StopBits": "One"
+  },
+  "RecipeEngine": {
+    "TemperatureTolerance": 0.5,
+    "CaptureResultTimeoutSeconds": 30
+  }
+}
