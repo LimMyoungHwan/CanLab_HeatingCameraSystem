@@ -1,10 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Master.Services;
+using Microsoft.Win32;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
@@ -193,6 +198,58 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void EmergencyStop()
         {
             SystemStatusText = "System Status: EMERGENCY STOPPED";
+        }
+
+        [RelayCommand]
+        private void ExportCsv()
+        {
+            var dlg = new SaveFileDialog
+            {
+                Title    = "Export history to CSV",
+                Filter   = "CSV (*.csv)|*.csv|All files (*.*)|*.*",
+                FileName = $"history_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            var records = AppServices.HistoryRepo
+                .QueryAsync(FromDateTime, ToDateTime, null, 1, int.MaxValue)
+                .GetAwaiter().GetResult()
+                .ToList();
+
+            if (SelectedCameraGroup != "All Units")
+            {
+                int min = 1, max = 64;
+                if (SelectedCameraGroup.Contains("Agent-PC-01")) { min = 1;  max = 16; }
+                else if (SelectedCameraGroup.Contains("Agent-PC-02")) { min = 17; max = 32; }
+                else if (SelectedCameraGroup.Contains("Agent-PC-03")) { min = 33; max = 64; }
+
+                records = records.Where(r =>
+                    int.TryParse(r.CameraId.Replace("CAM-", ""), out int n) && n >= min && n <= max
+                ).ToList();
+            }
+
+            using var writer = new StreamWriter(dlg.FileName, false, new UTF8Encoding(true));
+            writer.WriteLine("Timestamp,CameraId,Temperature,Humidity,RecipeStepId,ImagePath");
+            foreach (var r in records)
+            {
+                writer.WriteLine(string.Join(',',
+                    r.Timestamp.ToString("o", CultureInfo.InvariantCulture),
+                    CsvEscape(r.CameraId),
+                    r.Temperature.ToString("F2", CultureInfo.InvariantCulture),
+                    r.Humidity.ToString("F2", CultureInfo.InvariantCulture),
+                    CsvEscape(r.RecipeStepId),
+                    CsvEscape(r.ImagePath)));
+            }
+
+            SystemStatusText = $"Exported {records.Count} records to {Path.GetFileName(dlg.FileName)}";
+        }
+
+        private static string CsvEscape(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            if (s.Contains(',') || s.Contains('"') || s.Contains('\n') || s.Contains('\r'))
+                return "\"" + s.Replace("\"", "\"\"") + "\"";
+            return s;
         }
     }
 }

@@ -159,6 +159,9 @@
 
                 <!-- Search Button -->
                 <Button Content="SEARCH" Command="{Binding SearchCommand}" Style="{StaticResource SearchButtonStyle}" Height="30" Width="120" VerticalAlignment="Bottom"/>
+
+                <!-- Export CSV Button -->
+                <Button Content="EXPORT CSV" Command="{Binding ExportCsvCommand}" Style="{StaticResource PageButtonStyle}" Height="30" Width="120" VerticalAlignment="Bottom" Margin="8,0,0,0"/>
             </StackPanel>
         </Border>
 
