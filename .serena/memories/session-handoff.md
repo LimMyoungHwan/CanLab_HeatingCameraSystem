@@ -1,11 +1,42 @@
-# 세션 핸드오프 (2026-06-19)
+# 세션 핸드오프 (2026-06-20)
 
 ## 현재 상태
 
-- **빌드**: ✅ 0 errors / 0 warnings
-- **테스트**: ✅ 27/27 통과
-- **마지막 커밋**: `e8007e4`
+- **빌드**: ✅ 7 projects, 0 errors / 0 warnings
+- **테스트**: ✅ 38/38 통과 (기존 27 + 신규 시뮬 11)
+- **E2E**: ✅ 실제 NATS + 2 Agent 프로세스 + FakePlc → 4단계 Recipe → 캡처 4건 + JPEG 4개 검증 PASS
 - **GitHub**: https://github.com/LimMyoungHwan/CanLab_HeatingCameraSystem
+
+## 이번 세션 (2026-06-20) — Simulation Mode
+
+### 신규
+- `HeatingCameraSystem.Protocols/Simulation/FakePlcController.cs` — IPlcController in-memory, SetTarget 즉시 Current snap, 서보 즉시 도착, BB 인덱스별 상태
+- `HeatingCameraSystem.Protocols/Simulation/FakeSerialShutterController.cs` — ISerialShutterController in-memory, 카메라별 _isOpen Dictionary
+- `HeatingCameraSystem.Agent/Services/FakeCameraCaptureService.cs` — OpenCvSharp 합성 JPEG (HSV 그라디언트 + 텍스트 오버레이)
+- `HeatingCameraSystem.E2EDriver/` — 헤드리스 콘솔 E2E 드라이버 (FakePlc + 실제 NATS + Recipe 4-step)
+- `HeatingCameraSystem.Tests/SimulationTests.cs` — 11건 (FakePlc 6 / FakeShutter 3 / FakeCamera 1 / RecipeEngine+FakePlc 1)
+- `docs/deployment/simulation-mode.md` — 운영 가이드 (Master + 멀티 Agent + Recipe 검증 체크리스트)
+- `docs/deployment/run-e2e-simulation.ps1` — 한 줄 재현 러너
+- `docs/samples/hardware.simulation.json`, `agent.simulation.json`, `agent.webcam.json`
+
+### 수정
+- `Core/Config/HardwareSettings.cs` — `bool SimulationMode` (Master 측 PLC/Shutter Fake 스위치)
+- `Core/Config/AgentConfig.cs` — `bool SimulationMode` (Agent 측 Camera Fake 스위치)
+- `Master/Services/AppServices.cs` — `PlcController` 타입 `PlcModbusClient?` → `IPlcController?`, SimulationMode 시 Fake 주입, ConnectionMonitor 시뮬에서 미시작, Dispose 시 `as IDisposable` 캐스트
+- `Agent/Program.cs` — CLI 인수 확장 `<AgentId> <NatsUrl> [<CameraIndex>] [<StoragePath>] [<SimulationMode>]`, ICameraCaptureService 추상화로 Fake/Real 선택, 시리얼 셔터도 시뮬 분기
+- `HeatingCameraSystem.slnx` — E2EDriver 등록
+
+### 사용법
+- Master 시뮬: `hardware.json` 에 `"SimulationMode": true` → `dotnet run --project HeatingCameraSystem.Master`
+- Agent 멀티 인스턴스: `Agent.exe <AgentId> <NatsUrl> [<CamIdx>] [<StoragePath>] [<SimMode>]`
+- 자동 E2E 재현: `./docs/deployment/run-e2e-simulation.ps1`
+
+### 발견된 미해결
+- Agent 두 인스턴스 동시 launch 시 `agent.json` race → 늦게 뜬 쪽 조용히 실패. 러너에서 sequential start + 3초 대기로 회피. 근본 해결은 Agent 가 CLI 인수만으로 동작하도록 (agent.json 옵션화).
+
+## 이전 세션 (2026-06-19)
+
+- **마지막 커밋**: `e8007e4`
 
 ## 완료된 작업 (이번 세션)
 
