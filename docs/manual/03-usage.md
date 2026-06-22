@@ -290,6 +290,25 @@ Agent 프로세스가 크래시하면 Manager 가 지수 백오프(`1→2→5→
 | 카메라가 계속 사라졌다 나타남 | Agent 반복 크래시 → 백오프 재시작 중. 로그 가져오기로 원인 확인. 5회 초과 시 영구 드롭 |
 | "로그 가져오기" 30초 초과 | 해당 Agent 가 죽었거나 NATS 연결 끊김. Dashboard 점 색 확인 |
 
+### 8.6 승인 루프 E2E 검증 (SC-12)
+
+하드웨어 없이 Manager 승인 흐름이 정상인지 확인하는 자동 러너. NATS 서버만 떠 있으면 된다.
+
+```powershell
+./docs/deployment/run-manager-e2e.ps1
+```
+
+내부 동작:
+1. `ManagerE2EDriver` 가 AgentManager(SimulationMode)를 in-process 호스팅
+2. `FakeCameraEnumerator` 카메라 2대 발견 → `agent-mgr.inventory.{PCId}` 발행
+3. 드라이버가 `server.cmd.mgr.{PCId}` 로 Approve 2건 발행
+4. Manager 가 AgentId(`{PCId}_{해시8}`) 부여 + 승인 인벤토리 재발행
+5. 검증: 2대 모두 IsApproved=true, AgentId 부여, `manager-state.json` 영속
+
+종료 코드: `0` PASS / `1` FAIL / `2` NATS 연결 실패 / `3` timeout.
+
+> 이 러너는 **승인 흐름**만 검증한다 (SimulationMode 라 실제 Agent.exe spawn·캡처는 없음 — 매뉴얼 02 §9.3). 캡처 roundtrip 검증은 [§4.1 자동 E2E 러너](#41-자동-e2e-러너-가장-빠름) 사용.
+
 ## 9. 관련 문서
 
 | 주제 | 위치 |
@@ -298,5 +317,6 @@ Agent 프로세스가 크래시하면 Manager 가 지수 백오프(`1→2→5→
 | 설치 절차 | [01-installation.md](./01-installation.md) |
 | 설정 파일 필드 | [02-configuration.md](./02-configuration.md) |
 | 시뮬레이션 전체 가이드 | [../deployment/simulation-mode.md](../deployment/simulation-mode.md) |
-| 자동 E2E 러너 스크립트 | [../deployment/run-e2e-simulation.ps1](../deployment/run-e2e-simulation.ps1) |
+| 캡처 roundtrip E2E 러너 | [../deployment/run-e2e-simulation.ps1](../deployment/run-e2e-simulation.ps1) |
+| Manager 승인 E2E 러너 (SC-12) | [../deployment/run-manager-e2e.ps1](../deployment/run-manager-e2e.ps1) |
 | 샘플 설정 파일 | [../samples/](../samples/) |

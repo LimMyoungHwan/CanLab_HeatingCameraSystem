@@ -12,6 +12,7 @@ using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Master.Services;
 using HeatingCameraSystem.Protocols.Simulation;
 using LiteDB;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -58,6 +59,51 @@ namespace HeatingCameraSystem.Tests
 
             Assert.NotNull(received);
             Assert.Equal(PnpChangeType.Removal, received!.ChangeType);
+        }
+    }
+
+    // ── AgentSupervisor (SimulationMode) ──────────────────────────────────────
+
+    public class AgentSupervisorSimTests : IDisposable
+    {
+        private readonly string _tempDir;
+        private readonly AgentSupervisor _supervisor;
+
+        public AgentSupervisorSimTests()
+        {
+            _tempDir = Path.Combine(Path.GetTempPath(), $"hcs_sup_{Guid.NewGuid():N}");
+            Directory.CreateDirectory(_tempDir);
+            var settings = new ManagerSettings { SimulationMode = true, InstallRoot = _tempDir };
+            var store = new ManagerStateStore(_tempDir);
+            _supervisor = new AgentSupervisor(settings, store, NullLogger<AgentSupervisor>.Instance);
+        }
+
+        [Fact]
+        public void IsRunning_AfterSimSpawn_DoesNotThrow()
+        {
+            _supervisor.Spawn(new CameraEntry { HardwareId = "HW_SIM", AgentId = "PC_sim0001", OpenCvIndex = 0 });
+
+            var ex = Record.Exception(() => _supervisor.IsRunning("HW_SIM"));
+
+            Assert.Null(ex);
+            Assert.False(_supervisor.IsRunning("HW_SIM"));
+        }
+
+        [Fact]
+        public void Kill_AfterSimSpawn_DoesNotThrow()
+        {
+            _supervisor.Spawn(new CameraEntry { HardwareId = "HW_SIM2", AgentId = "PC_sim0002", OpenCvIndex = 1 });
+
+            var ex = Record.Exception(() => _supervisor.Kill("HW_SIM2"));
+
+            Assert.Null(ex);
+        }
+
+        public void Dispose()
+        {
+            _supervisor.Dispose();
+            try { Directory.Delete(_tempDir, true); }
+            catch { /* best effort cleanup */ }
         }
     }
 

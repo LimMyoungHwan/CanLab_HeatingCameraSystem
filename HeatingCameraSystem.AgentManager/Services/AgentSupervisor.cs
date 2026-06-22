@@ -92,7 +92,10 @@ namespace HeatingCameraSystem.AgentManager.Services
         public void Kill(string hardwareId)
         {
             if (!_agents.TryRemove(hardwareId, out var managed)) return;
-            if (managed.Process.HasExited) return;
+            // SimulationMode 에서 spawn 을 건너뛴 Agent 는 시작되지 않은 Process 라
+            // HasExited 접근 시 InvalidOperationException 이 발생한다 → 안전하게 no-op.
+            try { if (managed.Process.HasExited) return; }
+            catch (InvalidOperationException) { return; }
 
             try
             {
@@ -113,8 +116,13 @@ namespace HeatingCameraSystem.AgentManager.Services
                 Kill(hardwareId);
         }
 
-        public bool IsRunning(string hardwareId) =>
-            _agents.TryGetValue(hardwareId, out var m) && !m.Process.HasExited;
+        public bool IsRunning(string hardwareId)
+        {
+            if (!_agents.TryGetValue(hardwareId, out var m)) return false;
+            // SimulationMode 미시작 Process 는 HasExited 접근 시 예외 → 실행 안함으로 간주.
+            try { return !m.Process.HasExited; }
+            catch (InvalidOperationException) { return false; }
+        }
 
         public IReadOnlyCollection<string> RunningHardwareIds =>
             (IReadOnlyCollection<string>)_agents.Keys;

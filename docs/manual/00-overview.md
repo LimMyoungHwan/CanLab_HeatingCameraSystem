@@ -50,7 +50,8 @@
 | `HeatingCameraSystem.Agent` | `net8.0` | 카메라 PC 콘솔 앱 |
 | `HeatingCameraSystem.AgentManager` | `net8.0` (win-x64) | PC당 1개 Windows Service. WMI 카메라 자동 발견 + Agent 프로세스 supervisor + NDJSON 로그 수집 |
 | `HeatingCameraSystem.Tests` | `net8.0-windows` | xUnit + Moq (59건) |
-| `HeatingCameraSystem.E2EDriver` | `net8.0` | 헤드리스 E2E 시뮬 드라이버 |
+| `HeatingCameraSystem.E2EDriver` | `net8.0` | 헤드리스 캡처 roundtrip E2E 드라이버 |
+| `HeatingCameraSystem.ManagerE2EDriver` | `net8.0` (win-x64) | Manager 승인 루프 E2E 드라이버 (SC-12) — 발견→inventory→승인 검증 |
 
 ## 4. NATS 토픽 맵
 

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RootNamespace>HeatingCameraSystem.ManagerE2EDriver</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HeatingCameraSystem.Core\HeatingCameraSystem.Core.csproj" />
+    <ProjectReference Include="..\HeatingCameraSystem.Protocols\HeatingCameraSystem.Protocols.csproj" />
+    <ProjectReference Include="..\HeatingCameraSystem.AgentManager\HeatingCameraSystem.AgentManager.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
+</Project>
