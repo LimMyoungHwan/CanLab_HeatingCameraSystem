@@ -7,7 +7,7 @@
 > **Author**: -
 > **Date**: 2026-06-21
 > **Status**: Implemented
-> **Planning Doc**: [agent-manager.plan.md](../../01-plan/features/agent-manager.plan.md)
+> **Planning Doc**: [agent-manager.plan.md](./agent-manager.plan.md)
 
 ---
 

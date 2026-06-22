@@ -4,8 +4,8 @@
 > **Date**: 2026-06-21
 > **Build**: 9 projects, 0 errors, 0 warnings
 > **Tests**: 59/59 (기존 42 + 신규 17)
-> **Design Doc**: [agent-manager.design.md](../02-design/features/agent-manager.design.md)
-> **Plan Doc**: [agent-manager.plan.md](../01-plan/features/agent-manager.plan.md)
+> **Design Doc**: [agent-manager.design.md](./agent-manager.design.md)
+> **Plan Doc**: [agent-manager.plan.md](./agent-manager.plan.md)
 
 ---
 

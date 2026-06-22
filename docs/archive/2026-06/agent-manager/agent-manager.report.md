@@ -87,9 +87,9 @@
 
 | Phase | Document | Status |
 |-------|----------|--------|
-| Plan | [agent-manager.plan.md](../../01-plan/features/agent-manager.plan.md) | ✅ |
-| Design | [agent-manager.design.md](../../02-design/features/agent-manager.design.md) | ✅ |
-| Check | [agent-manager.analysis.md](../../03-analysis/agent-manager.analysis.md) | ✅ |
+| Plan | [agent-manager.plan.md](./agent-manager.plan.md) | ✅ |
+| Design | [agent-manager.design.md](./agent-manager.design.md) | ✅ |
+| Check | [agent-manager.analysis.md](./agent-manager.analysis.md) | ✅ |
 | Report | 현재 문서 | ✅ |
 
 ---
