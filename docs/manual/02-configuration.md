@@ -250,4 +250,101 @@ Remove-Item "$env:LOCALAPPDATA\HeatingCameraSystem\data.db"
 | 안정화 허용 오차 변경 | `RecipeEngine._tempTolerance` (코드 수정 필요, 향후 설정화 예정) |
 | 캡처 타임아웃 늘리기 | `RecipeEngine.cs` 의 `TimeSpan.FromSeconds(30)` — 현재 하드코딩 (`RecipeEngineSettings.CaptureResultTimeoutSeconds` 는 미사용 상태) |
 
+## 9. Agent Manager 설정
+
+> Agent Manager(Windows Service `HCS-Manager`, 설치는 [01-installation.md §8](./01-installation.md#8-agent-manager-설치-선택))를 쓸 때만 해당. 두 개의 JSON 파일을 `C:\HeatingCameraSystem\Manager\` 에 둔다. 둘 다 없으면 기본값으로 동작하며, `manager-settings.json` 은 `install.ps1` 이 생성한다.
+
+| 파일 | 위치 | 사용 주체 | 자동 생성 |
+|---|---|---|---|
+| `manager-settings.json` | `<InstallRoot>\Manager\` | AgentManager 서비스 | ✅ `install.ps1` 이 생성 |
+| `manager-state.json` | `<InstallRoot>\Manager\` | AgentManager 서비스 | ✅ 카메라 발견 시 생성·갱신 |
+
+### 9.1 manager-settings.json (서비스 설정)
+
+소스: `HeatingCameraSystem.AgentManager/Config/ManagerSettings.cs`
+
+```jsonc
+{
+  "PCId":             "AGENT-PC-01",                  // 기본: 머신 이름
+  "NatsUrl":          "nats://192.168.1.10:4222",
+  "SimulationMode":   false,
+  "LogRetentionDays": 7,
+  "WarnAlertEnabled": false,
+  "InstallRoot":      "C:\\HeatingCameraSystem",
+  "AgentExePath":     "C:\\HeatingCameraSystem\\Agent\\HeatingCameraSystem.Agent.exe"
+}
+```
+
+| 필드 | 타입 | 기본값 | 의미 |
+|---|---|---|---|
+| `PCId` | string | `<MachineName>` | NATS 토픽 라우팅 키. `agent-mgr.inventory.{PCId}` 등에 사용 |
+| `NatsUrl` | string | `nats://127.0.0.1:4222` | NATS 서버 주소. spawn 되는 Agent 에도 그대로 전달 |
+| `SimulationMode` | bool | `false` | true 시 `FakeCameraEnumerator`(가짜 카메라 2대) 사용 + **실제 Agent.exe spawn 건너뜀** (§9.3) |
+| `LogRetentionDays` | int | `7` | Agent NDJSON 로그 보관 일수 |
+| `WarnAlertEnabled` | bool | `false` | true 시 WARN 레벨도 즉시 alert push (기본은 ERROR/FATAL 만) |
+| `InstallRoot` | string | `C:\HeatingCameraSystem` | Manager/Agent/logs 루트. 서비스 binPath 의 인수로도 전달됨 |
+| `AgentExePath` | string | `<InstallRoot>\Agent\HeatingCameraSystem.Agent.exe` | spawn 할 Agent 실행 파일. **이 경로에 Agent 빌드가 있어야 함** |
+
+> `PCId` 를 바꾸면 Master Devices 탭의 인벤토리 그룹 키가 바뀐다. 이미 승인된 카메라의 `manager-state.json` 과 PCId 가 어긋나지 않도록 최초 설치 시 한번만 정한다.
+
+### 9.2 manager-state.json (카메라 등록 상태)
+
+소스: `HeatingCameraSystem.AgentManager/State/ManagerStateStore.cs`
+
+Manager 가 카메라를 발견·승인할 때마다 자동 갱신. **운영자가 직접 편집하지 않는 게 원칙** (Master Devices 탭에서 관리). 구조:
+
+```jsonc
+{
+  "PCId": "AGENT-PC-01",
+  "Cameras": [
+    {
+      "HardwareId":   "USB\\VID_1234&PID_5678\\00000001",  // PK
+      "AgentId":      "AGENT-PC-01_a1b2c3d4",
+      "Alias":        "Bay1-Left",
+      "OpenCvIndex":  0,
+      "StoragePath":  "",
+      "IsApproved":   true,
+      "FirstSeen":    "2026-06-20T08:00:00Z",
+      "LastSeen":     "2026-06-20T09:15:00Z",
+      "RestartFails": 0,
+      "IsDisabled":   false
+    }
+  ]
+}
+```
+
+| 필드 | 타입 | 의미 |
+|---|---|---|
+| `HardwareId` | string | WMI 가 반환한 카메라 PnP ID. 기본키(PK) |
+| `AgentId` | string | 승인 시 부여 — `{PCId}_{SHA256(HardwareId)[0:8] 소문자}` |
+| `Alias` | string | 운영자가 붙인 별칭. Recipe `CameraAlias` 매칭에 사용 (매뉴얼 02 §5, Recipe 쪽 alias 폴백) |
+| `OpenCvIndex` | int | 이 카메라의 OpenCV `VideoCapture` 인덱스. Agent spawn 인수로 전달 |
+| `StoragePath` | string | 캡처 저장 경로. 빈 값이면 `<InstallRoot>\Agent\ImageStorage\{AgentId}` |
+| `IsApproved` | bool | 승인 여부. true 여야 Agent spawn |
+| `FirstSeen` / `LastSeen` | DateTime(UTC) | 최초·최근 발견 시각 |
+| `RestartFails` | int | 연속 크래시 재시작 횟수. 600초 안정 실행 시 0 으로 리셋 |
+| `IsDisabled` | bool | true 면 spawn 안함. 재시작 5회 초과 시 자동 true (영구 드롭) 또는 운영자가 "거부" 시 |
+
+**AgentId ↔ Recipe 매핑 주의**: Manager 가 부여하는 AgentId 는 `{PCId}_{해시8}` 형식이라 기존 `Agent_{CameraIndex}` 와 다르다. Recipe Step 에서 이 카메라를 지정하려면 `CameraAlias` 에 위 `Alias` 값을 적어 DB lookup 으로 AgentId 를 찾게 한다 (매뉴얼 02 §5).
+
+### 9.3 Manager SimulationMode
+
+`manager-settings.json` 의 `"SimulationMode": true` 면:
+
+- `FakeCameraEnumerator` 가 가짜 카메라 2대(`USB\VID_FAKE&PID_CAM1\...`, `...CAM2\...`)를 발견
+- 승인해도 **실제 Agent.exe 를 spawn 하지 않음** (`AgentSupervisor` 가 "skipping real spawn" 로그만 남기고 엔트리만 등록) — 카메라 발견·승인·인벤토리 흐름을 하드웨어 없이 검증할 때 사용
+- 실제 캡처까지 보려면 Manager 는 끄고 Agent 를 직접 SimulationMode 로 띄우거나(매뉴얼 03 §3.2) E2E 러너 사용
+
+### 9.4 재시작 정책 (참고)
+
+`AgentSupervisor` (코드 하드코딩, 설정 불가):
+
+| 항목 | 값 |
+|---|---|
+| 백오프 간격 | `1 → 2 → 5 → 15 → 60` 초 (재시작 횟수에 따라) |
+| 최대 재시작 | 5회. 초과 시 `IsDisabled=true` 로 영구 드롭 + alert push |
+| 안정 실행 리셋 | 600초(10분) 이상 무사 실행 시 `RestartFails` 0 으로 초기화 |
+
+영구 드롭된 카메라는 Master Devices 탭에서 다시 "승인" 하면 `IsDisabled` 가 해제되며 재기동된다 (운영은 [03-usage.md §8](./03-usage.md#8-agent-manager-운영-카메라-승인)).
+
 다음: [03-usage.md](./03-usage.md) — Recipe 작성 / 실행 / 이력 조회 / 트러블슈팅.

@@ -117,4 +117,5 @@
 | 처음 설치 | [01-installation.md](./01-installation.md) |
 | 설정 파일 필드 모두 보기 | [02-configuration.md](./02-configuration.md) |
 | Recipe 만들기·실행·이력 보기 | [03-usage.md](./03-usage.md) |
+| Agent Manager(카메라 자동 발견·승인) 설치·운영 | 설치 [01 §8](./01-installation.md#8-agent-manager-설치-선택) · 설정 [02 §9](./02-configuration.md#9-agent-manager-설정) · 운영 [03 §8](./03-usage.md#8-agent-manager-운영-카메라-승인) |
 | 5분 만에 한번 돌려보고 싶다 | [README.md](./README.md) Quick Start |

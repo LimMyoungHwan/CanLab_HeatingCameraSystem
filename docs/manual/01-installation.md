@@ -171,6 +171,96 @@ New-NetFirewallRule -DisplayName "NATS 4222" -Direction Inbound -LocalPort 4222 
 | 5 | Agent 기동 | `HeatingCameraSystem.Agent.exe` 콘솔에 `Connected to NATS` 로그 |
 | 6 | Agent → Master 인식 | Master Dashboard 우측 Agent 패널에 녹색 점 (5초 내) |
 | 7 | (실 PLC) 온도/습도 표시 | Dashboard 좌상단 숫자 갱신 |
-| 8 | (시뮬) 단위·E2E 테스트 | 저장소 루트에서 `dotnet test --no-build` → 38/38 통과 |
+| 8 | (시뮬) 단위·E2E 테스트 | 저장소 루트에서 `dotnet test --no-build` → 59/59 통과 |
 
-8번까지 모두 OK 면 설치 완료. 설정 세부는 [02-configuration.md](./02-configuration.md), 운영은 [03-usage.md](./03-usage.md).
+8번까지 모두 OK 면 기본 설치 완료. 카메라 자동 발견·Agent 자동 감독이 필요하면 §8 Agent Manager 설치(선택)로. 설정 세부는 [02-configuration.md](./02-configuration.md), 운영은 [03-usage.md](./03-usage.md).
+
+## 8. Agent Manager 설치 (선택)
+
+> §4 Agent 설치는 운영자가 PC마다 `agent.json`/CLI 인수로 Agent 를 직접 띄우는 **수동 방식**이다. Agent Manager 는 PC당 1개 Windows Service 로 돌면서 **USB 카메라를 WMI 로 자동 발견 → Master 에서 승인 → Agent.exe 프로세스를 자동 spawn·감독·재시작**한다. 카메라 대수가 많거나 무인 운영이 필요할 때 사용.
+
+수동 Agent(§4) 와 Manager(§8) 는 **택일**이다. Manager 를 쓰면 Agent 는 Manager 가 자동으로 띄우므로 §4 의 수동 기동은 하지 않는다.
+
+### 8-1. 동작 요약
+
+```
+[USB 카메라 연결]
+   │  WMI Win32_PnPEntity 감지
+   ▼
+[Manager] manager-state.json 에 미승인(IsApproved=false) 등록
+   │  agent-mgr.inventory.{PCId} 발행
+   ▼
+[Master Devices 탭] 카메라 목록 표시 → 운영자가 "승인"
+   │  server.cmd.mgr.{PCId} (Approve) 수신
+   ▼
+[Manager] AgentId 부여 ({PCId}_{HardwareId 해시8}) → Agent.exe spawn
+   │  프로세스 크래시 시 지수 백오프 재시작 [1,2,5,15,60]s, 5회 한계
+   ▼
+[Agent] 평소처럼 NATS 캡처 명령 수신·처리
+```
+
+### 8-2. 빌드 (개발 PC)
+
+```powershell
+dotnet publish HeatingCameraSystem.AgentManager -c Release -r win-x64 --self-contained false -o publish\Manager
+dotnet publish HeatingCameraSystem.Agent        -c Release -o publish\Agent
+```
+
+> AgentManager 는 `win-x64` 타겟(WMI `Win32_PnPEntity` 사용). Agent 도 함께 빌드 — Manager 가 이 exe 를 spawn 한다.
+
+### 8-3. 설치 스크립트 실행 (Manager PC, 관리자 권한)
+
+저장소의 `docs/deployment/install.ps1` 이 디렉터리 생성·서비스 등록·방화벽·설정파일까지 한번에 처리한다.
+
+```powershell
+# 관리자 PowerShell 에서
+.\docs\deployment\install.ps1 -NatsUrl nats://192.168.1.10:4222
+# -InstallRoot 생략 시 기본 C:\HeatingCameraSystem
+# -NatsUrl 생략 시 대화형으로 입력 (기본 nats://127.0.0.1:4222)
+```
+
+스크립트가 수행하는 일:
+
+| 단계 | 내용 |
+|---|---|
+| 1 | `C:\HeatingCameraSystem\{Manager, Agent, logs}` 디렉터리 생성 |
+| 2 | NATS URL 입력 (인수 미지정 시 프롬프트) |
+| 3 | `Manager\manager-settings.json` 생성 (설정 필드는 매뉴얼 02 §9.1) |
+| 4 | Windows Service `HCS-Manager` 등록 (자동시작, LocalSystem) + 복구정책 (3회 재시작, 5초 간격) |
+| 5 | 방화벽 아웃바운드 규칙 `HCS-NATS-Outbound` (4222/tcp) 추가 |
+
+### 8-4. 빌드 산출물 복사
+
+스크립트 실행 후 빌드 결과를 설치 폴더로 복사한다 (스크립트는 디렉터리만 만들고 파일은 복사하지 않음):
+
+```powershell
+Copy-Item publish\Manager\* C:\HeatingCameraSystem\Manager\ -Recurse -Force
+Copy-Item publish\Agent\*   C:\HeatingCameraSystem\Agent\   -Recurse -Force
+```
+
+> `manager-settings.json` 의 `AgentExePath` 기본값은 `C:\HeatingCameraSystem\Agent\HeatingCameraSystem.Agent.exe` 이므로 Agent 빌드는 이 경로에 있어야 Manager 가 spawn 할 수 있다.
+
+### 8-5. 서비스 시작 및 검증
+
+```powershell
+Start-Service HCS-Manager
+Get-Service  HCS-Manager        # Status: Running 확인
+```
+
+| # | 확인 항목 | 방법 |
+|---|---|---|
+| 1 | 서비스 기동 | `Get-Service HCS-Manager` → `Running` |
+| 2 | 카메라 발견 | `C:\HeatingCameraSystem\Manager\manager-state.json` 에 카메라 엔트리 생성 |
+| 3 | 인벤토리 수신 | Master **Devices** 탭에 카메라 목록 표시 (미승인 상태) |
+| 4 | 승인 → Agent 기동 | Devices 탭에서 "승인" → `C:\HeatingCameraSystem\logs\{AgentId}\` 에 로그 생성 |
+| 5 | Master 인식 | Dashboard Agent 패널에 녹색 점 (5초 내) |
+
+승인·운영 워크플로 상세는 [03-usage.md §8](./03-usage.md#8-agent-manager-운영-카메라-승인). 설정 파일 필드는 [02-configuration.md §9](./02-configuration.md#9-agent-manager-설정).
+
+### 8-6. 서비스 제거
+
+```powershell
+Stop-Service HCS-Manager
+sc.exe delete HCS-Manager
+Remove-NetFirewallRule -DisplayName "HCS-NATS-Outbound"   # 선택
+```

@@ -137,7 +137,7 @@ Master **Settings** 탭에서:
 
 ```powershell
 dotnet test --no-build
-# 통과 38 / 실패 0
+# 통과 59 / 실패 0
 ```
 
 추가 시뮬 테스트는 `HeatingCameraSystem.Tests/SimulationTests.cs` (11건).
@@ -232,7 +232,65 @@ dotnet test --no-build
 | Recipe 갑자기 사라짐 | LiteDB Studio 로 직접 열어 확인. 백업본이 있으면 복구 |
 | 초기화 필요 | 매뉴얼 02 §7.3 |
 
-## 8. 관련 문서
+## 8. Agent Manager 운영 (카메라 승인)
+
+> Agent Manager(`HCS-Manager` 서비스)를 설치([01-installation.md §8](./01-installation.md#8-agent-manager-설치-선택))한 경우의 일상 운영. Manager 가 USB 카메라를 자동 발견하면 Master **Devices** 탭에서 승인해야 Agent 가 기동된다. Manager 를 안 쓰고 Agent 를 직접 띄우는 운영(§3)은 이 섹션과 무관.
+
+### 8.1 Devices 탭 둘러보기
+
+Master 좌측 사이드바 **Devices**(디바이스 관리) 탭:
+
+| 영역 | 내용 |
+|---|---|
+| 좌측 DataGrid | 발견된 카메라 목록. 컬럼: `Status`(IsRunning) / `PCId` / `Alias` / `AgentId` / `HardwareId` / `Approved` / `CV Idx` |
+| 우측 패널 — Alias | 선택 카메라의 별칭 입력란 |
+| 우측 패널 — 액션 버튼 | **승인** / **거부** / **이름 저장** / **로그 가져오기** |
+| 우측 패널 — Alert | 해당 Agent 의 최근 ERROR/FATAL alert (있을 때만 빨간 박스) |
+| 우측 패널 — Log Viewer | "로그 가져오기" 로 받은 NDJSON 로그 표시 |
+| 하단 Status Bar | 마지막 작업 상태 메시지 |
+
+카메라를 행으로 선택하면 우측 액션이 활성화된다.
+
+### 8.2 카메라 승인 워크플로
+
+```
+1. Agent PC 에 USB 카메라 연결 → Manager 가 WMI 로 자동 발견
+2. Master Devices 탭에 새 카메라가 Approved=False 로 표시
+3. 카메라 행 선택 → (선택) Alias 입력 (예: "Bay1-Left")
+4. "승인" 클릭
+     → server.cmd.mgr.{PCId} (Approve) 발행
+     → Manager 가 AgentId 부여 + Agent.exe spawn
+     → 인벤토리 재발행 → 그리드에 Approved=True, AgentId 채워짐
+5. Dashboard Agent 패널에 녹색 점 (5초 내) → 캡처 준비 완료
+```
+
+> "승인" 버튼은 **미승인(Approved=False) 카메라 선택 시에만** 활성화된다. 이미 승인된 카메라엔 비활성.
+
+### 8.3 액션별 동작
+
+| 버튼 | NATS Op | 효과 |
+|---|---|---|
+| **승인** | `Approve` | `IsApproved=true`, `IsDisabled=false`. AgentId 없으면 `{PCId}_{해시8}` 부여 후 Agent spawn. 영구 드롭된 카메라 재기동에도 사용 |
+| **거부** | `Reject` | `IsApproved=false` + 해당 Agent 프로세스 kill |
+| **이름 저장** | `Rename` | Alias 를 `manager-state.json` + Master LiteDB(`CameraDevice`) 양쪽에 저장. Recipe `CameraAlias` 매칭에 사용 |
+| **로그 가져오기** | `LogDumpRequest` | Agent NDJSON 로그를 gzip 으로 요청(최대 5MB) → 30초 내 수신 시 Log Viewer 에 표시 |
+
+> **Restart / Disable / SetSerial** Op 은 Manager 핸들러에 구현돼 있으나 현재 Devices 탭 UI 버튼으로는 노출되지 않는다. 필요 시 카메라 "거부" 후 "승인"(=재기동) 으로 대체하거나, 시리얼 설정은 **Settings** 탭(§3.3)의 기존 경로를 사용.
+
+### 8.4 자동 재시작 / 영구 드롭
+
+Agent 프로세스가 크래시하면 Manager 가 지수 백오프(`1→2→5→15→60`초)로 재시작한다. 5회 초과하면 영구 드롭(`IsDisabled=true`)되고 Devices 탭에 alert 가 뜬다. 원인 해결 후 해당 카메라를 다시 **승인**하면 재기동된다. 정책 상세는 [02-configuration.md §9.4](./02-configuration.md#94-재시작-정책-참고).
+
+### 8.5 Manager 트러블슈팅
+
+| 증상 | 점검 |
+|---|---|
+| Devices 탭에 카메라 안 뜸 | `HCS-Manager` 서비스 Running? (`Get-Service HCS-Manager`). NATS URL(`manager-settings.json`) 이 Master 와 같은 서버인지. `manager-state.json` 에 엔트리 생겼는지 |
+| 승인했는데 Agent 안 뜸 | `AgentExePath`(매뉴얼 02 §9.1) 경로에 Agent.exe 있나? `<InstallRoot>\logs\{AgentId}\` 로그 확인. SimulationMode=true 면 실제 spawn 안함(매뉴얼 02 §9.3) |
+| 카메라가 계속 사라졌다 나타남 | Agent 반복 크래시 → 백오프 재시작 중. 로그 가져오기로 원인 확인. 5회 초과 시 영구 드롭 |
+| "로그 가져오기" 30초 초과 | 해당 Agent 가 죽었거나 NATS 연결 끊김. Dashboard 점 색 확인 |
+
+## 9. 관련 문서
 
 | 주제 | 위치 |
 |---|---|
