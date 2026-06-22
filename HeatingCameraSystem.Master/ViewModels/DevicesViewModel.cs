@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -22,6 +23,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [NotifyCanExecuteChangedFor(nameof(RejectCommand))]
         [NotifyCanExecuteChangedFor(nameof(RenameCommand))]
         [NotifyCanExecuteChangedFor(nameof(GetLogsCommand))]
+        [NotifyCanExecuteChangedFor(nameof(SetSerialCommand))]
         private DeviceItem? _selectedDevice;
 
         [ObservableProperty]
@@ -29,6 +31,12 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         [ObservableProperty]
         private string _logContent = string.Empty;
+
+        [ObservableProperty] private string _serialPort = "COM3";
+        [ObservableProperty] private int    _serialBaud = 9600;
+        [ObservableProperty] private int    _serialDataBits = 8;
+        [ObservableProperty] private string _serialParity = "None";
+        [ObservableProperty] private string _serialStopBits = "One";
 
         public DevicesViewModel()
         {
@@ -188,8 +196,36 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        [RelayCommand(CanExecute = nameof(HasApprovedSelection))]
+        private async Task SetSerialAsync()
+        {
+            if (SelectedDevice == null || AppServices.NatsService == null) return;
+
+            var serial = new CameraSerialSettings
+            {
+                CameraIndex = SelectedDevice.OpenCvIndex,
+                PortName    = SerialPort,
+                BaudRate    = SerialBaud,
+                DataBits    = SerialDataBits,
+                Parity      = SerialParity,
+                StopBits    = SerialStopBits,
+            };
+
+            await AppServices.NatsService.PublishManagerCommandAsync(new ManagerCommandMessage
+            {
+                PCId       = SelectedDevice.PCId,
+                Op         = ManagerCommandOp.SetSerial,
+                HardwareId = SelectedDevice.HardwareId,
+                Payload    = JsonSerializer.Serialize(serial),
+                Timestamp  = DateTime.UtcNow,
+            });
+
+            StatusMessage = $"시리얼 전송: {SelectedDevice.AgentId} ({SerialPort} {SerialBaud})";
+        }
+
         private bool HasSelection() => SelectedDevice != null;
         private bool HasPendingSelection() => SelectedDevice is { IsApproved: false };
+        private bool HasApprovedSelection() => SelectedDevice is { IsApproved: true };
     }
 
     public partial class DeviceItem : ObservableObject

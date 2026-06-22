@@ -274,8 +274,11 @@ Master 좌측 사이드바 **Devices**(디바이스 관리) 탭:
 | **거부** | `Reject` | `IsApproved=false` + 해당 Agent 프로세스 kill |
 | **이름 저장** | `Rename` | Alias 를 `manager-state.json` + Master LiteDB(`CameraDevice`) 양쪽에 저장. Recipe `CameraAlias` 매칭에 사용 |
 | **로그 가져오기** | `LogDumpRequest` | Agent NDJSON 로그를 gzip 으로 요청(최대 5MB) → 30초 내 수신 시 Log Viewer 에 표시 |
+| **시리얼 전송** | `SetSerial` | 우측 패널 시리얼 폼(Port/Baud/Data Bits/Parity/Stop Bits)을 `CameraSerialSettings` 로 직렬화 → Manager 가 해당 AgentId 로 `master.config.serial.{AgentId}` 포워딩. **승인된 카메라만** 활성 |
 
-> **Restart / Disable / SetSerial** Op 은 Manager 핸들러에 구현돼 있으나 현재 Devices 탭 UI 버튼으로는 노출되지 않는다. 필요 시 카메라 "거부" 후 "승인"(=재기동) 으로 대체하거나, 시리얼 설정은 **Settings** 탭(§3.3)의 기존 경로를 사용.
+> **Restart / Disable** Op 은 Manager 핸들러에 구현돼 있으나 Devices 탭 UI 버튼으로는 노출되지 않는다. 필요 시 "거부" 후 "승인"(=재기동) 으로 대체.
+>
+> **시리얼 경로 2종**: Manager 관리 카메라는 위 **시리얼 전송**(Devices 탭, AgentId `{PCId}_{해시8}` 로 라우팅)을 사용한다. Manager 를 쓰지 않는 **수동 Agent**(AgentId `Agent_{idx}`)는 기존 **Settings** 탭(§3.3, legacy)을 그대로 사용한다 — 두 경로는 대상 배포가 달라 공존한다.
 
 ### 8.4 자동 재시작 / 영구 드롭
 
