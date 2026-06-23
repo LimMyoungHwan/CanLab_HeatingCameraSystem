@@ -62,7 +62,9 @@ namespace HeatingCameraSystem.Tests
         }
     }
 
-    // ── AgentSupervisor (SimulationMode) ──────────────────────────────────────
+    // ── AgentSupervisor (플래그 분리 후 spawn 스킵 동작) ─────────────────────────
+    // [SC-12 범위 2] Design Ref: §4.3 — SimulationMode 제거 후 spawn 스킵 조건 검증.
+    // spawn 스킵은 이제 AgentExePath 파일 존재 여부로만 결정된다.
 
     public class AgentSupervisorSimTests : IDisposable
     {
@@ -73,7 +75,16 @@ namespace HeatingCameraSystem.Tests
         {
             _tempDir = Path.Combine(Path.GetTempPath(), $"hcs_sup_{Guid.NewGuid():N}");
             Directory.CreateDirectory(_tempDir);
-            var settings = new ManagerSettings { SimulationMode = true, InstallRoot = _tempDir };
+
+            // [SC-12 범위 2] SimulationMode → SimulateEnumeration + SimulateAgentMode 로 교체.
+            // AgentExePath 는 존재하지 않는 경로 → spawn 스킵 → 기존 테스트 동작 유지.
+            var settings = new ManagerSettings
+            {
+                SimulateEnumeration = true,
+                SimulateAgentMode   = true,
+                InstallRoot         = _tempDir,
+                // AgentExePath 기본값이 존재하지 않는 경로이므로 spawn은 스킵됨
+            };
             var store = new ManagerStateStore(_tempDir);
             _supervisor = new AgentSupervisor(settings, store, NullLogger<AgentSupervisor>.Instance);
         }
@@ -81,6 +92,7 @@ namespace HeatingCameraSystem.Tests
         [Fact]
         public void IsRunning_AfterSimSpawn_DoesNotThrow()
         {
+            // exe 없음 → spawn 스킵 → Process 미시작 → IsRunning은 예외 없이 false 반환해야 함
             _supervisor.Spawn(new CameraEntry { HardwareId = "HW_SIM", AgentId = "PC_sim0001", OpenCvIndex = 0 });
 
             var ex = Record.Exception(() => _supervisor.IsRunning("HW_SIM"));
@@ -92,6 +104,7 @@ namespace HeatingCameraSystem.Tests
         [Fact]
         public void Kill_AfterSimSpawn_DoesNotThrow()
         {
+            // exe 없음 → spawn 스킵 → Kill 시 미시작 Process에 접근해도 예외 없어야 함
             _supervisor.Spawn(new CameraEntry { HardwareId = "HW_SIM2", AgentId = "PC_sim0002", OpenCvIndex = 1 });
 
             var ex = Record.Exception(() => _supervisor.Kill("HW_SIM2"));
@@ -104,6 +117,53 @@ namespace HeatingCameraSystem.Tests
             _supervisor.Dispose();
             try { Directory.Delete(_tempDir, true); }
             catch { /* best effort cleanup */ }
+        }
+    }
+
+    // ── ManagerSettings 플래그 분리 검증 ─────────────────────────────────────────
+    // [SC-12 범위 2] Plan SC: SC-04 — ManagerSettings JSON 왕복 직렬화 검증.
+
+    public class ManagerSettingsFlagTests
+    {
+        [Fact]
+        public void SimulateFlags_DefaultFalse()
+        {
+            // 기본값이 false인지 확인 — 실 운영 환경에서 시뮬레이션이 켜지면 안 됨
+            var settings = new ManagerSettings();
+
+            Assert.False(settings.SimulateEnumeration);
+            Assert.False(settings.SimulateAgentMode);
+        }
+
+        [Fact]
+        public void SimulateFlags_JsonRoundTrip_PreservesValues()
+        {
+            // JSON 직렬화 후 역직렬화해도 플래그 값이 유지되는지 확인
+            var original = new ManagerSettings
+            {
+                SimulateEnumeration = true,
+                SimulateAgentMode   = true,
+            };
+
+            var json     = System.Text.Json.JsonSerializer.Serialize(original);
+            var restored = System.Text.Json.JsonSerializer.Deserialize<ManagerSettings>(json)!;
+
+            Assert.True(restored.SimulateEnumeration);
+            Assert.True(restored.SimulateAgentMode);
+        }
+
+        [Fact]
+        public void SimulateFlags_CanBeSetIndependently()
+        {
+            // 두 플래그가 서로 독립적임을 확인 — 핵심 분리 설계 검증
+            var onlyEnum = new ManagerSettings { SimulateEnumeration = true, SimulateAgentMode = false };
+            var onlyMode = new ManagerSettings { SimulateEnumeration = false, SimulateAgentMode = true };
+
+            Assert.True(onlyEnum.SimulateEnumeration);
+            Assert.False(onlyEnum.SimulateAgentMode);
+
+            Assert.False(onlyMode.SimulateEnumeration);
+            Assert.True(onlyMode.SimulateAgentMode);
         }
     }
 

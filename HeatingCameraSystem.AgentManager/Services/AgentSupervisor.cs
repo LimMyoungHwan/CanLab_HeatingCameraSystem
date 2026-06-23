@@ -57,7 +57,11 @@ namespace HeatingCameraSystem.AgentManager.Services
                 ? Path.Combine(_settings.InstallRoot, "Agent", "ImageStorage", entry.AgentId)
                 : entry.StoragePath;
 
-            var args = $"{entry.AgentId} {_settings.NatsUrl} {entry.OpenCvIndex} \"{storagePath}\" \"{logPath}\" {_settings.SimulationMode}";
+            // [SC-12 범위 2] Design Ref: §4.3 — Agent CLI 인수 순서 (Agent/Program.cs 기준):
+            //   [0]=AgentId  [1]=NatsUrl  [2]=CameraIndex  [3]=StoragePath  [4]=SimulationMode  [5]=LogPath
+            // SimulationMode → SimulateAgentMode: true이면 Agent가 FakeCameraCaptureService를 사용.
+            // Plan SC: SC-01 — 인수 순서가 맞아야 Agent가 FakeCam 모드로 기동되어 캡처 roundtrip 가능.
+            var args = $"{entry.AgentId} {_settings.NatsUrl} {entry.OpenCvIndex} \"{storagePath}\" {_settings.SimulateAgentMode} \"{logPath}\"";
 
             var process = new Process
             {
@@ -76,9 +80,14 @@ namespace HeatingCameraSystem.AgentManager.Services
             var managed = new ManagedAgent(entry.HardwareId, entry.AgentId, process);
             process.Exited += (_, _) => OnAgentExited(managed);
 
-            if (_settings.SimulationMode || !File.Exists(_settings.AgentExePath))
+            // [SC-12 범위 2] Design Ref: §4.3 — spawn 스킵 조건에서 SimulationMode 제거.
+            // 이전: SimulationMode=true이면 무조건 spawn 스킵 → 캡처 roundtrip 검증 불가.
+            // 이후: exe 파일이 존재하면 실제 spawn 실행 (SimulateEnumeration=true여도 OK).
+            //       SimulateAgentMode=true로 전달하면 Agent가 FakeCam으로 동작하므로
+            //       실 카메라 없이도 전체 캡처 흐름을 테스트할 수 있음.
+            if (!File.Exists(_settings.AgentExePath))
             {
-                _logger.LogInformation("SimulationMode: skipping real spawn for {AgentId}", entry.AgentId);
+                _logger.LogInformation("AgentExePath not found — skipping spawn for {AgentId}", entry.AgentId);
                 _agents[entry.HardwareId] = managed;
                 return;
             }

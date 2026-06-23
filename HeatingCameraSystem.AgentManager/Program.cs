@@ -40,8 +40,11 @@ builder.Services.AddSingleton<ManagerStateStore>(sp =>
 builder.Services.AddSingleton<INatsCommunicationService, NatsCommunicationService>();
 
 // ── Camera Enumerator ─────────────────────────────────────────────────────────
+// [SC-12 범위 2] Design Ref: §4.2 — SimulationMode → SimulateEnumeration.
+// SimulateEnumeration=true 이면 실 카메라 없이 가상 카메라 2대를 반환하는 FakeCameraEnumerator 사용.
+// false 이면 WMI로 실제 연결된 USB 카메라를 탐지하는 WmiCameraEnumerator 사용.
 builder.Services.AddSingleton<ICameraEnumerator>(sp =>
-    settings.SimulationMode
+    settings.SimulateEnumeration
         ? (ICameraEnumerator)new FakeCameraEnumerator()
         : new WmiCameraEnumerator());
 
