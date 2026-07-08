@@ -48,6 +48,19 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
+        public void InitializeCamera_WithResolutionParams_InvalidIndex_ReturnsFalseNoThrow()
+        {
+            string testDir = Path.Combine(Path.GetTempPath(), "HeatingCameraTest_" + Guid.NewGuid());
+            using var service = new CameraCaptureService(testDir, 640, 480);
+
+            bool result = service.InitializeCamera(999);
+
+            Assert.False(result);
+
+            Directory.Delete(testDir, true);
+        }
+
+        [Fact]
         public void ICameraCaptureService_MockTest()
         {
             // Arrange

@@ -5,6 +5,11 @@
     <ProjectReference Include="..\HeatingCameraSystem.Protocols\HeatingCameraSystem.Protocols.csproj" />
   </ItemGroup>
 
+  <!-- [camera-model-select] Design Ref: §4.2 -->
+  <ItemGroup>
+    <None Include="CameraModels\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="NATS.Net" Version="2.8.1" />
     <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260602" />

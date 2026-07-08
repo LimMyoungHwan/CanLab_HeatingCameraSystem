@@ -15,5 +15,12 @@ namespace HeatingCameraSystem.Core.Config
         public bool SimulationMode { get; set; } = false;
 
         public string LogPath { get; set; } = "";
+
+        /// <summary>
+        /// [camera-model-select] Design Ref: §1.2 — 카메라 모델명.
+        /// 지정 시 CameraModels\{CameraModel}.json 을 읽어 캡처 해상도(Width/Height)를 적용한다.
+        /// 미지정(null)이면 모델 스펙 로드를 스킵하고 카메라 기본 해상도를 그대로 사용한다.
+        /// </summary>
+        public string? CameraModel { get; set; }
     }
 }

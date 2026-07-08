@@ -1,4 +1,18 @@
-# Session Handoff — 2026-06-29 갱신
+# Session Handoff — 2026-07-08 갱신
+
+## 최신 현황 (2026-07-08)
+- `camera-model-select` PDCA 전 사이클 완료 (PM→Plan→Design→Do→Check→Report→Archive), Match Rate 100%
+  → 최종 구조: 파일 기반 (Master UI/LiteDB 폐기) — `agent.json.CameraModel` + `CameraModels\{모델}.json`
+  → 신규 파일: `Core/Models/CameraModelSpec.cs`, `Agent/CameraModels/{AISEN,FPV}.json`, `Tests/CameraModelSpecTests.cs`
+  → `docs/archive/2026-07/camera-model-select/` 로 이동
+  → 빌드 0/0, 테스트 69/69(기존64+신규5), E2E 회귀 없음(exit 0)
+  → **미완**: 카메라 실물로 해상도 실적용 검증 — 다음 주 입고 예정
+- 셔터 프로토콜(`04 00 01...` vs `43 4C 30 01...`)/BaudRate(9600 vs 115200) 검증도 카메라 입고 후 진행 (`mem:camera-connection-verification`)
+- **미커밋**: 이번 세션 변경사항 아직 git add/commit 안 됨 — 사용자 요청 시 커밋/푸시
+
+---
+
+# Session Handoff — 2026-06-29 갱신 (이전)
 
 ## 최신 현황 (2026-06-29)
 - SC-12 범위 2 PDCA 전 사이클 완료 (PM→Plan→Design→Do→Check→Report→Archive), Match Rate 100%

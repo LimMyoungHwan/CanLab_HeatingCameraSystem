@@ -11,6 +11,42 @@
     "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\04-report\\features\\sc-12-scope2.report.md": {
       "count": 1,
       "ts": 1783494828835
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\01-plan\\features\\camera-model-select.plan.md": {
+      "count": 1,
+      "ts": 1783498840835
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\02-design\\features\\camera-model-select.design.md": {
+      "count": 1,
+      "ts": 1783498921792
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Core\\Models\\CameraModelSpec.cs": {
+      "count": 1,
+      "ts": 1783498970770
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Agent\\CameraModels\\AISEN.json": {
+      "count": 1,
+      "ts": 1783499046868
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Agent\\CameraModels\\FPV.json": {
+      "count": 1,
+      "ts": 1783499047330
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\CameraModelSpecTests.cs": {
+      "count": 1,
+      "ts": 1783499074252
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\03-analysis\\features\\camera-model-select.analysis.md": {
+      "count": 1,
+      "ts": 1783499224577
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\04-report\\features\\camera-model-select.report.md": {
+      "count": 1,
+      "ts": 1783499260434
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\archive\\2026-07\\_INDEX.md": {
+      "count": 1,
+      "ts": 1783499284864
     }
   }
 }

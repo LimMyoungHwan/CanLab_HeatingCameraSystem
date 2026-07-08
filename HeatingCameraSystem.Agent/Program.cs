@@ -46,9 +46,15 @@ namespace HeatingCameraSystem.Agent
                 ? config.StoragePath
                 : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, config.StoragePath);
 
+            // [camera-model-select] Design Ref: §2.3 — CameraModel 지정 시 CameraModels\{모델}.json 로드 후 해상도 전달
+            string modelsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CameraModels");
+            var modelSpec = CameraModelSpec.Load(modelsDir, config.CameraModel);
+            if (!string.IsNullOrWhiteSpace(config.CameraModel) && modelSpec == null)
+                Console.WriteLine($"[{config.AgentId}] CameraModel '{config.CameraModel}' spec not found/invalid in {modelsDir} — using camera default resolution.");
+
             ICameraCaptureService cameraService = config.SimulationMode
                 ? new FakeCameraCaptureService(storagePath, config.AgentId)
-                : new CameraCaptureService(storagePath);
+                : new CameraCaptureService(storagePath, modelSpec?.Width, modelSpec?.Height);
             using var cameraDisposable = cameraService as IDisposable;
 
             bool cameraReady = cameraService.InitializeCamera(config.CameraIndex);
