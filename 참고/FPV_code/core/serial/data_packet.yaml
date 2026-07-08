@@ -1,0 +1,122 @@
+name: CANLAB_THERMAL_CAMERA_DATA_PACKET
+version: 2.0
+
+HEADER: [0x43, 0x4C]
+
+MAIN_ID:
+  DETECTOR: 0x00
+  NUC: 0x10
+  USER_CONFIG: 0x20
+  OPERATE_CTRL: 0x30
+  DEBUG: 0xF0
+
+SUB_ID:
+  DETECTOR: # main_id: 0x00
+    SERIAL_NB_A: 0x00
+    SERIAL_NB_B: 0x01
+    SERIAL_NB_C: 0x02
+    SERIAL_NB_D: 0x03
+    GFID: 0x04
+    GSK_MSB: 0x05
+    GSK_LSB: 0x06
+    TINT_MSB: 0x07
+    TINT_LSB: 0x08
+    CINT: 0x09
+    FPA_TEMP_MSB: 0x0A
+    FPA_TEMP_LSB: 0x0B
+  NUC: # main_id: 0x10
+    NUC_MODE: 0x00
+  USER_CONFIG: # main_id: 0x20
+    CAEMRA: 0x00
+    SHUTTER: 0x01
+    SHUTTER_CYCLE: 0x02
+    CEM: 0x03
+  OPERATE_CTRL: # main_id: 0x30
+    CAEMRA: 0x00
+    SHUTTER: 0x01
+    SAVE_CONFIG: 0x02
+  DEBUG: # main_id: 0xF0
+    SOC_TEMP_MSB: 0x00
+    SOC_TEMP_LSB: 0x01
+    FIRM_VER_MAJOR: 0x02
+    FIRM_VER_MINOR: 0x03
+    FIRM_VER_PATCH: 0x04
+    TECLESS_TEMP_RANGE: 0x05
+
+RW:
+  WRITE: 0x00
+  READ: 0x01
+
+DATA:
+  DETECTOR: # main_id: 0x00
+    SERIAL_NB_A: None # sub_id: 0x00, bit_range[4:0] (serial_num_1_MSB[12:8]), readonly
+    SERIAL_NB_B: None # sub_id: 0x01, bit_range[7:0] (serial_num_1_LSB[7:0]), readonly
+    SERIAL_NB_C: None # sub_id: 0x02, bit_range[6:2, 1:0] ([6:2]serial_num_2, [1:0]serial_num_3_MSB[9:8]), readonly
+    SERIAL_NB_D: None # sub_id: 0x03, bit_range[7:0] (serial_num_3_LSB[7:0]), readonly
+    GFID: [0x18, 0xDD] # sub_id: 0x04, bit_range[7:0] (GFID[7:0]), R/W
+    GSK_MSB: [0x00, 0x03] # sub_id: 0x05, bit_range[1:0] (GSK_MSB[9:8]), R/W
+    GSK_LSB: [0x00, 0xFF] # sub_id: 0x06, bit_range[7:0] (GSK_LSB[7:0]), R/W
+    TINT_MSB: [0x0000, 0x0000, 0x0001, 0x0001, 0x0002, 0x0002, 0x0002, 0x0003, 0x0003] # sub_id: 0x7, bit_range[4:0] (TINT_MSB[13:8]), R/W
+    TINT_LSB: [0x0092, 0x00F2, 0x0053, 0x00B3, 0x0013, 0x0073, 0x00D3, 0x0033, 0x0093] # sub_id: 0x08, bit_range[7:0] (TINT_LSB[7:0]), R/W
+    CINT: [0x00F3, 0x00E3, 0x00D3, 0x00C3, 0x00B3, 0x00A3, 0x0093, 0x0083] # sub_id: 0x09, bit_range[6:4], CINT[2:0], R/W
+    FPA_TEMP_MSB: None # sub_id: 0x0A, bit_range[7:0], FPA_temp_MSB[15:8], readonly
+    FPA_TEMP_LSB: None # sub_id: 0x0B, bit_range[7:0], FPA_temp_LSB[7:0], readonly
+  NUC: # main_id: 0x10
+    NUC_MODE: # sub_id: 0x00, bit_range[3, 1:0] ([3]lens shading, [1:0]nuc_mode), R/W
+      LENS_SHADING:
+        DISABLE: 0x00
+        ENABLE: 0x08
+      MODE:
+        TECLESS_NUC1P: 0x00
+        NUC1P: 0x01
+        TECLESS: 0x02
+  USER_CONFIG: # main_id: 0x20
+    CAEMRA: # sub_id: 0x00, bit_range[7, 6:5, 3:2, 0] ([7]auto start, [6:5]display mode, [3:2]output format, [0]op mode), R/W
+      AUTO_START:
+        DISABLE: 0x00
+        ENABLE: 0x80
+      DISPALY_MODE:
+        PARALLEL_OUT: 0x00
+        HDMI: 0x20
+        NTSC: 0x40
+        PAL: 0x60
+      OUTPUT_FORMAT:
+        YUV: 0x00
+        Y16: 0x04
+      OP_MODE:
+        NORMAL: 0x00
+        FACTORY: 0x01
+    SHUTTER: # sub_id: 0x01
+      MODE:
+        AUTO: 0x00
+        MANUAL: 0x01
+        CYCLE: 0x20
+    SHUTTER_CYCLE: # sub_id: 0x02, bit_range[7:0] (shutter cycle setting 0 ~ 256sec), R/W
+    CEM: # sub_id: 0x03, bit_range[4, 2, 0] ([4]BPC, [2]TPHE, [0]Edge), R/W
+      BPC:
+        DISABLE: 0x00
+        ENABLE: 0x10
+      TPHE:
+        DISABLE: 0x00
+        ENABLE: 0x04
+      EDGE:
+        DISABLE: 0x00
+        ENABLE: 0x01
+  OPERATE_CTRL: # main_id: 0x30
+    CAEMRA: # sub_id: 0x00, bit_range[0] (start/stop), R/W
+      STOP: 0x00
+      START: 0x01
+    SHUTTER: # sub_id: 0x01, bit_range[0] (open/close), R/W
+      CLOSE: 0x00
+      OPEN: 0x01
+      0: 0x00
+      1: 0x01
+    SAVE_CONFIG: # sub_id: 0x02, bit_range[0] (save), R/W
+      SAVE: 0x01
+  DEBUG: # main_id: 0xF0
+    SOC_TEMP_MSB: None # sub_id: 0x00, bit_range[7:0] (SOC_temp_MSB[15:8]), readonly
+    SOC_TEMP_LSB: None # sub_id: 0x01, bit_range[7:0] (SOC_temp_LSB[0:7]), readonly
+    FIRM_VER_MAJOR: None # sub_id: 0x02, bit_range[7:0] (major firmware version), readonly
+    FIRM_VER_MINOR: None # sub_id: 0x03, bit_range[7:0] (minor firmware version), readonly
+    FIRM_VER_PATCH: None # sub_id: 0x04, bit_range[7:0] (patch firmware version), readonly
+    TECLESS_TEMP_RANGE: None # sub_id: 0x05, bit_range[7:0], (Selected Tecless temp range 0:L, 1:M, 2:H), readonly 
