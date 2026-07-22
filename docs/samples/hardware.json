@@ -1,20 +1,39 @@
 {
+  "SimulationMode": false,
+  "DataRetentionDays": 30,
   "Plc": {
     "IpAddress": "10.0.1.50",
-    "Port": 502,
-    "UnitId": 1,
-    "RegTempPv": 4096,
-    "RegTempSv": 4097,
-    "RegHumPv": 4098,
-    "RegHumSv": 4099,
-    "RegServoPosSv": 4100,
-    "RegBb1TempSv": 4101,
-    "RegBb2TempSv": 4102,
-    "RegBb1TempPv": 4103,
-    "RegBb2TempPv": 4104,
-    "CoilRunStop": 256,
-    "CoilServoArrival": 257,
-    "CoilEStop": 258
+    "Port": 2004,
+    "StationNo": 0,
+    "CpuSeries": "XGB",
+    "UseHexBitIndex": true,
+    "TempPv": "D100",
+    "TempSv": "D102",
+    "HumPv": "D130",
+    "HumSv": "D131",
+    "Bb1Pv": "D140",
+    "Bb1Sv": "D142",
+    "Bb2Pv": "D150",
+    "Bb2Sv": "D152",
+    "BitTempStart": "M10",
+    "BitTempStop": "M11",
+    "BitChamberRun": "M1910",
+    "BitHumidityControl": "D281.0",
+    "BitEmergencyStop": "M2000",
+    "ServoXPos": "D2540",
+    "ServoYPos": "D2640",
+    "ServoXBusyBit": "D2520.0",
+    "ServoYBusyBit": "D2620.0",
+    "ServoCurrentPoint": "D2740",
+    "ServoSpeedPercent": "D2560",
+    "ServoPointMoveBase": "P601",
+    "ServoPointXBase": "D3010",
+    "ServoPointStride": 10,
+    "ServoPointCount": 20,
+    "FanSpeed": "D350",
+    "ErrorBitBase": "M4001",
+    "InputBitBase": "P000",
+    "OutputBitBase": "P020"
   },
   "Nats": {
     "Url": "nats://master.local:4222"
@@ -28,6 +47,7 @@
   },
   "RecipeEngine": {
     "TemperatureTolerance": 0.3,
-    "CaptureResultTimeoutSeconds": 45
+    "CaptureResultTimeoutSeconds": 45,
+    "RampStepIntervalSeconds": 60
   }
 }

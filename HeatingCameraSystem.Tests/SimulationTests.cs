@@ -57,7 +57,7 @@ namespace HeatingCameraSystem.Tests
             await plc.ConnectAsync("any");
 
             await plc.MoveServoToPositionAsync(7);
-            var arrived = await plc.IsServoAtPositionAsync();
+            var arrived = await plc.IsServoAtPositionAsync(7);
 
             Assert.True(arrived);
         }

@@ -1,0 +1,218 @@
+<UserControl x:Class="HeatingCameraSystem.Master.Views.StatusMonitorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:conv="clr-namespace:HeatingCameraSystem.Master.Converters"
+             mc:Ignorable="d" d:DesignHeight="768" d:DesignWidth="1024"
+             Background="#0e1321" Foreground="#dee2f7">
+    <UserControl.Resources>
+        <conv:BoolToBrushConverter x:Key="Lamp" OnBrush="#4ae183" OffBrush="#33404a"/>
+        <conv:BoolToBrushConverter x:Key="ErrLamp" OnBrush="#ff5b52" OffBrush="#33404a"/>
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="#161b2a"/>
+            <Setter Property="BorderBrush" Value="#3b4949"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Margin" Value="6"/>
+        </Style>
+        <Style x:Key="Head" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#47eaed"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style x:Key="Lbl" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#bac9c9"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,0,10,3"/>
+        </Style>
+        <Style x:Key="Val" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#dee2f7"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="Margin" Value="0,0,0,3"/>
+        </Style>
+        <Style x:Key="LampRow" TargetType="StackPanel">
+            <Setter Property="Orientation" Value="Horizontal"/>
+            <Setter Property="Margin" Value="0,2,12,2"/>
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="6,6,6,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Ellipse Width="12" Height="12" Fill="{Binding IsConnected, Converter={StaticResource Lamp}}" VerticalAlignment="Center"/>
+                <TextBlock Text="PLC 상태 모니터" FontSize="16" FontWeight="Bold" Margin="10,0,20,0" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding StatusMessage}" Foreground="#bac9c9" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <WrapPanel Orientation="Horizontal">
+                <Border Style="{StaticResource Card}" Width="240">
+                    <StackPanel>
+                        <TextBlock Text="챔버" Style="{StaticResource Head}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="현재온도 (℃)" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CurrentTemperature, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="목표온도 (℃)" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TargetTemperature, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="현재습도 (%RH)" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CurrentHumidity, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="목표습도 (%RH)" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TargetHumidity, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="240">
+                    <StackPanel>
+                        <TextBlock Text="흑체" Style="{StaticResource Head}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Text="흑체1 현재 (℃)" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding BlackBody1Pv, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="1" Text="흑체1 목표 (℃)" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding BlackBody1Sv, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="2" Text="흑체2 현재 (℃)" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding BlackBody2Pv, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="3" Text="흑체2 목표 (℃)" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding BlackBody2Sv, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="260">
+                    <StackPanel>
+                        <TextBlock Text="서보 (직교로봇)" Style="{StaticResource Head}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Text="X 위치" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ServoXPosition}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="1" Text="Y 위치" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ServoYPosition}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="2" Text="현재 포인트" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CurrentPoint}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="3" Text="X 에러코드" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ServoXErrorCode}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="4" Text="Y 에러코드" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ServoYErrorCode}" Style="{StaticResource Val}"/>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding ServoXBusy, Converter={StaticResource Lamp}}"/>
+                                <TextBlock Text=" X BUSY" Style="{StaticResource Lbl}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding ServoYBusy, Converter={StaticResource Lamp}}"/>
+                                <TextBlock Text=" Y BUSY" Style="{StaticResource Lbl}"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding ServoXHomeComplete, Converter={StaticResource Lamp}}"/>
+                                <TextBlock Text=" X 원점" Style="{StaticResource Lbl}"/>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding ServoYHomeComplete, Converter={StaticResource Lamp}}"/>
+                                <TextBlock Text=" Y 원점" Style="{StaticResource Lbl}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="240">
+                    <StackPanel>
+                        <TextBlock Text="진행 / 기타" Style="{StaticResource Head}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Text="현재 스텝" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CurrentStep}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="1" Text="전체 스텝" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding TotalSteps}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="2" Text="팬 속도 (Hz)" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FanSpeedHz, StringFormat={}{0:F2}}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="3" Text="GAS 유속" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding GasFlow, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="260">
+                    <StackPanel>
+                        <TextBlock Text="장비 상태" Style="{StaticResource Head}"/>
+                        <WrapPanel>
+                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Heater, Converter={StaticResource Lamp}}"/><TextBlock Text=" 히터" Style="{StaticResource Lbl}"/></StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Cooler1st, Converter={StaticResource Lamp}}"/><TextBlock Text=" 1차 냉동기" Style="{StaticResource Lbl}"/></StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Cooler2nd, Converter={StaticResource Lamp}}"/><TextBlock Text=" 2차 냉동기" Style="{StaticResource Lbl}"/></StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding CoolerRoom, Converter={StaticResource Lamp}}"/><TextBlock Text=" 상온 냉동기" Style="{StaticResource Lbl}"/></StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding CoolerRoomBypass, Converter={StaticResource Lamp}}"/><TextBlock Text=" 바이패스" Style="{StaticResource Lbl}"/></StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding DoorLamp, Converter={StaticResource Lamp}}"/><TextBlock Text=" 도어램프" Style="{StaticResource Lbl}"/></StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding PairGlass, Converter={StaticResource Lamp}}"/><TextBlock Text=" 페어글라스" Style="{StaticResource Lbl}"/></StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Mcf, Converter={StaticResource Lamp}}"/><TextBlock Text=" MCF" Style="{StaticResource Lbl}"/></StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Blower1, Converter={StaticResource Lamp}}"/><TextBlock Text=" 블로워1" Style="{StaticResource Lbl}"/></StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Blower2, Converter={StaticResource Lamp}}"/><TextBlock Text=" 블로워2" Style="{StaticResource Lbl}"/></StackPanel>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="260">
+                    <StackPanel>
+                        <TextBlock Text="에러 (M4001~)" Style="{StaticResource Head}"/>
+                        <ItemsControl ItemsSource="{Binding Errors}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2">
+                                        <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding On, Converter={StaticResource ErrLamp}}"/>
+                                        <TextBlock Text="{Binding Name}" Margin="8,0,0,0" Foreground="#dee2f7" FontSize="12"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="260">
+                    <StackPanel>
+                        <TextBlock Text="입력 (P000~)" Style="{StaticResource Head}"/>
+                        <ItemsControl ItemsSource="{Binding Inputs}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2">
+                                        <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding On, Converter={StaticResource Lamp}}"/>
+                                        <TextBlock Text="{Binding Name}" Margin="8,0,0,0" Foreground="#dee2f7" FontSize="12"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="260">
+                    <StackPanel>
+                        <TextBlock Text="출력 (P020~)" Style="{StaticResource Head}"/>
+                        <ItemsControl ItemsSource="{Binding Outputs}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2">
+                                        <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding On, Converter={StaticResource Lamp}}"/>
+                                        <TextBlock Text="{Binding Name}" Margin="8,0,0,0" Foreground="#dee2f7" FontSize="12"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </WrapPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

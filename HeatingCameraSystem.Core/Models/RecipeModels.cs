@@ -12,6 +12,9 @@ namespace HeatingCameraSystem.Core.Models
         public float GlobalTargetTemperature { get; set; } = 25.0f;
         public float GlobalTargetHumidity { get; set; } = 50.0f;
 
+        /// <summary>타겟 온도 도달 시간(분). 0=즉시 지정, &gt;0=현재온도→타겟 선형 램프(히터 급출력 방지).</summary>
+        public int TemperatureRampMinutes { get; set; } = 0;
+
         // 순차적으로 실행될 스텝 목록
         public List<RecipeStep> Steps { get; set; } = new();
     }

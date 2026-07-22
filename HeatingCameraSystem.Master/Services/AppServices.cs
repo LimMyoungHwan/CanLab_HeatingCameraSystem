@@ -13,7 +13,11 @@ namespace HeatingCameraSystem.Master.Services
 {
     public static class AppServices
     {
-        private static readonly JsonSerializerOptions _jsonOpts = new() { WriteIndented = true };
+        private static readonly JsonSerializerOptions _jsonOpts = new()
+        {
+            WriteIndented = true,
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+        };
 
         public static HardwareSettings Settings { get; private set; } = new();
         public static string ImageCacheDir { get; private set; } = string.Empty;
@@ -61,7 +65,7 @@ namespace HeatingCameraSystem.Master.Services
             }
             else
             {
-                PlcController     = new PlcModbusClient(Settings.Plc);
+                PlcController     = new PlcXgtClient(Settings.Plc);
                 ShutterController = new SerialShutterController(Settings.Serial);
             }
 

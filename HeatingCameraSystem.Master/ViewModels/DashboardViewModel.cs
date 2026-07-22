@@ -297,9 +297,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         }
 
         [RelayCommand]
-        private void SetViewMode(int mode)
+        private void SetViewMode(string mode)
         {
-            CurrentViewMode = mode;
+            CurrentViewMode = int.Parse(mode);
             LoadCameraFeeds();
         }
 

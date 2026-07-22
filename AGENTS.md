@@ -6,7 +6,7 @@
 
 ```
 Core (.NET 8)          ← 인터페이스 + 모델 + 설정만. 외부 의존성 없음.
-Protocols (.NET 8)     ← Core 구현체. FluentModbus, NATS.Net, System.IO.Ports.
+Protocols (.NET 8)     ← Core 구현체. VagabondK.Protocols(LS XGT FEnet), NATS.Net, System.IO.Ports.
 Master (.NET 8-windows)← WPF 운영자 UI. AppServices 정적 서비스 로케이터.
 Agent (.NET 8)         ← 카메라 PC 콘솔 앱. OpenCvSharp4 + NATS.
 Tests (.NET 8-windows) ← xUnit + Moq. 4개 프로젝트 모두 참조.
@@ -16,7 +16,7 @@ Tests (.NET 8-windows) ← xUnit + Moq. 4개 프로젝트 모두 참조.
 
 ```powershell
 dotnet build                                             # 솔루션 전체 빌드
-dotnet test --no-build                                   # 테스트 (현재 22개)
+dotnet test --no-build                                   # 테스트 (현재 61개)
 dotnet run --project HeatingCameraSystem.Master          # WPF Master 실행
 dotnet run --project HeatingCameraSystem.Agent           # Agent 실행 (agent.json 기준)
 dotnet run --project HeatingCameraSystem.Agent -- Bay1 nats://192.168.1.10:4222  # 인수 오버라이드
@@ -68,13 +68,23 @@ byte[] _closeBuffer = { 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 `cameraIndex`는 **식별자 전용** — 바이트 버퍼에는 사용하지 않음.  
 `GetShutterStateAsync`는 하드웨어 조회 불가 → 소프트웨어 상태 캐시(`bool _isOpen`) 반환.
 
+### PLC 프로토콜 (LS XGT FEnet)
+
+Modbus → **XGT 전용 프로토콜**(TCP 2004)로 변경됨. 구현: `PlcXgtClient` (VagabondK.Protocols.LSElectric).
+- 논리 디바이스 토큰(`D100`, `M10`, `P000`, `D2520.0`)을 `PlcSettings`에 저장 → VagabondK `DeviceVariable`로 변환.
+- 비트-오브-워드(`D2520.0`)는 워드 읽기+마스크(쓰기는 read-modify-write). 순수 비트(`M10`/`P000`)는 직접.
+- CPU=**XGB**(XBC-DN64H) 확인 → `UseHexBitIndex=true` 기본. 비트 오독 시 반전. 위치결정: XBF-PD02A(X/Y 2축).
+- 전체 상태 일괄: `IPlcController.ReadStatusAsync()` → `PlcStatusSnapshot` (Master 상태 화면 1초 폴링).
+- 온도 램프: `Recipe.TemperatureRampMinutes`(분) — RecipeEngine이 현재온도→타겟을 선형 스텝(히터 급출력 방지).
+
 ### Agent ↔ 카메라 매핑
 `RecipeStep.CameraIndex` → NATS 대상 `Agent_{CameraIndex}`.  
 Agent `agent.json`의 `AgentId`와 `CameraIndex`가 일치해야 함.
 
 ## 알려진 플레이스홀더
 
-- `hardware.json` PLC Modbus 레지스터 주소: A&D PLC 실제 명세 확인 후 운영자가 직접 수정.
+- `hardware.json` PLC 디바이스 주소(D/M/P): A&D PLC 실제 명세 확인 후 운영자가 직접 수정. CPU=XGB(XBC-DN64H) 확인 → `UseHexBitIndex=true` 기본.
+- `ServoSpeedPercent`(D2560), `BitEmergencyStop`(M2000), Y축 JOG 비트(P725/P726): 문서 미기재 임의값 — 실제 비트 확인 후 교체.
 - `SerialSettings` 기본값(`COM3`, `9600 8N1`): 실제 카메라 가상 포트 설정에 맞게 수정 필요.
 
 ## 코드 규칙

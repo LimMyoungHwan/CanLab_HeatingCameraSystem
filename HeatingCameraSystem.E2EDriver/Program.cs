@@ -65,7 +65,7 @@ internal static class Program
             Console.WriteLine($"[E2E] Step {i+1}/{recipe.Steps.Count}: cam={step.CameraIndex}, pos={step.TargetPositionIndex}, BBtemp={step.TargetBlackBodyTemperature}");
 
             await plc.MoveServoToPositionAsync(step.TargetPositionIndex);
-            while (!await plc.IsServoAtPositionAsync()) await Task.Delay(100);
+            while (!await plc.IsServoAtPositionAsync(step.TargetPositionIndex)) await Task.Delay(100);
 
             await plc.SetBlackBodyTemperatureAsync(0, step.TargetBlackBodyTemperature);
             while (Math.Abs(await plc.GetCurrentBlackBodyTemperatureAsync(0) - step.TargetBlackBodyTemperature) > 0.5f)

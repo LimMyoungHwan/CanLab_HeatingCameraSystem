@@ -16,7 +16,7 @@
 │  Serial Settings        │  config ►          │   USB-C Camera #2   │
 │  History Logs           │  ◄ config ACK      └─────────────────────┘
 │                         │
-│  PLC (Modbus TCP) ──────┤
+│  PLC (XGT FEnet TCP) ───┤
 │  LiteDB (data.db)       │
 └─────────────────────────┘
 ```
@@ -26,7 +26,7 @@
 ```
 HeatingCameraSystem/
 ├── HeatingCameraSystem.Core/        # 인터페이스 + 모델 + 설정 (.NET 8)
-├── HeatingCameraSystem.Protocols/   # FluentModbus, NATS.Net, System.IO.Ports
+├── HeatingCameraSystem.Protocols/   # VagabondK (LS XGT FEnet), NATS.Net, System.IO.Ports
 ├── HeatingCameraSystem.Master/      # WPF 운영자 UI (.NET 8-windows)
 ├── HeatingCameraSystem.Agent/       # 카메라 PC 콘솔 앱 (.NET 8)
 ├── HeatingCameraSystem.Tests/       # xUnit + Moq (.NET 8-windows)

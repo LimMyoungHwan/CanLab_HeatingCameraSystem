@@ -5,8 +5,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentModbus" Version="5.3.2" />
     <PackageReference Include="NATS.Net" Version="2.8.1" />
+    <PackageReference Include="VagabondK.Protocols.LSElectric" Version="1.1.21" />
+    <PackageReference Include="VagabondK.Protocols.Channels" Version="1.1.22" />
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>

@@ -1,5 +1,7 @@
+using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using HeatingCameraSystem.Core.Config;
 using Xunit;
 
@@ -7,15 +9,22 @@ namespace HeatingCameraSystem.Tests
 {
     public class HardwareSettingsTests
     {
+        private static readonly JsonSerializerOptions Opts = new()
+        {
+            Converters = { new JsonStringEnumConverter() }
+        };
+
         [Fact]
         public void HardwareSettings_DefaultsArePopulated()
         {
             var s = new HardwareSettings();
 
-            Assert.Equal("192.168.1.100", s.Plc.IpAddress);
-            Assert.Equal(502, s.Plc.Port);
-            Assert.Equal(100, s.Plc.RegTempPv);
-            Assert.Equal(10, s.Plc.CoilRunStop);
+            Assert.Equal("192.168.1.2", s.Plc.IpAddress);
+            Assert.Equal(2004, s.Plc.Port);
+            Assert.Equal("D100", s.Plc.TempPv);
+            Assert.Equal("D102", s.Plc.TempSv);
+            Assert.Equal(XgtCpuSeries.XGB, s.Plc.CpuSeries);
+            Assert.True(s.Plc.UseHexBitIndex);
             Assert.Equal("nats://127.0.0.1:4222", s.Nats.Url);
             Assert.Equal("COM3", s.Serial.PortName);
             Assert.Equal(0.5f, s.RecipeEngine.TemperatureTolerance);
@@ -29,24 +38,26 @@ namespace HeatingCameraSystem.Tests
                 Plc = new PlcSettings
                 {
                     IpAddress = "10.0.1.50",
-                    Port = 502,
-                    UnitId = 1,
-                    RegTempPv = 4096,
-                    RegTempSv = 4097,
-                    CoilRunStop = 256
+                    Port = 2004,
+                    StationNo = 1,
+                    CpuSeries = XgtCpuSeries.XGK,
+                    UseHexBitIndex = false,
+                    TempPv = "D200",
+                    TempSv = "D202"
                 },
                 Nats = new NatsSettings { Url = "nats://master.local:4222" }
             };
 
-            string json = JsonSerializer.Serialize(original);
-            var restored = JsonSerializer.Deserialize<HardwareSettings>(json);
+            string json = JsonSerializer.Serialize(original, Opts);
+            var restored = JsonSerializer.Deserialize<HardwareSettings>(json, Opts);
 
             Assert.NotNull(restored);
             Assert.Equal("10.0.1.50", restored!.Plc.IpAddress);
-            Assert.Equal(1, restored.Plc.UnitId);
-            Assert.Equal(4096, restored.Plc.RegTempPv);
-            Assert.Equal(4097, restored.Plc.RegTempSv);
-            Assert.Equal(256, restored.Plc.CoilRunStop);
+            Assert.Equal(1, restored.Plc.StationNo);
+            Assert.Equal(XgtCpuSeries.XGK, restored.Plc.CpuSeries);
+            Assert.False(restored.Plc.UseHexBitIndex);
+            Assert.Equal("D200", restored.Plc.TempPv);
+            Assert.Equal("D202", restored.Plc.TempSv);
             Assert.Equal("nats://master.local:4222", restored.Nats.Url);
         }
 
@@ -60,12 +71,12 @@ namespace HeatingCameraSystem.Tests
             Assert.True(File.Exists(samplePath), $"Sample missing at {samplePath}");
 
             var json = File.ReadAllText(samplePath);
-            var loaded = JsonSerializer.Deserialize<HardwareSettings>(json);
+            var loaded = JsonSerializer.Deserialize<HardwareSettings>(json, Opts);
 
             Assert.NotNull(loaded);
             Assert.Equal("10.0.1.50", loaded!.Plc.IpAddress);
-            Assert.Equal(4096, loaded.Plc.RegTempPv);
-            Assert.Equal(256, loaded.Plc.CoilRunStop);
+            Assert.Equal(2004, loaded.Plc.Port);
+            Assert.Equal("D100", loaded.Plc.TempPv);
         }
 
         [Fact]

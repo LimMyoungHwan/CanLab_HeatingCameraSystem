@@ -20,7 +20,7 @@ namespace HeatingCameraSystem.Tests
             var mockHistory = new Mock<ICaptureHistoryRepository>();
 
             mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
-            mockPlc.Setup(p => p.IsServoAtPositionAsync()).ReturnsAsync(true);
+            mockPlc.Setup(p => p.IsServoAtPositionAsync(It.IsAny<int>())).ReturnsAsync(true);
             mockPlc.Setup(p => p.GetCurrentBlackBodyTemperatureAsync(It.IsAny<int>())).ReturnsAsync(30.0f);
             mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
 

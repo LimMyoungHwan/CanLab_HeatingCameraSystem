@@ -1,0 +1,146 @@
+<UserControl x:Class="HeatingCameraSystem.Master.Views.ManualControlView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:conv="clr-namespace:HeatingCameraSystem.Master.Converters"
+             mc:Ignorable="d" d:DesignHeight="768" d:DesignWidth="1024"
+             Background="#0e1321" Foreground="#dee2f7">
+    <UserControl.Resources>
+        <conv:BoolToBrushConverter x:Key="Lamp" OnBrush="#4ae183" OffBrush="#33404a"/>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="#161b2a"/>
+            <Setter Property="BorderBrush" Value="#3b4949"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="Margin" Value="6"/>
+        </Style>
+        <Style x:Key="Head" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#47eaed"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style x:Key="Lbl" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#bac9c9"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+        </Style>
+        <Style x:Key="Btn" TargetType="Button">
+            <Setter Property="Background" Value="#2f3444"/>
+            <Setter Property="Foreground" Value="#dee2f7"/>
+            <Setter Property="BorderBrush" Value="#3b4949"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="MinWidth" Value="70"/>
+        </Style>
+        <Style x:Key="Toggle" TargetType="ToggleButton">
+            <Setter Property="Background" Value="#2f3444"/>
+            <Setter Property="Foreground" Value="#dee2f7"/>
+            <Setter Property="BorderBrush" Value="#3b4949"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="MinWidth" Value="110"/>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background" Value="#1f6f3f"/>
+                    <Setter Property="Foreground" Value="#eafff2"/>
+                    <Setter Property="BorderBrush" Value="#4ae183"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" Background="#1a1f2e" BorderBrush="#3b4949" BorderThickness="0,1,0,0" Padding="14,8">
+            <TextBlock Text="{Binding StatusMessage}" Foreground="#bac9c9"/>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <WrapPanel Orientation="Horizontal">
+                <Border Style="{StaticResource Card}" Width="360">
+                    <StackPanel>
+                        <TextBlock Text="챔버" Style="{StaticResource Head}"/>
+                        <WrapPanel>
+                            <Button Content="온도제어 시작" Style="{StaticResource Btn}" Command="{Binding StartChamberCommand}"/>
+                            <Button Content="온도제어 정지" Style="{StaticResource Btn}" Command="{Binding StopChamberCommand}"/>
+                            <Button Content="비상정지" Style="{StaticResource Btn}" Background="#7a2020" Foreground="#ffd9d6" Command="{Binding EmergencyStopCommand}"/>
+                        </WrapPanel>
+                        <StackPanel Orientation="Horizontal" Margin="4,10,0,0">
+                            <CheckBox Content="습도 제어" IsChecked="{Binding HumidityControl}" Foreground="#dee2f7" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="360">
+                    <StackPanel>
+                        <TextBlock Text="장비 원터치" Style="{StaticResource Head}"/>
+                        <WrapPanel>
+                            <ToggleButton Content="1차 냉동기" Style="{StaticResource Toggle}" IsChecked="{Binding Cooler1st}"/>
+                            <ToggleButton Content="2차 냉동기" Style="{StaticResource Toggle}" IsChecked="{Binding Cooler2nd}"/>
+                            <ToggleButton Content="상온 냉동기" Style="{StaticResource Toggle}" IsChecked="{Binding CoolerRoom}"/>
+                            <ToggleButton Content="블로워1" Style="{StaticResource Toggle}" IsChecked="{Binding Blower1}"/>
+                            <ToggleButton Content="블로워2" Style="{StaticResource Toggle}" IsChecked="{Binding Blower2}"/>
+                            <ToggleButton Content="칠러" Style="{StaticResource Toggle}" IsChecked="{Binding Chiller}"/>
+                            <ToggleButton Content="도어락" Style="{StaticResource Toggle}" IsChecked="{Binding DoorLock}"/>
+                            <ToggleButton Content="조명" Style="{StaticResource Toggle}" IsChecked="{Binding Lighting}"/>
+                            <ToggleButton Content="페어글라스" Style="{StaticResource Toggle}" IsChecked="{Binding PairGlass}"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="360">
+                    <StackPanel>
+                        <TextBlock Text="서보 조작" Style="{StaticResource Head}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="X 위치:" Style="{StaticResource Lbl}"/>
+                            <TextBlock Text="{Binding ServoXPosition}" Foreground="#47eaed" FontWeight="Bold" Margin="0,0,16,0"/>
+                            <Ellipse Width="10" Height="10" Fill="{Binding ServoXBusy, Converter={StaticResource Lamp}}" VerticalAlignment="Center"/>
+                            <TextBlock Text=" X BUSY" Style="{StaticResource Lbl}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="Y 위치:" Style="{StaticResource Lbl}"/>
+                            <TextBlock Text="{Binding ServoYPosition}" Foreground="#47eaed" FontWeight="Bold" Margin="0,0,16,0"/>
+                            <Ellipse Width="10" Height="10" Fill="{Binding ServoYBusy, Converter={StaticResource Lamp}}" VerticalAlignment="Center"/>
+                            <TextBlock Text=" Y BUSY" Style="{StaticResource Lbl}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="현재 포인트:" Style="{StaticResource Lbl}"/>
+                            <TextBlock Text="{Binding CurrentPoint}" Foreground="#47eaed" FontWeight="Bold"/>
+                        </StackPanel>
+                        <WrapPanel Margin="0,6,0,0">
+                            <Button Content="X 축 JOG -" Style="{StaticResource Btn}" Tag="X-" PreviewMouseLeftButtonDown="JogDown" PreviewMouseLeftButtonUp="JogUp"/>
+                            <Button Content="X 축 JOG +" Style="{StaticResource Btn}" Tag="X+" PreviewMouseLeftButtonDown="JogDown" PreviewMouseLeftButtonUp="JogUp"/>
+                            <Button Content="Y 축 JOG -" Style="{StaticResource Btn}" Tag="Y-" PreviewMouseLeftButtonDown="JogDown" PreviewMouseLeftButtonUp="JogUp"/>
+                            <Button Content="Y 축 JOG +" Style="{StaticResource Btn}" Tag="Y+" PreviewMouseLeftButtonDown="JogDown" PreviewMouseLeftButtonUp="JogUp"/>
+                            <Button Content="X 원점" Style="{StaticResource Btn}" Command="{Binding HomeXCommand}"/>
+                            <Button Content="Y 원점" Style="{StaticResource Btn}" Command="{Binding HomeYCommand}"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="360">
+                    <StackPanel>
+                        <TextBlock Text="포인트 이동" Style="{StaticResource Head}"/>
+                        <ItemsControl ItemsSource="{Binding PointNumbers}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><UniformGrid Columns="5"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Content="{Binding}" Style="{StaticResource Btn}" MinWidth="52"
+                                            Command="{Binding DataContext.MoveToPointCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </WrapPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

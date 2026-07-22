@@ -58,5 +58,26 @@ namespace HeatingCameraSystem.Master.ViewModels
             CurrentViewTitle = "디바이스 관리 (Devices)";
             CurrentViewModel = new DevicesViewModel();
         }
+
+        [RelayCommand]
+        private void NavigateToStatusMonitor()
+        {
+            CurrentViewTitle = "PLC 상태 (Status)";
+            CurrentViewModel = new StatusMonitorViewModel();
+        }
+
+        [RelayCommand]
+        private void NavigateToPlcControlSettings()
+        {
+            CurrentViewTitle = "PLC 설정 (Control Settings)";
+            CurrentViewModel = new PlcControlSettingsViewModel();
+        }
+
+        [RelayCommand]
+        private void NavigateToManualControl()
+        {
+            CurrentViewTitle = "수동 조작 (Manual Control)";
+            CurrentViewModel = new ManualControlViewModel();
+        }
     }
 }

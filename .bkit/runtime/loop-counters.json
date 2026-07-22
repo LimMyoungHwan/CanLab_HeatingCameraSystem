@@ -1,52 +1,56 @@
 {
   "fileEditCounts": {
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\00-pm\\camera-model-select.prd.md": {
-      "count": 1,
-      "ts": 1783494661584
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Protocols\\PlcXgtClient.cs": {
+      "count": 2,
+      "ts": 1784683797693
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\03-analysis\\features\\sc-12-scope2.analysis.md": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\samples\\hardware.json": {
       "count": 1,
-      "ts": 1783494794599
+      "ts": 1784683906381
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\04-report\\features\\sc-12-scope2.report.md": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\HardwareSettingsTests.cs": {
       "count": 1,
-      "ts": 1783494828835
+      "ts": 1784683918071
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\01-plan\\features\\camera-model-select.plan.md": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\ViewModels\\StatusMonitorViewModel.cs": {
       "count": 1,
-      "ts": 1783498840835
+      "ts": 1784696917676
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\02-design\\features\\camera-model-select.design.md": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\ViewModels\\PlcControlSettingsViewModel.cs": {
       "count": 1,
-      "ts": 1783498921792
+      "ts": 1784696951628
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Core\\Models\\CameraModelSpec.cs": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\ViewModels\\ManualControlViewModel.cs": {
       "count": 1,
-      "ts": 1783498970770
+      "ts": 1784696984172
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Agent\\CameraModels\\AISEN.json": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Converters\\BoolToBrushConverter.cs": {
       "count": 1,
-      "ts": 1783499046868
+      "ts": 1784697042032
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Agent\\CameraModels\\FPV.json": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\StatusMonitorView.xaml.cs": {
       "count": 1,
-      "ts": 1783499047330
+      "ts": 1784697043643
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\CameraModelSpecTests.cs": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\PlcControlSettingsView.xaml.cs": {
       "count": 1,
-      "ts": 1783499074252
+      "ts": 1784697045212
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\03-analysis\\features\\camera-model-select.analysis.md": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\ManualControlView.xaml.cs": {
       "count": 1,
-      "ts": 1783499224577
+      "ts": 1784697049403
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\04-report\\features\\camera-model-select.report.md": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\StatusMonitorView.xaml": {
       "count": 1,
-      "ts": 1783499260434
+      "ts": 1784697135450
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\archive\\2026-07\\_INDEX.md": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\PlcControlSettingsView.xaml": {
       "count": 1,
-      "ts": 1783499284864
+      "ts": 1784697202038
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\ManualControlView.xaml": {
+      "count": 1,
+      "ts": 1784697283645
     }
   }
 }

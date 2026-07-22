@@ -1,0 +1,161 @@
+<UserControl x:Class="HeatingCameraSystem.Master.Views.PlcControlSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" d:DesignHeight="768" d:DesignWidth="1024"
+             Background="#0e1321" Foreground="#dee2f7">
+    <UserControl.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="#161b2a"/>
+            <Setter Property="BorderBrush" Value="#3b4949"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="Margin" Value="6"/>
+        </Style>
+        <Style x:Key="Head" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#47eaed"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style x:Key="Lbl" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#bac9c9"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#0e1321"/>
+            <Setter Property="Foreground" Value="#dee2f7"/>
+            <Setter Property="BorderBrush" Value="#3b4949"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="MinWidth" Value="80"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+        <Style x:Key="Apply" TargetType="Button">
+            <Setter Property="Background" Value="#2f3444"/>
+            <Setter Property="Foreground" Value="#47eaed"/>
+            <Setter Property="BorderBrush" Value="#3b4949"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,4"/>
+            <Setter Property="Margin" Value="0,0,0,0"/>
+        </Style>
+        <Style x:Key="FieldRow" TargetType="StackPanel">
+            <Setter Property="Orientation" Value="Horizontal"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" Background="#1a1f2e" BorderBrush="#3b4949" BorderThickness="0,1,0,0" Padding="14,8">
+            <TextBlock Text="{Binding StatusMessage}" Foreground="#bac9c9"/>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <WrapPanel Orientation="Horizontal">
+                <Border Style="{StaticResource Card}" Width="360">
+                    <StackPanel>
+                        <TextBlock Text="챔버 온습도 / 흑체" Style="{StaticResource Head}"/>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="목표 온도 (℃)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBox Text="{Binding TargetTemperature}"/>
+                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyTemperatureCommand}"/>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="목표 습도 (%RH)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBox Text="{Binding TargetHumidity}"/>
+                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyHumidityCommand}"/>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="습도 제어" Style="{StaticResource Lbl}" Width="110"/>
+                            <CheckBox IsChecked="{Binding HumidityControl}" Foreground="#dee2f7" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyHumidityControlCommand}"/>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="흑체1 목표 (℃)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBox Text="{Binding BlackBody1Target}"/>
+                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyBlackBody1Command}"/>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="흑체2 목표 (℃)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBox Text="{Binding BlackBody2Target}"/>
+                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyBlackBody2Command}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="360">
+                    <StackPanel>
+                        <TextBlock Text="모터 / 팬" Style="{StaticResource Head}"/>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="서보 속도 (1~100%)" Style="{StaticResource Lbl}" Width="130"/>
+                            <TextBox Text="{Binding ServoSpeedPercent}"/>
+                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyServoSpeedCommand}"/>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="팬 속도 (Hz)" Style="{StaticResource Lbl}" Width="130"/>
+                            <TextBox Text="{Binding FanSpeedHz}"/>
+                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyFanSpeedCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="360">
+                    <StackPanel>
+                        <TextBlock Text="관리자 설정" Style="{StaticResource Head}"/>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="과열 상한 (℃)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding OverheatLimit}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="상온냉동기 경계 (℃)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding CoolerRoomBoundary}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="2차냉동기 경계 (℃)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding Cooler2ndBoundary}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="냉동기 딜레이 (분)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding CoolerDelayMinutes}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="바이패스 경계 (℃)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding BypassBoundary}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="MFC 최소출력 (%RH)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding MfcMinOutput}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="MFC 최대출력 (%RH)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding MfcMaxOutput}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="페어글라스 경계 (℃)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding PairGlassBoundary}"/></StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <Button Content="불러오기" Style="{StaticResource Apply}" Command="{Binding LoadAdminCommand}" Margin="0,0,8,0"/>
+                            <Button Content="저장" Style="{StaticResource Apply}" Command="{Binding SaveAdminCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="360">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,10">
+                            <TextBlock Text="서보 포인트 좌표 (20)" Style="{StaticResource Head}"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="불러오기" Style="{StaticResource Apply}" Command="{Binding LoadPointsCommand}" Margin="0,0,8,0"/>
+                                <Button Content="저장" Style="{StaticResource Apply}" Command="{Binding SavePointsCommand}"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="포인트" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Column="1" Text="X" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Column="2" Text="Y" Style="{StaticResource Lbl}"/>
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding Points}" MaxHeight="360">
+                            <ItemsControl.Template>
+                                <ControlTemplate TargetType="ItemsControl">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsPresenter/></ScrollViewer>
+                                </ControlTemplate>
+                            </ItemsControl.Template>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Index}" Foreground="#dee2f7" VerticalAlignment="Center"/>
+                                        <TextBox Grid.Column="1" Text="{Binding X}"/>
+                                        <TextBox Grid.Column="2" Text="{Binding Y}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </WrapPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

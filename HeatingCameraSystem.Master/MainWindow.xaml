@@ -32,6 +32,15 @@
         <DataTemplate DataType="{x:Type vm:DevicesViewModel}">
             <views:DevicesView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:StatusMonitorViewModel}">
+            <views:StatusMonitorView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:PlcControlSettingsViewModel}">
+            <views:PlcControlSettingsView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ManualControlViewModel}">
+            <views:ManualControlView />
+        </DataTemplate>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </Window.Resources>
 
@@ -62,6 +71,15 @@
                         Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
 
                 <Button Content="Devices" Command="{Binding NavigateToDevicesCommand}" 
+                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+
+                <Button Content="PLC 상태" Command="{Binding NavigateToStatusMonitorCommand}" 
+                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+
+                <Button Content="PLC 설정" Command="{Binding NavigateToPlcControlSettingsCommand}" 
+                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+
+                <Button Content="수동 조작" Command="{Binding NavigateToManualControlCommand}" 
                         Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
             </StackPanel>
         </Border>

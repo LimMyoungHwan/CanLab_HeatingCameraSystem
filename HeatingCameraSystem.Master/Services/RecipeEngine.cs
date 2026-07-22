@@ -15,6 +15,7 @@ namespace HeatingCameraSystem.Master.Services
         private readonly ICaptureHistoryRepository _historyRepo;
         private readonly float _tempTolerance;
         private readonly TimeSpan _captureTimeout;
+        private readonly int _rampStepIntervalSeconds;
         private readonly string? _imageCacheDir;
         private readonly ICameraDeviceRepository? _deviceRepo;
 
@@ -32,6 +33,7 @@ namespace HeatingCameraSystem.Master.Services
             var s = settings ?? new RecipeEngineSettings();
             _tempTolerance  = s.TemperatureTolerance;
             _captureTimeout = TimeSpan.FromSeconds(s.CaptureResultTimeoutSeconds);
+            _rampStepIntervalSeconds = s.RampStepIntervalSeconds;
             _imageCacheDir  = imageCacheDir;
             _deviceRepo     = deviceRepo;
         }
@@ -52,8 +54,8 @@ namespace HeatingCameraSystem.Master.Services
             progress?.Report(new RecipeProgress { CurrentStep = 0, TotalSteps = totalSteps, CurrentPhase = "챔버 안정화" });
 
             await _plcController.StartChamberAsync();
-            await _plcController.SetTargetTemperatureAsync(recipe.GlobalTargetTemperature);
             await _plcController.SetTargetHumidityAsync(recipe.GlobalTargetHumidity);
+            await RampTemperatureAsync(recipe, totalSteps, progress, cancellationToken);
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -73,7 +75,7 @@ namespace HeatingCameraSystem.Master.Services
                 await _plcController.MoveServoToPositionAsync(step.TargetPositionIndex);
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    if (await _plcController.IsServoAtPositionAsync()) break;
+                    if (await _plcController.IsServoAtPositionAsync(step.TargetPositionIndex)) break;
                     await Task.Delay(500, cancellationToken);
                 }
 
@@ -146,6 +148,38 @@ namespace HeatingCameraSystem.Master.Services
             await _plcController.StopChamberAsync();
             progress?.Report(new RecipeProgress { CurrentStep = totalSteps, TotalSteps = totalSteps, CurrentPhase = "완료" });
             Console.WriteLine($"[RecipeEngine] Recipe '{recipe.Name}' completed.");
+        }
+
+        private async Task RampTemperatureAsync(Recipe recipe, int totalSteps, IProgress<RecipeProgress>? progress, CancellationToken ct)
+        {
+            float target = recipe.GlobalTargetTemperature;
+            if (recipe.TemperatureRampMinutes <= 0)
+            {
+                await _plcController.SetTargetTemperatureAsync(target);
+                return;
+            }
+
+            float start = await _plcController.GetCurrentTemperatureAsync();
+            double durationSeconds = recipe.TemperatureRampMinutes * 60.0;
+            var stepDelay = TimeSpan.FromSeconds(Math.Max(1, _rampStepIntervalSeconds));
+            var startedAt = DateTime.UtcNow;
+
+            while (!ct.IsCancellationRequested)
+            {
+                double frac = Math.Min((DateTime.UtcNow - startedAt).TotalSeconds / durationSeconds, 1.0);
+                float sv = start + (float)((target - start) * frac);
+                await _plcController.SetTargetTemperatureAsync(sv);
+                progress?.Report(new RecipeProgress
+                {
+                    CurrentStep = 0,
+                    TotalSteps = totalSteps,
+                    CurrentPhase = $"온도 램프 {sv:F1}℃ / {target:F1}℃"
+                });
+                if (frac >= 1.0) break;
+                await Task.Delay(stepDelay, ct);
+            }
+
+            await _plcController.SetTargetTemperatureAsync(target);
         }
 
         private async Task<string> ResolveAgentIdAsync(RecipeStep step)
