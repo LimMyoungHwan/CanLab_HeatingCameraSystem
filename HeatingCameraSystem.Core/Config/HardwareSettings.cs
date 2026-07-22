@@ -1,3 +1,5 @@
+using HeatingCameraSystem.Core.Models;
+
 namespace HeatingCameraSystem.Core.Config
 {
     public class HardwareSettings
@@ -14,6 +16,8 @@ namespace HeatingCameraSystem.Core.Config
         /// 기본 30일. 0 이면 정리 안 함(주의: 무한 증가).
         /// </summary>
         public int DataRetentionDays { get; set; } = 30;
+
+        public List<CameraPairingEntry> CameraPairings { get; set; } = new();
 
         public PlcSettings Plc { get; set; } = new();
         public NatsSettings Nats { get; set; } = new();
@@ -89,6 +93,8 @@ namespace HeatingCameraSystem.Core.Config
         public string ServoPointMoveBase { get; set; } = "P601";
         // 포인트 목표좌표: X=base+(idx-1)*stride, Y=X+2  (1P: D3010/D3012, 2P: D3020/D3022 ...)
         public string ServoPointXBase { get; set; } = "D3010";
+        // 절대좌표 직접 이동(MoveToCoordinateAsync)의 Y 목표 워드. ponytail: 실제 주소 하드웨어 확인 후 교체.
+        public string ServoPointYBase { get; set; } = "D3012";
         public int ServoPointStride { get; set; } = 10;
         public int ServoPointCount { get; set; } = 20;
 

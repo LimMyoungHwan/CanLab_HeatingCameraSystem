@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Management;
 using System.Runtime.Versioning;
 using System.Threading;
@@ -43,11 +44,17 @@ namespace HeatingCameraSystem.Protocols
                     HardwareId   = hardwareId,
                     FriendlyName = name,
                     OpenCvIndex  = index++,
+                    // ponytail: ContainerID 우선(동일 CLTC_T_VGA 두 대를 물리 장치로 구분),
+                    // 조회 불가 시 PNPDeviceID 정규화 폴백. WmiUsbSerialEnumerator와 공유.
+                    UsbParentId  = UsbTopology.DeriveContainerId(hardwareId),
                 });
             }
 
             return results;
         }
+
+        public IReadOnlyList<DiscoveredCamera> EnumerateThermal(string friendlyNamePrefix = "CLTC_T_VGA") =>
+            Enumerate().Where(c => c.FriendlyName.StartsWith(friendlyNamePrefix, StringComparison.OrdinalIgnoreCase)).ToList();
 
         public void StartWatching()
         {

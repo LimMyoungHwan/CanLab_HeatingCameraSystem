@@ -1,56 +1,72 @@
 {
   "fileEditCounts": {
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Protocols\\PlcXgtClient.cs": {
+    "C:\\Users\\p2062\\AppData\\Local\\Temp\\opencode\\ulw-recipe-design-camera.md": {
       "count": 2,
-      "ts": 1784683797693
+      "ts": 1784718634456
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\samples\\hardware.json": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\Protocols\\FakeUsbSerialEnumeratorTests.cs": {
       "count": 1,
-      "ts": 1784683906381
+      "ts": 1784718570281
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\HardwareSettingsTests.cs": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Core\\Models\\DiscoveredSerialPort.cs": {
       "count": 1,
-      "ts": 1784683918071
+      "ts": 1784718655732
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\ViewModels\\StatusMonitorViewModel.cs": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Core\\Interfaces\\IUsbSerialEnumerator.cs": {
       "count": 1,
-      "ts": 1784696917676
+      "ts": 1784718658189
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\ViewModels\\PlcControlSettingsViewModel.cs": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Protocols\\WmiUsbSerialEnumerator.cs": {
       "count": 1,
-      "ts": 1784696951628
+      "ts": 1784718683248
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\ViewModels\\ManualControlViewModel.cs": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Protocols\\Simulation\\FakeUsbSerialEnumerator.cs": {
       "count": 1,
-      "ts": 1784696984172
+      "ts": 1784718688160
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Converters\\BoolToBrushConverter.cs": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\RecipeStepPersistenceTests.cs": {
       "count": 1,
-      "ts": 1784697042032
+      "ts": 1784719230050
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\StatusMonitorView.xaml.cs": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\Protocols\\FakeCameraEnumeratorTests.cs": {
       "count": 1,
-      "ts": 1784697043643
+      "ts": 1784719724185
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\PlcControlSettingsView.xaml.cs": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Core\\Interfaces\\ICameraSerialClient.cs": {
       "count": 1,
-      "ts": 1784697045212
+      "ts": 1784722866681
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\ManualControlView.xaml.cs": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Protocols\\Cameras\\CL\\ClSerialCameraClient.cs": {
       "count": 1,
-      "ts": 1784697049403
+      "ts": 1784722881347
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\StatusMonitorView.xaml": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Protocols\\Simulation\\FakeCameraSerialClient.cs": {
       "count": 1,
-      "ts": 1784697135450
+      "ts": 1784722887655
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\PlcControlSettingsView.xaml": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\Protocols\\CameraSerialClientTests.cs": {
       "count": 1,
-      "ts": 1784697202038
+      "ts": 1784722890645
     },
-    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Master\\Views\\ManualControlView.xaml": {
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\Protocols\\UsbTopologyTests.cs": {
       "count": 1,
-      "ts": 1784697283645
+      "ts": 1784723141389
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Protocols\\UsbTopology.cs": {
+      "count": 1,
+      "ts": 1784723176755
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\_QaDriverManual.cs": {
+      "count": 1,
+      "ts": 1784725248974
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\qa\\recipe-design-simulation-qa.md": {
+      "count": 1,
+      "ts": 1784725380039
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\docs\\qa\\recipe-design-real-hardware-runbook.md": {
+      "count": 1,
+      "ts": 1784725421750
     }
   }
 }

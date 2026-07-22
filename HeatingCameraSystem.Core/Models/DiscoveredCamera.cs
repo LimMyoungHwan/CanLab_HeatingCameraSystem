@@ -8,6 +8,7 @@ namespace HeatingCameraSystem.Core.Models
         public string HardwareId    { get; set; } = string.Empty;   // WMI PnPDeviceID
         public string FriendlyName  { get; set; } = string.Empty;   // 표시용 이름
         public int    OpenCvIndex   { get; set; }                   // DirectShow 열거 순서
+        public string UsbParentId   { get; set; } = string.Empty;   // USB 부모 id (카메라↔COM 페어링 조인 키)
     }
 
     /// <summary>PnP 이벤트 종류</summary>

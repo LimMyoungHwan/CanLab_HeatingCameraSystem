@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Config;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Protocols;
+using HeatingCameraSystem.Protocols.Cameras.CL;
 using HeatingCameraSystem.Protocols.Simulation;
 using LiteDB;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -32,6 +33,11 @@ namespace HeatingCameraSystem.Master.Services
         public static ISerialShutterController? ShutterController { get; private set; }
         public static RecipeEngine? RecipeEngine { get; private set; }
         public static ConnectionMonitorService? ConnectionMonitor { get; private set; }
+        public static ILiveThermalCamera? LiveThermalCamera { get; private set; }
+        public static ICameraComPairingService? CameraPairingService { get; private set; }
+        public static Func<string, ICameraSerialClient>? CameraSerialClientFactory { get; private set; }
+
+        private static string _hardwareJsonPath = string.Empty;
 
         public static void Initialize()
         {
@@ -41,6 +47,7 @@ namespace HeatingCameraSystem.Master.Services
             Directory.CreateDirectory(dir);
 
             Settings = LoadOrCreateSettings(dir);
+            _hardwareJsonPath = Path.Combine(dir, "hardware.json");
             ImageCacheDir = Path.Combine(dir, "ImageCache");
             Directory.CreateDirectory(ImageCacheDir);
 
@@ -61,12 +68,21 @@ namespace HeatingCameraSystem.Master.Services
             {
                 PlcController     = new FakePlcController();
                 ShutterController = new FakeSerialShutterController();
-                System.Diagnostics.Debug.WriteLine("[AppServices] SimulationMode=true -> using Fake PLC + Fake Shutter");
+                CameraSerialClientFactory = portName => new FakeCameraSerialClient(portName);
+                LiveThermalCamera         = new FakeLiveThermalCamera();
+                CameraPairingService      = new FakeCameraComPairingService();
+                System.Diagnostics.Debug.WriteLine("[AppServices] SimulationMode=true -> using Fake PLC + Fake Shutter + Fake Camera/Pairing");
             }
             else
             {
                 PlcController     = new PlcXgtClient(Settings.Plc);
                 ShutterController = new SerialShutterController(Settings.Serial);
+                CameraSerialClientFactory = portName => new ClSerialCameraClient(portName);
+                LiveThermalCamera         = new CltcLiveThermalCamera();
+                var cameraEnumerator      = new WmiCameraEnumerator();
+                var usbSerialEnumerator   = new WmiUsbSerialEnumerator();
+                CameraPairingService      = new CameraComPairingService(
+                    cameraEnumerator, usbSerialEnumerator, CameraSerialClientFactory, Settings);
             }
 
             RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo);
@@ -147,6 +163,11 @@ namespace HeatingCameraSystem.Master.Services
             if (NatsService != null) await NatsService.DisposeAsync();
             (PlcController as IDisposable)?.Dispose();
             Db?.Dispose();
+        }
+
+        public static void SaveHardwareSettings()
+        {
+            File.WriteAllText(_hardwareJsonPath, JsonSerializer.Serialize(Settings, _jsonOpts));
         }
 
         private static HardwareSettings LoadOrCreateSettings(string dir)

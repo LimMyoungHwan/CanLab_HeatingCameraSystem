@@ -34,6 +34,7 @@ namespace HeatingCameraSystem.Core.Interfaces
         Task HomeAsync(ServoAxis axis);                          // 원점 실행
         Task SetPointCoordinateAsync(int positionIndex, int x, int y);  // 포인트 목표좌표 쓰기
         Task<(int X, int Y)> GetPointCoordinateAsync(int positionIndex); // 포인트 목표좌표 읽기
+        Task MoveToCoordinateAsync(int x, int y);                        // 절대좌표 직접 이동 (X/Y 쓰고 이동 트리거)
 
         // ── 수동 장비 제어 (원터치) ──
         Task SetEquipmentAsync(PlcEquipment equipment, bool on);

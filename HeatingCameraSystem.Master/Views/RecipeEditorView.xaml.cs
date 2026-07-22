@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using HeatingCameraSystem.Master.ViewModels;
+using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Master.Views
 {
@@ -72,6 +73,63 @@ namespace HeatingCameraSystem.Master.Views
                     }
                 }
             }
+        }
+
+        private void Step_Select(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Border border && border.DataContext is RecipeStepModel step)
+            {
+                if (DataContext is RecipeEditorViewModel vm)
+                {
+                    vm.SelectedStep = step;
+                }
+            }
+        }
+
+        private void Jog_Down(object sender, MouseButtonEventArgs e)
+        {
+            try
+            {
+                if (sender is FrameworkElement element && element.Tag is string tag)
+                {
+                    if (DataContext is RecipeEditorViewModel vm)
+                    {
+                        switch (tag)
+                        {
+                            case "X+": vm.StartJog(ServoAxis.X, true); break;
+                            case "X-": vm.StartJog(ServoAxis.X, false); break;
+                            case "Y+": vm.StartJog(ServoAxis.Y, true); break;
+                            case "Y-": vm.StartJog(ServoAxis.Y, false); break;
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void Jog_Up(object sender, MouseEventArgs e)
+        {
+            try
+            {
+                if (sender is FrameworkElement element && element.Tag is string tag)
+                {
+                    if (DataContext is RecipeEditorViewModel vm)
+                    {
+                        switch (tag)
+                        {
+                            case "X+":
+                            case "X-": 
+                                vm.StopJog(ServoAxis.X, tag.EndsWith("+")); 
+                                break;
+                            case "Y+":
+                            case "Y-": 
+                                vm.StopJog(ServoAxis.Y, tag.EndsWith("+")); 
+                                break;
+                        }
+                    }
+                }
+            }
+            catch { }
         }
     }
 }

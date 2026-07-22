@@ -72,10 +72,13 @@ namespace HeatingCameraSystem.Master.Services
                 cancellationToken.ThrowIfCancellationRequested();
 
                 progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"서보 이동 ({i + 1}/{totalSteps})" });
-                await _plcController.MoveServoToPositionAsync(step.TargetPositionIndex);
+                await _plcController.MoveToCoordinateAsync(step.PositionX, step.PositionY);
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    if (await _plcController.IsServoAtPositionAsync(step.TargetPositionIndex)) break;
+                    // 좌표 이동은 포인트 인덱스가 아니므로 도착 판정은 서보 축 idle(비구동)로 확인.
+                    // ponytail: 실HW는 이동 트리거 직후 busy가 늦게 서므로 정착 지연이 필요할 수 있음 — 하드웨어 QA에서 튜닝.
+                    var servoStatus = await _plcController.ReadStatusAsync();
+                    if (!servoStatus.ServoXBusy && !servoStatus.ServoYBusy) break;
                     await Task.Delay(500, cancellationToken);
                 }
 

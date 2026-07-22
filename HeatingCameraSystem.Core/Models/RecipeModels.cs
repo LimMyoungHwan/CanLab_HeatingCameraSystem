@@ -34,5 +34,13 @@ namespace HeatingCameraSystem.Core.Models
         
         // 스텝 수행 시 블랙바디가 도달해야 할 타겟 온도
         public float TargetBlackBodyTemperature { get; set; }
+
+        // 서보 유닛 직접 이동 XY 좌표 (direct-XY-move)
+        public int PositionX { get; set; }
+        public int PositionY { get; set; }
+
+        // 스텝별 챔버 목표 온도/습도
+        public double TargetChamberTemperature { get; set; }
+        public double TargetChamberHumidity { get; set; }
     }
 }

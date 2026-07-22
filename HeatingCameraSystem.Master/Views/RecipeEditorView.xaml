@@ -45,6 +45,7 @@
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="250"/>
             <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="420"/>
         </Grid.ColumnDefinitions>
 
         <!-- Left Panel: Recipes List -->
@@ -178,40 +179,68 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
-                                            AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop">
+                                            AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
                                             
-                                            <TextBlock Grid.Column="0" Text="=" FontSize="20" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="0,0,16,0" Cursor="SizeAll"
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="=" FontSize="20" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="0,0,16,0" Cursor="SizeAll"
                                                        PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown"
                                                        MouseMove="Step_MouseMove"/>
                                             
-                                            <Border Grid.Column="1" Background="{StaticResource BgSurface}" BorderBrush="{StaticResource Primary}" BorderThickness="1" CornerRadius="4" Width="40" Height="40" Margin="0,0,16,0">
+                                            <Border Grid.Row="0" Grid.Column="1" Background="{StaticResource BgSurface}" BorderBrush="{StaticResource Primary}" BorderThickness="1" CornerRadius="4" Width="40" Height="40" Margin="0,0,16,0">
                                                 <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold"/>
                                             </Border>
                                             
-                                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                                <TextBlock Text="NODE ASSIGNMENT" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                                                <TextBox Text="{Binding NodeAssignment}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
+                                            <StackPanel Grid.Row="0" Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal">
+                                                <StackPanel Margin="0,0,16,0">
+                                                    <TextBlock Text="NODE ASSIGNMENT" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                                    <TextBox Text="{Binding NodeAssignment}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
+                                                </StackPanel>
+                                                <StackPanel Margin="0,0,16,0" Width="100">
+                                                    <TextBlock Text="BLACKBODY REF" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                                    <Border BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,0,1">
+                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                            <TextBox Text="{Binding BlackbodyRef, StringFormat={}{0:F1}}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14" FontWeight="Bold" TextAlignment="Right" Width="60"/>
+                                                            <TextBlock Text="°C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Bottom" Margin="4,0,0,2"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
                                             </StackPanel>
                                             
-                                            <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="16,0" Width="120">
-                                                <TextBlock Text="BLACKBODY REF" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                                                <Border BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,0,1">
-                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                                        <TextBox Text="{Binding BlackbodyRef, StringFormat={}{0:F1}}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14" FontWeight="Bold" TextAlignment="Right" Width="60"/>
-                                                        <TextBlock Text="°C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Bottom" Margin="4,0,0,2"/>
-                                                    </StackPanel>
-                                                </Border>
+                                            <Button Grid.Row="0" Grid.Column="3" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" VerticalAlignment="Center" Margin="8,0,0,0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+
+                                            <!-- Second Row: X, Y, Chamber Temp, Chamber RH, Camera -->
+                                            <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,12,0,0">
+                                                <StackPanel Margin="0,0,16,0">
+                                                    <TextBlock Text="X (mm)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                                    <TextBox Text="{Binding PositionX}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
+                                                </StackPanel>
+                                                <StackPanel Margin="0,0,16,0">
+                                                    <TextBlock Text="Y (mm)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                                    <TextBox Text="{Binding PositionY}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
+                                                </StackPanel>
+                                                <StackPanel Margin="0,0,16,0">
+                                                    <TextBlock Text="CHAMBER °C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                                    <TextBox Text="{Binding TargetChamberTemperature, StringFormat={}{0:F1}}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
+                                                </StackPanel>
+                                                <StackPanel Margin="0,0,16,0">
+                                                    <TextBlock Text="CHAMBER %RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                                    <TextBox Text="{Binding TargetChamberHumidity, StringFormat={}{0:F1}}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
+                                                </StackPanel>
+                                                <StackPanel Margin="0,0,16,0">
+                                                    <TextBlock Text="CAMERA" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                                    <ComboBox ItemsSource="{Binding DataContext.CameraPairs, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Camera.OpenCvIndex" SelectedValue="{Binding CameraIndex}" DisplayMemberPath="Camera.FriendlyName" Width="120" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
+                                                </StackPanel>
                                             </StackPanel>
-                                            
-                                            <Button Grid.Column="4" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" VerticalAlignment="Center" Margin="8,0,0,0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
@@ -240,10 +269,107 @@
                             <Button Content="IMPORT" Command="{Binding ImportRecipeCommand}" Background="Transparent" Foreground="{StaticResource Primary}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="24,8" Margin="0,0,8,0" FontWeight="Bold"/>
                             <Button Content="EXPORT" Command="{Binding ExportRecipeCommand}" Background="Transparent" Foreground="{StaticResource Primary}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="24,8" Margin="0,0,16,0" FontWeight="Bold"/>
                             <Button Content="CANCEL" Background="Transparent" Foreground="{StaticResource TextOnSurfaceVariant}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="24,8" Margin="0,0,16,0" FontWeight="Bold"/>
-                            <Button Content="SAVE RECIPE" Background="{StaticResource Secondary}" Foreground="#00210c" BorderThickness="0" Padding="32,8" FontWeight="Bold"/>
+                            <Button Content="SAVE RECIPE" Command="{Binding DataContext.SaveRecipeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Background="{StaticResource Secondary}" Foreground="#00210c" BorderThickness="0" Padding="32,8" FontWeight="Bold"/>
                         </StackPanel>
                     </Grid>
                 </Border>
+            </Grid>
+        </Border>
+
+        <!-- Column 2: LIVE PREVIEW & MOTION -->
+        <Border Grid.Column="2" Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1,0,0,0">
+            <Grid Margin="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="LIVE PREVIEW &amp; MOTION" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource TextOnSurface}" Margin="0,0,0,16"/>
+
+                <StackPanel Grid.Row="1" Margin="0,0,0,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0" ItemsSource="{Binding CameraPairs}" SelectedItem="{Binding SelectedCameraPair}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}" Margin="0,0,8,0">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Camera.FriendlyName}"/>
+                                        <TextBlock Text=" — "/>
+                                        <TextBlock Text="{Binding Status}"/>
+                                        <TextBlock Text=" — "/>
+                                        <TextBlock Text="{Binding SerialPort.PortName}"/>
+                                        <TextBlock Text=" — "/>
+                                        <TextBlock Text="{Binding CameraSerialNumber}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button Grid.Column="1" Content="REFRESH PAIRING" Command="{Binding RefreshPairingsCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4"/>
+                    </Grid>
+                </StackPanel>
+
+                <Border Grid.Row="2" Background="Black" Width="380" Height="285" Margin="0,0,0,16" HorizontalAlignment="Center">
+                    <Image Source="{Binding CurrentPreview}" Stretch="Uniform"/>
+                </Border>
+
+                <StackPanel Grid.Row="3" Margin="0,0,0,16">
+                    <TextBlock Text="{Binding FpaTemperature, StringFormat='FPA: {0:F1} °C'}" FontSize="14" FontWeight="Bold" Foreground="{StaticResource Primary}"/>
+                    <TextBlock FontSize="14" FontWeight="Bold" Foreground="{StaticResource Secondary}">
+                        <Run Text="X: "/>
+                        <Run Text="{Binding CurrentServoX}"/>
+                        <Run Text=" / Y: "/>
+                        <Run Text="{Binding CurrentServoY}"/>
+                    </TextBlock>
+                </StackPanel>
+
+                <Grid Grid.Row="4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <StackPanel Grid.Row="0">
+                        <TextBlock Text="XY TARGET" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <TextBox Text="{Binding SelectedStep.PositionX}" Width="60" Margin="0,0,8,0" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="4"/>
+                            <TextBox Text="{Binding SelectedStep.PositionY}" Width="60" Margin="0,0,8,0" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="4"/>
+                            <Button Content="GO TO XY" Command="{Binding GoToXyCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="0,0,8,0"/>
+                            <Button Content="USE CURRENT" Command="{Binding UseCurrentXyCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="0,0,8,0"/>
+                            <Button Content="HOME" Command="{Binding HomeServoCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4"/>
+                        </StackPanel>
+                        
+                        <TextBlock Text="SERIAL SHUTTER &amp; CAMERA" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <Button Content="SHUTTER OPEN" Command="{Binding OpenShutterCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="0,0,8,0"/>
+                            <Button Content="SHUTTER CLOSE" Command="{Binding CloseShutterCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="0,0,8,0"/>
+                            <Button Content="CAMERA START" Command="{Binding StartCameraCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="0,0,8,0"/>
+                            <Button Content="CAMERA STOP" Command="{Binding StopCameraCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,16,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="50"/>
+                            <RowDefinition Height="50"/>
+                            <RowDefinition Height="50"/>
+                        </Grid.RowDefinitions>
+                        <Button Grid.Row="0" Grid.Column="1" Tag="Y+" PreviewMouseDown="Jog_Down" PreviewMouseUp="Jog_Up" MouseLeave="Jog_Up" Content="Y+" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Margin="2"/>
+                        <Button Grid.Row="1" Grid.Column="0" Tag="X-" PreviewMouseDown="Jog_Down" PreviewMouseUp="Jog_Up" MouseLeave="Jog_Up" Content="X-" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Margin="2"/>
+                        <Button Grid.Row="1" Grid.Column="2" Tag="X+" PreviewMouseDown="Jog_Down" PreviewMouseUp="Jog_Up" MouseLeave="Jog_Up" Content="X+" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Margin="2"/>
+                        <Button Grid.Row="2" Grid.Column="1" Tag="Y-" PreviewMouseDown="Jog_Down" PreviewMouseUp="Jog_Up" MouseLeave="Jog_Up" Content="Y-" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Margin="2"/>
+                    </Grid>
+                </Grid>
             </Grid>
         </Border>
     </Grid>

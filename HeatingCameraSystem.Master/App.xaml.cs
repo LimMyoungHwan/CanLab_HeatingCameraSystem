@@ -25,6 +25,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _cleanupService?.Stop();
+        AppServices.LiveThermalCamera?.Dispose();
         try
         {
             var disposeTask = Task.Run(async () => await AppServices.DisposeAsync());

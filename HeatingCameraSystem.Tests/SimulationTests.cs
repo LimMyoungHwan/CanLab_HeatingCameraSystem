@@ -63,6 +63,19 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
+        public async Task MoveToCoordinate_SetsServoXYPosition()
+        {
+            var plc = new FakePlcController();
+            await plc.ConnectAsync("any");
+
+            await plc.MoveToCoordinateAsync(1234, 5678);
+            var s = await plc.ReadStatusAsync();
+
+            Assert.Equal(1234, s.ServoXPosition);
+            Assert.Equal(5678, s.ServoYPosition);
+        }
+
+        [Fact]
         public async Task SetBlackBodyTemperature_PerIndexState()
         {
             var plc = new FakePlcController();

@@ -86,6 +86,7 @@ Agent `agent.json`의 `AgentId`와 `CameraIndex`가 일치해야 함.
 - `hardware.json` PLC 디바이스 주소(D/M/P): A&D PLC 실제 명세 확인 후 운영자가 직접 수정. CPU=XGB(XBC-DN64H) 확인 → `UseHexBitIndex=true` 기본.
 - `ServoSpeedPercent`(D2560), `BitEmergencyStop`(M2000), Y축 JOG 비트(P725/P726): 문서 미기재 임의값 — 실제 비트 확인 후 교체.
 - `SerialSettings` 기본값(`COM3`, `9600 8N1`): 실제 카메라 가상 포트 설정에 맞게 수정 필요.
+- `ServoPointYBase`(D3012): 절대좌표 이동(`MoveToCoordinateAsync`)의 Y 목표 워드. 이동 트리거는 `ServoPointMoveBase`(P601) 재사용 — 실제 주소 하드웨어 확인 후 교체.
 
 ## 코드 규칙
 

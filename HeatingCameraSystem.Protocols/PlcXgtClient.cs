@@ -127,6 +127,13 @@ namespace HeatingCameraSystem.Protocols
             return (x, y);
         }
 
+        public async Task MoveToCoordinateAsync(int x, int y)
+        {
+            await WriteWordAsync(_s.ServoPointXBase, (short)x);
+            await WriteWordAsync(_s.ServoPointYBase, (short)y);
+            await WriteBitAsync(_s.ServoPointMoveBase, true);
+        }
+
         // ── 수동 장비 ──
         public Task SetEquipmentAsync(PlcEquipment equipment, bool on)
             => WriteBitAsync(EquipmentDevice(equipment), on);

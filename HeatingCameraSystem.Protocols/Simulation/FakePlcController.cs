@@ -174,6 +174,14 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.FromResult(_pointCoords.GetOrAdd(positionIndex, (0, 0)));
         }
 
+        public Task MoveToCoordinateAsync(int x, int y)
+        {
+            EnsureConnected();
+            lock (_gate) { _servoX = x; _servoY = y; _currentPoint = 0; }
+            Log($"MoveToCoordinateAsync({x}, {y}) -> arrived");
+            return Task.CompletedTask;
+        }
+
         public Task SetEquipmentAsync(PlcEquipment equipment, bool on)
         {
             EnsureConnected();
