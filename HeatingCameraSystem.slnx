@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="HeatingCameraSystem.Agent/HeatingCameraSystem.Agent.csproj" />
   <Project Path="HeatingCameraSystem.AgentManager/HeatingCameraSystem.AgentManager.csproj" />
+  <Project Path="HeatingCameraSystem.AgentUI/HeatingCameraSystem.AgentUI.csproj" />
   <Project Path="HeatingCameraSystem.Core/HeatingCameraSystem.Core.csproj" />
   <Project Path="HeatingCameraSystem.E2EDriver/HeatingCameraSystem.E2EDriver.csproj" />
   <Project Path="HeatingCameraSystem.ManagerE2EDriver/HeatingCameraSystem.ManagerE2EDriver.csproj" />
