@@ -142,6 +142,7 @@
                                                     <Button Content="STOP" Command="{Binding StopCameraCommand}" Margin="0,0,4,4" Padding="8,3"/>
                                                     <Button Content="정보 읽기" Command="{Binding RefreshInfoCommand}" Margin="0,0,4,4" Padding="8,3"/>
                                                     <Button Content="설정 저장" Command="{Binding SaveConfigCommand}" Margin="0,0,4,4" Padding="8,3"/>
+                                                    <Button Content="NUC" Command="{Binding RunNucCommand}" Margin="0,0,4,4" Padding="8,3"/>
                                                 </WrapPanel>
                                                 <TextBlock Text="{Binding SerialStatus}" Foreground="#B0B0B0" Margin="2,2,0,0" TextWrapping="Wrap"/>
                                             </StackPanel>

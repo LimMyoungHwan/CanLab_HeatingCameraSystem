@@ -1,32 +1,29 @@
 using System;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using HeatingCameraSystem.Core.Models;
 
-namespace HeatingCameraSystem.AgentUI.Services
+namespace HeatingCameraSystem.Protocols.Cameras
 {
     /// <summary>
-    /// Converts a 14-bit Y16 <see cref="ThermalFrame"/> to a frozen false-color thermal
-    /// <see cref="BitmapSource"/> for live display. Two stages: (1) plateau histogram
-    /// equalization (thermal AGC, ported from the reference Python
-    /// two_point_viewer.thresh_plateau_hist_eq) maps 14-bit → 8-bit with per-bin clipping so a
-    /// flat background / dead pixels can't wash out contrast; (2) an iron palette LUT maps
-    /// 8-bit → color. Frozen so it may be built on the camera loop thread and assigned on the UI
-    /// thread. Preview only — the 14-bit radiometric data is NOT preserved (raw persisted separately).
+    /// Turns a 14-bit Y16 <see cref="ThermalFrame"/> into a BGR24 byte buffer via plateau
+    /// histogram equalization (thermal AGC, ported from the reference Python
+    /// two_point_viewer.thresh_plateau_hist_eq) followed by an iron palette LUT. Single source of
+    /// the live thermal look — shared by the AgentUI preview and the NATS color-JPEG encoder so the
+    /// two never drift.
     /// </summary>
-    public static class ThermalFrameBitmapSourceConverter
+    public static class ThermalColorizer
     {
-        private const int Bins = 1 << 14;      // 14-bit thermal range (0..16383)
+        private const int Bins = 1 << 14;
 
-        // ponytail: thermal AGC plateau (per-bin count cap). 100 = Python parity. It is the
-        // display-contrast tuning knob — lower = flatter, higher = harsher. Bump if contrast is off.
+        // ponytail: AGC plateau (per-bin count cap). 100 = Python parity. The display-contrast knob —
+        // raise if flat scenes wash out, lower if noise is over-amplified.
         private const int PlateauLimit = 100;
 
         private static readonly uint[] IronLut = BuildIronLut();
 
-        public static BitmapSource ToBitmapSource(ThermalFrame f)
+        /// <summary>Returns a BGR24 buffer (stride = <c>Width * 3</c>) for the frame.</summary>
+        public static byte[] ToBgr24(ThermalFrame f)
         {
+            if (f is null) throw new ArgumentNullException(nameof(f));
             if (f.Width <= 0 || f.Height <= 0 || f.Pixels.Length != f.Width * f.Height)
             {
                 throw new ArgumentException("Thermal frame dimensions do not match pixel data.", nameof(f));
@@ -51,7 +48,7 @@ namespace HeatingCameraSystem.AgentUI.Services
             }
 
             // Normalize the CDF over its populated range (leading zero bins stay black),
-            // producing a 14-bit → 8-bit grayscale LUT.
+            // producing a 14-bit -> 8-bit grayscale LUT.
             long cdfLast = cdf[Bins - 1];
             long cdfMin = 0;
             for (int i = 0; i < Bins; i++)
@@ -71,25 +68,20 @@ namespace HeatingCameraSystem.AgentUI.Services
                 }
             }
 
-            // 14-bit → gray → iron color, packed as Bgr24.
-            int w = f.Width, h = f.Height;
-            int stride = w * 3;
-            var bytes = new byte[stride * h];
+            int stride = f.Width * 3;
+            var bgr = new byte[stride * f.Height];
             for (int i = 0, j = 0; i < px.Length; i++, j += 3)
             {
                 uint c = IronLut[grayLut[px[i] & 0x3FFF]];
-                bytes[j]     = (byte)(c & 0xFF);          // B
-                bytes[j + 1] = (byte)((c >> 8) & 0xFF);   // G
-                bytes[j + 2] = (byte)((c >> 16) & 0xFF);  // R
+                bgr[j]     = (byte)(c & 0xFF);          // B
+                bgr[j + 1] = (byte)((c >> 8) & 0xFF);   // G
+                bgr[j + 2] = (byte)((c >> 16) & 0xFF);  // R
             }
 
-            var bmp = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgr24, null);
-            bmp.WritePixels(new Int32Rect(0, 0, w, h), bytes, stride, 0);
-            bmp.Freeze();
-            return bmp;
+            return bgr;
         }
 
-        // Classic ironbow palette: black → purple → magenta → red → orange → amber → white,
+        // Classic ironbow palette: black -> purple -> magenta -> red -> orange -> amber -> white,
         // built by linearly interpolating anchor colors into a 256-entry 0x00RRGGBB LUT.
         private static uint[] BuildIronLut()
         {

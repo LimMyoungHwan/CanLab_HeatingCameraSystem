@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -56,6 +57,7 @@ namespace HeatingCameraSystem.AgentUI
             _mainViewModel = new MainViewModel(config.SimulationMode ? "AgentUI — SIMULATION" : "AgentUI");
 
             Dispatcher dispatcher = Dispatcher;
+            var nucs = new Dictionary<string, ThermalNucCorrector>();
             foreach (CameraDescriptor cam in config.Cameras)
             {
                 ICameraRuntime runtime = _manager.Add(cam);
@@ -84,7 +86,17 @@ namespace HeatingCameraSystem.AgentUI
                     }
                 }
 
-                _mainViewModel.Cameras.Add(new CameraPanelViewModel(cam.Alias, runtime, dispatcher, serial));
+                var nuc = new ThermalNucCorrector();
+                nucs[cam.AgentId] = nuc;
+
+                var panel = new CameraPanelViewModel(cam.Alias, runtime, dispatcher, nuc, serial);
+                _mainViewModel.Cameras.Add(panel);
+
+                // 영상 ON: 카메라 RUN + 셔터 열기 (기본 셔터 닫힘 → 흰 화면 방지). 카메라별 격리.
+                if (serial is not null)
+                {
+                    _ = panel.StartLiveAsync();
+                }
             }
 
             // Fire-and-forget: per-camera start failures are isolated inside the manager.
@@ -95,7 +107,7 @@ namespace HeatingCameraSystem.AgentUI
             _store = new CaptureStore(storageDir, new LiteDbCaptureIndex(Path.Combine(storageDir, "index.db")), config.CaptureImageFormat);
 
             _nats = new NatsCommunicationService();
-            _natsConnector = new CameraNatsConnector(_nats, _manager, _store, config.Cameras, config.HeartbeatSeconds);
+            _natsConnector = new CameraNatsConnector(_nats, _manager, _store, config.Cameras, config.HeartbeatSeconds, nucs);
             _natsConnector.Start(config.NatsUrl);
 
             AgentUiLog.Logger.Information(
@@ -121,6 +133,9 @@ namespace HeatingCameraSystem.AgentUI
                 {
                     foreach (CameraPanelViewModel panel in _mainViewModel.Cameras.ToList())
                     {
+                        // 영상 종료: 셔터 닫기 + STOP (시리얼 포트 dispose 전에).
+                        try { panel.StopLiveAsync().GetAwaiter().GetResult(); }
+                        catch { /* best effort */ }
                         panel.Dispose();
                     }
                 }

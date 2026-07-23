@@ -20,6 +20,10 @@ namespace HeatingCameraSystem.Core.Interfaces
         Task PublishCaptureResultAsync(CaptureResultMessage message);
         Task SubscribeCaptureResultAsync(Action<CaptureResultMessage> onMessageReceived);
 
+        // Agent -> Master (Live preview frames): agent.live.{AgentId}
+        Task PublishLiveFrameAsync(LiveFrameMessage message);
+        Task SubscribeLiveFrameAsync(Action<LiveFrameMessage> onMessageReceived);
+
         // Master -> Agent (Serial Config): master.config.serial.{AgentId}
         Task PublishSerialConfigAsync(SerialConfigMessage message);
         Task SubscribeSerialConfigAsync(string agentId, Action<SerialConfigMessage> onMessageReceived);

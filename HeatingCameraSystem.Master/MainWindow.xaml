@@ -17,6 +17,9 @@
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
             <views:DashboardView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:LiveViewModel}">
+            <views:LiveView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:RecipeEditorViewModel}">
             <views:RecipeEditorView />
         </DataTemplate>
@@ -56,6 +59,9 @@
                 <TextBlock Text="Master Control" Foreground="White" FontSize="24" FontWeight="Bold" Margin="0,0,0,30"/>
                 
                 <Button Content="Dashboard" Command="{Binding NavigateToDashboardCommand}" 
+                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+
+                <Button Content="라이브 영상" Command="{Binding NavigateToLiveViewCommand}" 
                         Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
                 
                 <Button Content="Recipe Editor" Command="{Binding NavigateToRecipeEditorCommand}" 

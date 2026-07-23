@@ -69,6 +69,19 @@ namespace HeatingCameraSystem.Protocols
             return Task.CompletedTask;
         }
 
+        public async Task PublishLiveFrameAsync(LiveFrameMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"agent.live.{message.AgentId}", message);
+        }
+
+        public Task SubscribeLiveFrameAsync(Action<LiveFrameMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop("agent.live.>", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
         public async Task PublishSerialConfigAsync(SerialConfigMessage message)
         {
             CheckConnection();

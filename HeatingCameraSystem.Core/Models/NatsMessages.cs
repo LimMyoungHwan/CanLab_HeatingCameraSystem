@@ -48,4 +48,14 @@ namespace HeatingCameraSystem.Core.Models
         public DateTime Timestamp { get; set; }
         public byte[]? ImageBytes { get; set; }
     }
+
+    public class LiveFrameMessage
+    {
+        public string AgentId { get; set; } = string.Empty;
+        public int CameraIndex { get; set; }
+        public byte[]? ImageBytes { get; set; }
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public DateTime Timestamp { get; set; }
+    }
 }

@@ -27,6 +27,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly CaptureStore _store;
         private readonly IReadOnlyList<CameraDescriptor> _cameras;
         private readonly int _heartbeatSeconds;
+        private readonly IReadOnlyDictionary<string, ThermalNucCorrector>? _nucs;
 
         private readonly CancellationTokenSource _cts = new();
         private Timer? _heartbeat;
@@ -37,13 +38,15 @@ namespace HeatingCameraSystem.Protocols.Cameras
             CameraRuntimeManager manager,
             CaptureStore store,
             IReadOnlyList<CameraDescriptor> cameras,
-            int heartbeatSeconds = 5)
+            int heartbeatSeconds = 5,
+            IReadOnlyDictionary<string, ThermalNucCorrector>? nucs = null)
         {
             _nats = nats ?? throw new ArgumentNullException(nameof(nats));
             _manager = manager ?? throw new ArgumentNullException(nameof(manager));
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _cameras = cameras ?? throw new ArgumentNullException(nameof(cameras));
             _heartbeatSeconds = heartbeatSeconds > 0 ? heartbeatSeconds : 5;
+            _nucs = nucs;
         }
 
         public bool IsConnected => _connected;
@@ -91,6 +94,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
             }
 
             _heartbeat = new Timer(_ => PublishHeartbeats(), null, TimeSpan.Zero, TimeSpan.FromSeconds(_heartbeatSeconds));
+
+            _ = Task.Run(() => LiveStreamLoopAsync(_cts.Token));
         }
 
         public async Task HandleCaptureAsync(CameraDescriptor descriptor, CaptureCommandMessage cmd)
@@ -174,6 +179,48 @@ namespace HeatingCameraSystem.Protocols.Cameras
             CameraRuntimeStatus.Running => CameraStatus.Connected,
             _ => CameraStatus.Offline
         };
+
+        // ponytail: ~10fps color-JPEG preview per camera over NATS. Bandwidth ceiling — raise the
+        // delay (or drop resolution) if many agents saturate the link.
+        private async Task LiveStreamLoopAsync(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                foreach (CameraDescriptor cam in _cameras)
+                {
+                    if (!_manager.TryGet(cam.AgentId, out ICameraRuntime runtime)) continue;
+
+                    ThermalFrame? frame = runtime.LatestFrame;
+                    if (frame is null) continue;
+
+                    if (_nucs is not null && _nucs.TryGetValue(cam.AgentId, out ThermalNucCorrector? nuc) && nuc is not null)
+                    {
+                        frame = nuc.Apply(frame);
+                    }
+
+                    try
+                    {
+                        byte[] jpeg = ThermalPreviewEncoder.EncodeColorJpeg(frame);
+                        await _nats.PublishLiveFrameAsync(new LiveFrameMessage
+                        {
+                            AgentId = cam.AgentId,
+                            CameraIndex = cam.OpenCvIndex,
+                            ImageBytes = jpeg,
+                            Width = frame.Width,
+                            Height = frame.Height,
+                            Timestamp = DateTime.UtcNow
+                        }).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[CameraNats] live publish failed for {cam.AgentId}: {ex.Message}");
+                    }
+                }
+
+                try { await Task.Delay(100, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { return; }
+            }
+        }
 
         public async ValueTask DisposeAsync()
         {
