@@ -19,11 +19,15 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         [ObservableProperty]
         private string _alias;
 
+        [ObservableProperty]
+        private string _serialPortName = string.Empty;
+
         public CameraRow(CameraDescriptor descriptor)
         {
             _agentId = descriptor.AgentId;
             _openCvIndex = descriptor.OpenCvIndex;
             _alias = descriptor.Alias;
+            _serialPortName = descriptor.SerialPortName ?? string.Empty;
         }
 
         public CameraRow()
@@ -33,7 +37,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _alias = "Camera";
         }
 
-        public CameraDescriptor ToDescriptor() => new(AgentId, OpenCvIndex, Alias);
+        public CameraDescriptor ToDescriptor() =>
+            new(AgentId, OpenCvIndex, Alias, string.IsNullOrWhiteSpace(SerialPortName) ? null : SerialPortName);
     }
 
     public partial class SettingsViewModel : ObservableObject
@@ -53,6 +58,11 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private int _heartbeatSeconds;
 
         [ObservableProperty]
+        private CaptureImageFormat _captureImageFormat;
+
+        public CaptureImageFormat[] ImageFormats { get; } = Enum.GetValues<CaptureImageFormat>();
+
+        [ObservableProperty]
         private string _statusText = string.Empty;
 
         public ObservableCollection<CameraRow> Cameras { get; } = new();
@@ -64,6 +74,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _natsUrl = config.NatsUrl;
             _storagePath = config.StoragePath;
             _heartbeatSeconds = config.HeartbeatSeconds;
+            _captureImageFormat = config.CaptureImageFormat;
 
             foreach (CameraDescriptor camera in config.Cameras)
             {
@@ -90,6 +101,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _config.NatsUrl = NatsUrl;
             _config.StoragePath = StoragePath;
             _config.HeartbeatSeconds = HeartbeatSeconds;
+            _config.CaptureImageFormat = CaptureImageFormat;
             _config.Cameras = Cameras.Select(row => row.ToDescriptor()).ToList();
 
             try

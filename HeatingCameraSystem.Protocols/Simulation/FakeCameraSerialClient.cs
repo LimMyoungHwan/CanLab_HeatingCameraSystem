@@ -59,6 +59,14 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        public bool ConfigSaved { get; private set; }
+
+        public Task SaveConfigAsync(CancellationToken ct = default)
+        {
+            ConfigSaved = true;
+            return Task.CompletedTask;
+        }
+
         public void Dispose() => IsOpen = false;
     }
 }

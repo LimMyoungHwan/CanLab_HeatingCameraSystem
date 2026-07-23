@@ -48,6 +48,10 @@ namespace HeatingCameraSystem.AgentUI
                 ? (d => new CameraRuntime(d.OpenCvIndex, new FakeThermalFrameSource()))
                 : (d => new CameraRuntime(d.OpenCvIndex, new CltcThermalFrameSource(d.OpenCvIndex)));
 
+            Func<CameraDescriptor, ICameraSerialClient?> serialFactory = config.SimulationMode
+                ? (d => string.IsNullOrWhiteSpace(d.SerialPortName) ? null : new FakeCameraSerialClient(d.SerialPortName!))
+                : (d => string.IsNullOrWhiteSpace(d.SerialPortName) ? null : new ClSerialCameraClient(d.SerialPortName!));
+
             _manager = new CameraRuntimeManager(sourceFactory);
             _mainViewModel = new MainViewModel(config.SimulationMode ? "AgentUI — SIMULATION" : "AgentUI");
 
@@ -64,7 +68,23 @@ namespace HeatingCameraSystem.AgentUI
                         AgentUiLog.Logger.Error("Camera {AgentId} (index {Index}) faulted", agentId, cameraIndex);
                     }
                 };
-                _mainViewModel.Cameras.Add(new CameraPanelViewModel(cam.Alias, runtime, dispatcher));
+
+                ICameraSerialClient? serial = serialFactory(cam);
+                if (serial is not null)
+                {
+                    try
+                    {
+                        _ = serial.InitializeAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        AgentUiLog.Logger.Warning(ex, "Camera {AgentId} serial {Port} open failed", agentId, cam.SerialPortName);
+                        serial.Dispose();
+                        serial = null;
+                    }
+                }
+
+                _mainViewModel.Cameras.Add(new CameraPanelViewModel(cam.Alias, runtime, dispatcher, serial));
             }
 
             // Fire-and-forget: per-camera start failures are isolated inside the manager.
@@ -72,7 +92,7 @@ namespace HeatingCameraSystem.AgentUI
 
             string storageDir = config.EffectiveStorageDir;
             Directory.CreateDirectory(storageDir);
-            _store = new CaptureStore(storageDir, new LiteDbCaptureIndex(Path.Combine(storageDir, "index.db")));
+            _store = new CaptureStore(storageDir, new LiteDbCaptureIndex(Path.Combine(storageDir, "index.db")), config.CaptureImageFormat);
 
             _nats = new NatsCommunicationService();
             _natsConnector = new CameraNatsConnector(_nats, _manager, _store, config.Cameras, config.HeartbeatSeconds);

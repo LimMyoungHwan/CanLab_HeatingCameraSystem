@@ -18,6 +18,7 @@ namespace HeatingCameraSystem.Master.Services
         private readonly int _rampStepIntervalSeconds;
         private readonly string? _imageCacheDir;
         private readonly ICameraDeviceRepository? _deviceRepo;
+        private readonly IBlackBodyController _blackBody;
 
         public RecipeEngine(
             IPlcController plcController,
@@ -25,7 +26,8 @@ namespace HeatingCameraSystem.Master.Services
             ICaptureHistoryRepository historyRepo,
             RecipeEngineSettings? settings = null,
             string? imageCacheDir = null,
-            ICameraDeviceRepository? deviceRepo = null)
+            ICameraDeviceRepository? deviceRepo = null,
+            IBlackBodyController? blackBody = null)
         {
             _plcController = plcController;
             _natsService = natsService;
@@ -36,6 +38,7 @@ namespace HeatingCameraSystem.Master.Services
             _rampStepIntervalSeconds = s.RampStepIntervalSeconds;
             _imageCacheDir  = imageCacheDir;
             _deviceRepo     = deviceRepo;
+            _blackBody      = blackBody ?? new HeatingCameraSystem.Protocols.PlcBlackBodyAdapter(plcController);
         }
 
         public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null)
@@ -84,10 +87,10 @@ namespace HeatingCameraSystem.Master.Services
 
                 progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"BB 안정화 ({i + 1}/{totalSteps})" });
                 const int activeBB = 0;
-                await _plcController.SetBlackBodyTemperatureAsync(activeBB, step.TargetBlackBodyTemperature);
+                await _blackBody.SetTemperatureAsync(activeBB, step.TargetBlackBodyTemperature);
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    float bbTemp = await _plcController.GetCurrentBlackBodyTemperatureAsync(activeBB);
+                    float bbTemp = await _blackBody.GetCurrentTemperatureAsync(activeBB);
                     if (Math.Abs(bbTemp - step.TargetBlackBodyTemperature) <= _tempTolerance) break;
                     await Task.Delay(1000, cancellationToken);
                 }

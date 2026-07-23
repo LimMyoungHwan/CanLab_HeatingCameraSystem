@@ -99,10 +99,21 @@ namespace HeatingCameraSystem.Master.ViewModels
                 TargetTemperature = s.TargetTemperature;
                 CurrentHumidity = s.CurrentHumidity;
                 TargetHumidity = s.TargetHumidity;
-                BlackBody1Pv = s.BlackBody1Pv;
-                BlackBody1Sv = s.BlackBody1Sv;
-                BlackBody2Pv = s.BlackBody2Pv;
-                BlackBody2Sv = s.BlackBody2Sv;
+                var bb = AppServices.BlackBodyController;
+                if (bb != null)
+                {
+                    BlackBody1Pv = await bb.GetCurrentTemperatureAsync(0);
+                    BlackBody1Sv = await bb.GetTargetTemperatureAsync(0);
+                    BlackBody2Pv = await bb.GetCurrentTemperatureAsync(1);
+                    BlackBody2Sv = await bb.GetTargetTemperatureAsync(1);
+                }
+                else
+                {
+                    BlackBody1Pv = s.BlackBody1Pv;
+                    BlackBody1Sv = s.BlackBody1Sv;
+                    BlackBody2Pv = s.BlackBody2Pv;
+                    BlackBody2Sv = s.BlackBody2Sv;
+                }
 
                 ServoXPosition = s.ServoXPosition;
                 ServoYPosition = s.ServoYPosition;

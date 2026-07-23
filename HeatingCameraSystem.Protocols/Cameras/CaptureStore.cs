@@ -16,9 +16,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly ThermalCaptureWriter _writer;
         private readonly ICaptureIndex _index;
 
-        public CaptureStore(string rootDir, ICaptureIndex index)
+        public CaptureStore(string rootDir, ICaptureIndex index, CaptureImageFormat format = CaptureImageFormat.Y16Raw)
         {
-            _writer = new ThermalCaptureWriter(rootDir);
+            _writer = new ThermalCaptureWriter(rootDir, format);
             _index = index ?? throw new ArgumentNullException(nameof(index));
         }
 
@@ -80,6 +80,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
         {
             TryDelete(record.Y16Path);
             TryDelete(record.JsonPath);
+            TryDelete(Path.ChangeExtension(record.Y16Path, ".tif"));
             if (!string.IsNullOrEmpty(record.PngPath))
             {
                 TryDelete(record.PngPath);

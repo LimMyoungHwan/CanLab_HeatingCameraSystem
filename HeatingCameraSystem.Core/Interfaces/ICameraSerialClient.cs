@@ -13,5 +13,6 @@ namespace HeatingCameraSystem.Core.Interfaces
         Task<double> ReadFpaTemperatureAsync(CancellationToken ct = default);
         Task SetShutterAsync(bool open, CancellationToken ct = default);
         Task SetCameraRunningAsync(bool running, CancellationToken ct = default);
+        Task SaveConfigAsync(CancellationToken ct = default);
     }
 }

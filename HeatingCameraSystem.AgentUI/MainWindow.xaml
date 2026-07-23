@@ -7,6 +7,7 @@
         <SolidColorBrush x:Key="BorderBrush" Color="#3C3C3C"/>
         <SolidColorBrush x:Key="TextBrush" Color="#E0E0E0"/>
         <SolidColorBrush x:Key="AccentBrush" Color="#3D6FB4"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
@@ -116,6 +117,35 @@
                                         </TextBlock>
                                         <Button Content="Restart" Command="{Binding RestartCommand}"
                                                 HorizontalAlignment="Left" Margin="2,8,0,0" Padding="12,3"/>
+                                        <Border Margin="2,10,0,0" Padding="0,8,0,0" BorderBrush="#3C3C3C" BorderThickness="0,1,0,0"
+                                                Visibility="{Binding HasSerialControl, Converter={StaticResource BoolToVis}}">
+                                            <StackPanel>
+                                                <TextBlock Text="카메라 시리얼 제어" Foreground="#B0B0B0" FontWeight="SemiBold" Margin="2,0,0,4"/>
+                                                <Grid Margin="2,0,0,4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="S/N: " Foreground="#909090"/>
+                                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SerialNumber}"/>
+                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="FPA: " Foreground="#909090"/>
+                                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FpaTemperature}"/>
+                                                </Grid>
+                                                <WrapPanel Margin="2,2,0,0">
+                                                    <Button Content="셔터 열기" Command="{Binding OpenShutterCommand}" Margin="0,0,4,4" Padding="8,3"/>
+                                                    <Button Content="셔터 닫기" Command="{Binding CloseShutterCommand}" Margin="0,0,4,4" Padding="8,3"/>
+                                                    <Button Content="RUN" Command="{Binding RunCameraCommand}" Margin="0,0,4,4" Padding="8,3"/>
+                                                    <Button Content="STOP" Command="{Binding StopCameraCommand}" Margin="0,0,4,4" Padding="8,3"/>
+                                                    <Button Content="정보 읽기" Command="{Binding RefreshInfoCommand}" Margin="0,0,4,4" Padding="8,3"/>
+                                                    <Button Content="설정 저장" Command="{Binding SaveConfigCommand}" Margin="0,0,4,4" Padding="8,3"/>
+                                                </WrapPanel>
+                                                <TextBlock Text="{Binding SerialStatus}" Foreground="#B0B0B0" Margin="2,2,0,0" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>
@@ -200,12 +230,16 @@
                         <TextBox Text="{Binding StoragePath}" Width="360" HorizontalAlignment="Left" Margin="0,2,0,8"/>
                         <TextBlock Text="Heartbeat (seconds)"/>
                         <TextBox Text="{Binding HeartbeatSeconds}" Width="80" HorizontalAlignment="Left" Margin="0,2,0,8"/>
+                        <TextBlock Text="Capture image format"/>
+                        <ComboBox ItemsSource="{Binding ImageFormats}" SelectedItem="{Binding CaptureImageFormat}"
+                                  Width="160" HorizontalAlignment="Left" Margin="0,2,0,8"/>
                         <TextBlock Text="Cameras" FontWeight="SemiBold" Margin="0,6,0,4"/>
                         <DataGrid ItemsSource="{Binding Cameras}" IsReadOnly="False" Height="180">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Agent Id" Width="*" Binding="{Binding AgentId}"/>
                                 <DataGridTextColumn Header="OpenCV Index" Width="110" Binding="{Binding OpenCvIndex}"/>
                                 <DataGridTextColumn Header="Alias" Width="*" Binding="{Binding Alias}"/>
+                                <DataGridTextColumn Header="Serial COM" Width="100" Binding="{Binding SerialPortName}"/>
                                 <DataGridTemplateColumn Header="" Width="80">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>

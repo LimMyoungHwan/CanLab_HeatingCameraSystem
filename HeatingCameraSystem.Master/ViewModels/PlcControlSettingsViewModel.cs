@@ -56,10 +56,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         private Task ApplyHumidityControl() => RunAsync(p => p.SetHumidityControlAsync(HumidityControl), "습도제어");
 
         [RelayCommand]
-        private Task ApplyBlackBody1() => RunAsync(p => p.SetBlackBodyTemperatureAsync(0, BlackBody1Target), "흑체1 온도");
+        private Task ApplyBlackBody1() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(0, BlackBody1Target), "흑체1 온도");
 
         [RelayCommand]
-        private Task ApplyBlackBody2() => RunAsync(p => p.SetBlackBodyTemperatureAsync(1, BlackBody2Target), "흑체2 온도");
+        private Task ApplyBlackBody2() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(1, BlackBody2Target), "흑체2 온도");
 
         [RelayCommand]
         private Task ApplyServoSpeed() => RunAsync(p => p.SetServoSpeedAsync(ServoSpeedPercent), "서보 속도");
@@ -152,6 +152,22 @@ namespace HeatingCameraSystem.Master.ViewModels
             try
             {
                 await action(plc);
+                StatusMessage = $"{label} 적용됨";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"{label} 오류: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"[PlcSettings] {ex.Message}");
+            }
+        }
+
+        private async Task RunBlackBodyAsync(Func<IBlackBodyController, Task> action, string label)
+        {
+            var bb = AppServices.BlackBodyController;
+            if (bb == null) { StatusMessage = "흑체 컨트롤러 미초기화"; return; }
+            try
+            {
+                await action(bb);
                 StatusMessage = $"{label} 적용됨";
             }
             catch (Exception ex)

@@ -30,6 +30,7 @@ namespace HeatingCameraSystem.Master.Services
         public static ICameraDeviceRepository CameraDeviceRepo { get; private set; } = null!;
         public static NatsCommunicationService? NatsService { get; private set; }
         public static IPlcController? PlcController { get; private set; }
+        public static IBlackBodyController? BlackBodyController { get; private set; }
         public static ISerialShutterController? ShutterController { get; private set; }
         public static RecipeEngine? RecipeEngine { get; private set; }
         public static ConnectionMonitorService? ConnectionMonitor { get; private set; }
@@ -85,7 +86,9 @@ namespace HeatingCameraSystem.Master.Services
                     cameraEnumerator, usbSerialEnumerator, CameraSerialClientFactory, Settings);
             }
 
-            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo);
+            BlackBodyController = new FakeBlackBodyController();
+
+            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController);
             ConnectionMonitor = new ConnectionMonitorService(PlcController, ShutterController, Settings);
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
         }
@@ -110,6 +113,16 @@ namespace HeatingCameraSystem.Master.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[AppServices] PLC connect failed: {ex.Message}");
+            }
+
+            try
+            {
+                if (BlackBodyController != null) await BlackBodyController.ConnectAsync();
+                System.Diagnostics.Debug.WriteLine("[AppServices] BlackBody connected.");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AppServices] BlackBody connect failed: {ex.Message}");
             }
 
             if (Settings.SimulationMode && ShutterController is { IsConnected: false })
@@ -160,6 +173,7 @@ namespace HeatingCameraSystem.Master.Services
         {
             ConnectionMonitor?.Dispose();
             ShutterController?.Dispose();
+            BlackBodyController?.Dispose();
             if (NatsService != null) await NatsService.DisposeAsync();
             (PlcController as IDisposable)?.Dispose();
             Db?.Dispose();

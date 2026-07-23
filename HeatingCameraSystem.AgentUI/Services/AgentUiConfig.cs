@@ -33,6 +33,8 @@ namespace HeatingCameraSystem.AgentUI.Services
 
         public int HeartbeatSeconds { get; set; } = 5;
 
+        public CaptureImageFormat CaptureImageFormat { get; set; } = CaptureImageFormat.Y16Raw;
+
         public string EffectiveStorageDir =>
             string.IsNullOrWhiteSpace(StoragePath)
                 ? Path.Combine(ConfigDir, "Captures")

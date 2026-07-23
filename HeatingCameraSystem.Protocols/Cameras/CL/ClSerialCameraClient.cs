@@ -55,6 +55,9 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
         public Task SetCameraRunningAsync(bool running, CancellationToken ct = default)
             => QueryAsync((byte)ClMainId.OperateCtrl, (byte)ClOperateCtrlSubId.Camera, ClRw.Write, running ? (byte)1 : (byte)0, ct);
 
+        public Task SaveConfigAsync(CancellationToken ct = default)
+            => QueryAsync((byte)ClMainId.OperateCtrl, (byte)ClOperateCtrlSubId.SaveConfig, ClRw.Write, 1, ct);
+
         private async Task<byte> QueryAsync(byte mainId, byte subId, ClRw rw, byte data, CancellationToken ct)
         {
             EnsureOpen();

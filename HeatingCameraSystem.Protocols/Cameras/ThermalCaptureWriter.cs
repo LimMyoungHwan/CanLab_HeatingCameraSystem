@@ -2,24 +2,21 @@ using System;
 using System.IO;
 using System.Text.Json;
 using HeatingCameraSystem.Core.Models;
+using OpenCvSharp;
 
 namespace HeatingCameraSystem.Protocols.Cameras
 {
-    /// <summary>
-    /// Persists a thermal capture as the radiometric source of truth: a raw little-endian
-    /// 14-bit <c>.y16</c> payload plus a self-describing <c>.json</c> sidecar. The 8-bit
-    /// normalized JPG that the console Agent used to write is intentionally NOT the primary
-    /// format here (it discards temperature data). PNG preview is written by the caller layer.
-    /// </summary>
     public sealed class ThermalCaptureWriter
     {
         private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
         private readonly string _rootDir;
+        private readonly CaptureImageFormat _format;
 
-        public ThermalCaptureWriter(string rootDir)
+        public ThermalCaptureWriter(string rootDir, CaptureImageFormat format = CaptureImageFormat.Y16Raw)
         {
             _rootDir = rootDir ?? throw new ArgumentNullException(nameof(rootDir));
+            _format = format;
             Directory.CreateDirectory(_rootDir);
         }
 
@@ -57,7 +54,18 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
             File.WriteAllText(jsonPath, JsonSerializer.Serialize(meta, JsonOpts));
 
+            if (_format == CaptureImageFormat.Tiff16)
+            {
+                WriteTiff16(Path.Combine(_rootDir, baseName + ".tif"), frame);
+            }
+
             return new CaptureFiles(meta, y16Path, jsonPath, PngPath: null);
+        }
+
+        private static void WriteTiff16(string path, ThermalFrame frame)
+        {
+            using var mat = Mat.FromPixelData(frame.Height, frame.Width, MatType.CV_16UC1, frame.Pixels);
+            mat.SaveImage(path);
         }
 
         private static (ushort Min, ushort Max) MinMax(ushort[] pixels)
