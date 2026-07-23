@@ -28,13 +28,13 @@ Master = 슈퍼셋(슬레이브 전 기능 + 챔버 + 흑체 + 장비 에러/로
 | S4-데이터 | `ThermalCaptureWriter`(.y16+.json) + `LiteDbCaptureIndex` + `CaptureStore`(저장/조회/retention) + `ThermalFrameReader` | f1e630e |
 | S5-로컬 | E2E 파이프라인 테스트(라이브+tee+저장+재구성+radiometric 무손실) | f1e630e |
 | S6 | `CameraNatsConnector`(카메라별 구독→tee→로컬저장→JPG 결과+하트비트, optional 백그라운드 재시도) + `ThermalPreviewEncoder`(Y16→JPG/PNG) + App 배선 | c323c77 |
+| S4-UI | MainWindow TabControl(Live/Data/Logs/Settings): 데이터 브라우저(조회/삭제/retention/프리뷰) + 로그 뷰어(Serilog NDJSON→`NdjsonLogReader`→레벨필터) + 설정 탭(agentui.json 편집/저장) + `AgentUiLog`(App레벨 라이프사이클/Faulted 로깅) | 3993175 |
 
-**검증: 빌드 0 errors/0 warnings · 테스트 97/97 · 콘솔 Agent·Master 완전 무변경(회귀 0).**
+**검증: 빌드 0 errors/0 warnings · 테스트 101/101(기존 97+신규 4) · 시뮬레이션 실행 4탭 시각 QA(로깅 파이프라인 라이브 증명) · 콘솔 Agent·Master 완전 무변경(회귀 0).**
 
 ## 남은 단계
 
-- **S4-UI**: 데이터 브라우저 + 로그 뷰어(Serilog NDJSON) + 카메라 설정 탭. 신규 파일(기존 무영향). ⚠️ WPF라 **실데스크톱 시각 QA 필요**(현 실행 환경=비대화형 윈도우 스테이션은 창 렌더/클릭 불가).
-- **S5-full**: E2E를 NATS + Manager 모니터링까지 확장.
+- **S5-full**: E2E를 NATS + Manager 모니터링까지 확장. ⚠️ "라이브" 실카메라 검증 부분은 실장비 필요(로컬 fake+NATS docker까지는 무장비 가능).
 - **S7 ⚠️ 기존 SC-12 코드 수정**:
   - `AgentSupervisor`: "카메라당 Agent.exe spawn" → "AgentUI 1개 실행 보장 + 카메라별 건강 보고". **public 메서드 시그니처 보존**(AgentManagerTests 유지).
   - `ManagerCommandHandler`: Reject/Disable/Restart를 **프로세스 kill → 카메라별 런타임 언로드**로 변경(카메라 1대 거부가 전체 다운 방지).
@@ -49,11 +49,11 @@ Master = 슈퍼셋(슬레이브 전 기능 + 챔버 + 흑체 + 장비 에러/로
 
 ## 신규 파일 맵
 
-- Core: `Interfaces/{ICameraRuntime,IThermalFrameSource,ICaptureIndex}.cs`, `Models/{CameraRuntimeStatus,CameraDescriptor,CaptureMetadata,CaptureFiles,CaptureRecord}.cs`
-- Protocols/Cameras: `CameraRuntime.cs`, `CameraRuntimeManager.cs`, `ThermalCaptureWriter.cs`, `ThermalFrameReader.cs`, `LiteDbCaptureIndex.cs`, `CaptureStore.cs`, `CameraNatsConnector.cs`, `ThermalPreviewEncoder.cs`, `CL/CltcThermalFrameSource.cs`
+- Core: `Interfaces/{ICameraRuntime,IThermalFrameSource,ICaptureIndex}.cs`, `Models/{CameraRuntimeStatus,CameraDescriptor,CaptureMetadata,CaptureFiles,CaptureRecord,LogEntry,LogEntryLevel}.cs`
+- Protocols/Cameras: `CameraRuntime.cs`, `CameraRuntimeManager.cs`, `ThermalCaptureWriter.cs`, `ThermalFrameReader.cs`, `LiteDbCaptureIndex.cs`, `CaptureStore.cs`, `CameraNatsConnector.cs`, `ThermalPreviewEncoder.cs`, `NdjsonLogReader.cs`, `CL/CltcThermalFrameSource.cs`
 - Protocols/Simulation: `FakeThermalFrameSource.cs`
-- AgentUI: `App.xaml(.cs)`, `MainWindow.xaml(.cs)`, `Services/{AgentUiConfig,ThermalFrameBitmapSourceConverter}.cs`, `ViewModels/{MainViewModel,CameraPanelViewModel}.cs`
-- Tests: `CameraRuntimeTests`, `CameraRuntimeManagerTests`, `ThermalCaptureWriterTests`, `CaptureStoreTests`, `CapturePipelineE2ETests`, `CameraNatsConnectorTests`
+- AgentUI: `App.xaml(.cs)`, `MainWindow.xaml(.cs)`, `Services/{AgentUiConfig,ThermalFrameBitmapSourceConverter,AgentUiLog}.cs`, `ViewModels/{MainViewModel,CameraPanelViewModel,DataBrowserViewModel,LogViewerViewModel,SettingsViewModel}.cs`
+- Tests: `CameraRuntimeTests`, `CameraRuntimeManagerTests`, `ThermalCaptureWriterTests`, `CaptureStoreTests`, `CapturePipelineE2ETests`, `CameraNatsConnectorTests`, `NdjsonLogReaderTests`
 
 ## 빌드/테스트
 
@@ -68,4 +68,4 @@ AgentUI 설정: `%LOCALAPPDATA%\HeatingCameraSystem\AgentUI\agentui.json` (Simul
 ## 참고
 
 - council 리뷰 원본(미커밋 스크래치): `.council/` (proposal.md + out_codex.md + out_agy.md + out_claude.md).
-- 다음 세션 시작점 추천: **S7 IPC 메커니즘 결정 → S7 구현**, 또는 **S4-UI(실데스크톱 QA 가능 시)**.
+- 다음 세션 시작점 추천(실장비 무관): **S8**(ManagerE2EDriver fake화 + `--headless` + 로그온 예약작업 배포 + 자동로그인 문서) — 순수 인프라, 설계 포크 없음. 또는 **S7**(Manager 재정의 — 단 Manager→AgentUI 카메라별 언로드 **IPC 방식 결정 필요** + 기존 SC-12 코드 수정).
