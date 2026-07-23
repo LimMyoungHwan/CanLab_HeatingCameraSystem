@@ -27,6 +27,17 @@ namespace HeatingCameraSystem.AgentUI.Services
 
         public List<CameraDescriptor> Cameras { get; set; } = new();
 
+        public string NatsUrl { get; set; } = "nats://127.0.0.1:4222";
+
+        public string StoragePath { get; set; } = string.Empty;
+
+        public int HeartbeatSeconds { get; set; } = 5;
+
+        public string EffectiveStorageDir =>
+            string.IsNullOrWhiteSpace(StoragePath)
+                ? Path.Combine(ConfigDir, "Captures")
+                : StoragePath;
+
         public static string ConfigDir => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "HeatingCameraSystem", "AgentUI");

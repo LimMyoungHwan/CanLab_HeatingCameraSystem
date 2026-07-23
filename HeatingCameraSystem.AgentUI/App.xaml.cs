@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows;
@@ -7,6 +8,7 @@ using HeatingCameraSystem.AgentUI.Services;
 using HeatingCameraSystem.AgentUI.ViewModels;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Protocols;
 using HeatingCameraSystem.Protocols.Cameras;
 using HeatingCameraSystem.Protocols.Cameras.CL;
 using HeatingCameraSystem.Protocols.Simulation;
@@ -22,6 +24,9 @@ namespace HeatingCameraSystem.AgentUI
         private Mutex? _singleInstanceMutex;
         private CameraRuntimeManager? _manager;
         private MainViewModel? _mainViewModel;
+        private CaptureStore? _store;
+        private INatsCommunicationService? _nats;
+        private CameraNatsConnector? _natsConnector;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -54,6 +59,14 @@ namespace HeatingCameraSystem.AgentUI
             // Fire-and-forget: per-camera start failures are isolated inside the manager.
             _ = _manager.StartAllAsync();
 
+            string storageDir = config.EffectiveStorageDir;
+            Directory.CreateDirectory(storageDir);
+            _store = new CaptureStore(storageDir, new LiteDbCaptureIndex(Path.Combine(storageDir, "index.db")));
+
+            _nats = new NatsCommunicationService();
+            _natsConnector = new CameraNatsConnector(_nats, _manager, _store, config.Cameras, config.HeartbeatSeconds);
+            _natsConnector.Start(config.NatsUrl);
+
             var window = new MainWindow { DataContext = _mainViewModel };
             MainWindow = window;
             window.Show();
@@ -63,6 +76,8 @@ namespace HeatingCameraSystem.AgentUI
         {
             try
             {
+                _natsConnector?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+
                 if (_mainViewModel is not null)
                 {
                     foreach (CameraPanelViewModel panel in _mainViewModel.Cameras.ToList())
@@ -72,6 +87,8 @@ namespace HeatingCameraSystem.AgentUI
                 }
 
                 _manager?.Dispose();
+                _store?.Dispose();
+                _nats?.DisposeAsync().AsTask().GetAwaiter().GetResult();
             }
             catch
             {

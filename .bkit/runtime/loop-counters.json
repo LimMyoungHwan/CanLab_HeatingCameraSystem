@@ -17,8 +17,8 @@
       "ts": 1784768219971
     },
     "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.AgentUI\\App.xaml.cs": {
-      "count": 2,
-      "ts": 1784768230904
+      "count": 3,
+      "ts": 1784774736534
     },
     "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.AgentUI\\MainWindow.xaml": {
       "count": 2,
@@ -127,6 +127,22 @@
     "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\CapturePipelineE2ETests.cs": {
       "count": 1,
       "ts": 1784769222573
+    },
+    "C:\\Users\\p2062\\AppData\\Local\\Temp\\opencode\\commitmsg_agentui.txt": {
+      "count": 1,
+      "ts": 1784774122702
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Protocols\\Cameras\\ThermalPreviewEncoder.cs": {
+      "count": 1,
+      "ts": 1784774396621
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Protocols\\Cameras\\CameraNatsConnector.cs": {
+      "count": 1,
+      "ts": 1784774531990
+    },
+    "E:\\Source\\Canlab\\HeatingCameraSystem\\HeatingCameraSystem.Tests\\CameraNatsConnectorTests.cs": {
+      "count": 1,
+      "ts": 1784774573751
     }
   }
 }
