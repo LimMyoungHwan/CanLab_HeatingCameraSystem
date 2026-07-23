@@ -40,6 +40,8 @@ namespace HeatingCameraSystem.AgentUI
 
             base.OnStartup(e);
 
+            AgentUiLog.Initialize();
+
             AgentUiConfig config = AgentUiConfig.LoadOrCreate();
 
             Func<CameraDescriptor, ICameraRuntime> sourceFactory = config.SimulationMode
@@ -53,6 +55,15 @@ namespace HeatingCameraSystem.AgentUI
             foreach (CameraDescriptor cam in config.Cameras)
             {
                 ICameraRuntime runtime = _manager.Add(cam);
+                string agentId = cam.AgentId;
+                int cameraIndex = cam.OpenCvIndex;
+                runtime.StatusChanged += (_, status) =>
+                {
+                    if (status == CameraRuntimeStatus.Faulted)
+                    {
+                        AgentUiLog.Logger.Error("Camera {AgentId} (index {Index}) faulted", agentId, cameraIndex);
+                    }
+                };
                 _mainViewModel.Cameras.Add(new CameraPanelViewModel(cam.Alias, runtime, dispatcher));
             }
 
@@ -66,6 +77,14 @@ namespace HeatingCameraSystem.AgentUI
             _nats = new NatsCommunicationService();
             _natsConnector = new CameraNatsConnector(_nats, _manager, _store, config.Cameras, config.HeartbeatSeconds);
             _natsConnector.Start(config.NatsUrl);
+
+            AgentUiLog.Logger.Information(
+                "AgentUI started: {CameraCount} cameras, simulation={Simulation}, nats={NatsUrl}",
+                config.Cameras.Count, config.SimulationMode, config.NatsUrl);
+
+            _mainViewModel.DataBrowser = new DataBrowserViewModel(_store);
+            _mainViewModel.Logs = new LogViewerViewModel(AgentUiLog.LogDir);
+            _mainViewModel.Settings = new SettingsViewModel(config);
 
             var window = new MainWindow { DataContext = _mainViewModel };
             MainWindow = window;
@@ -96,6 +115,7 @@ namespace HeatingCameraSystem.AgentUI
             }
 
             _singleInstanceMutex?.Dispose();
+            AgentUiLog.CloseAndFlush();
             base.OnExit(e);
         }
     }

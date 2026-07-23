@@ -76,6 +76,14 @@ namespace HeatingCameraSystem.AgentUI.Services
             return defaults;
         }
 
+        /// <summary>Writes to agentui.json. Changes take effect on next launch (config is read once at startup).</summary>
+        public void Save()
+        {
+            Directory.CreateDirectory(ConfigDir);
+            string path = Path.Combine(ConfigDir, "agentui.json");
+            File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOpts));
+        }
+
         private static AgentUiConfig CreateDefaults() => new()
         {
             SimulationMode = true,
