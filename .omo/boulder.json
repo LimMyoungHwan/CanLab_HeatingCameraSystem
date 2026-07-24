@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "active_work_id": "hardware-external-simulator-d4ff28d5",
+  "works": {
+    "hardware-external-simulator-d4ff28d5": {
+      "work_id": "hardware-external-simulator-d4ff28d5",
+      "active_plan": "E:\\Source\\Canlab\\HeatingCameraSystem\\.omo\\plans\\hardware-external-simulator.md",
+      "plan_name": "hardware-external-simulator",
+      "status": "paused",
+      "started_at": "2026-07-24T01:13:01.269Z",
+      "updated_at": "2026-07-24T03:22:10.384Z",
+      "session_ids": [
+        "opencode:ses_06e52613affeW9zjoowIT4TM4r"
+      ],
+      "session_origins": {
+        "opencode:ses_06e52613affeW9zjoowIT4TM4r": "direct"
+      },
+      "agent": "atlas",
+      "task_sessions": {
+        "todo:1": {
+          "task_key": "todo:1",
+          "task_label": "1",
+          "task_title": "Scaffold the standalone simulator and lock the FEnet package contract",
+          "session_id": "opencode:ses_06e4d2cffffekyzpKbou74ZvNO",
+          "agent": "csharp-expert",
+          "updated_at": "2026-07-24T03:22:10.385Z",
+          "started_at": "2026-07-24T03:22:10.385Z",
+          "status": "running"
+        }
+      }
+    }
+  },
+  "active_plan": "E:\\Source\\Canlab\\HeatingCameraSystem\\.omo\\plans\\hardware-external-simulator.md",
+  "started_at": "2026-07-24T01:13:01.269Z",
+  "status": "paused",
+  "updated_at": "2026-07-24T03:22:10.384Z",
+  "session_ids": [
+    "opencode:ses_06e52613affeW9zjoowIT4TM4r"
+  ],
+  "session_origins": {
+    "opencode:ses_06e52613affeW9zjoowIT4TM4r": "direct"
+  },
+  "plan_name": "hardware-external-simulator",
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "Scaffold the standalone simulator and lock the FEnet package contract",
+      "session_id": "opencode:ses_06e4d2cffffekyzpKbou74ZvNO",
+      "agent": "csharp-expert",
+      "updated_at": "2026-07-24T03:22:10.385Z",
+      "started_at": "2026-07-24T03:22:10.385Z",
+      "status": "running"
+    }
+  },
+  "agent": "atlas"
+}
