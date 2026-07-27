@@ -3,12 +3,13 @@ using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Protocols;
 using HeatingCameraSystem.Protocols.Cameras;
+using HeatingCameraSystem.Simulator;
 using HeatingCameraSystem.Simulator.Config;
 using HeatingCameraSystem.Simulator.State;
 
 namespace HeatingCameraSystem.Simulator.Cameras;
 
-public sealed class NatsCameraAgentSimulator : IAsyncDisposable
+public sealed class NatsCameraAgentSimulator : ICameraAgentEndpoint
 {
     private readonly SimulatorSettings _settings;
     private readonly SimulatorState _state;

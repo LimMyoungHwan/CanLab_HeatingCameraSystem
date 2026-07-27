@@ -12,7 +12,7 @@ using VagabondK.Protocols.LSElectric.FEnet.Simulation;
 
 namespace HeatingCameraSystem.Simulator.Plc;
 
-public sealed class FEnetPlcSimulator : IDisposable
+public sealed class FEnetPlcSimulator : IPlcSimulatorEndpoint
 {
     private readonly SimulatorSettings _settings;
     private readonly PlcSettings _plc;
