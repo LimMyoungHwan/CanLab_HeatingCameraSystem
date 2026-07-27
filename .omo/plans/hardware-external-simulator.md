@@ -180,7 +180,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios: Happy — script log `.omo/evidence/task-12-hardware-external-simulator.txt`; Failure — invoke with an occupied FEnet port and assert nonzero exit, actionable message and complete child cleanup, evidence `.omo/evidence/task-12-hardware-external-simulator-failure.txt`.
   Commit: Y | `chore(simulator): add launch and E2E scripts`
 
-- [ ] 13. Reconcile operator/developer documentation
+- [x] 13. Reconcile operator/developer documentation
   What to do / Must NOT do: Rewrite `docs/deployment/simulation-mode.md` to clearly separate legacy in-process SimulationMode from the new external Simulator, replace stale Modbus/FluentModbus/test-count claims with XGT FEnet and current commands, document camera/chamber/blackbody coverage and COM/AgentUI limitations, and link the new executable/config/scripts. Update `README.md`, `docs/manual/README.md`, `docs/manual/00-overview.md`, `01-installation.md`, `02-configuration.md` and `03-usage.md` only where they contain stale protocol/project/simulator instructions. Include safe Master configuration guidance: `SimulationMode=false`, PLC `127.0.0.1:2004`, local NATS, and backup/restore rather than destructive replacement. Do not promise physical timing, shutter/COM, AgentUI live-camera or real-blackbody protocol coverage.
   Parallelization: Wave 3 | Blocked by: T6, T7, T8, T9, T10 | Blocks: final verification
   References: `docs/deployment/simulation-mode.md:1-140`; `docs/manual/README.md:14-31`; `docs/manual/00-overview.md`; `docs/manual/01-installation.md`; `docs/manual/02-configuration.md`; `docs/manual/03-usage.md`; `README.md`; `AGENTS.md` known hardware placeholders/architecture.

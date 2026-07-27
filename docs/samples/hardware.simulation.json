@@ -1,21 +1,19 @@
 {
   "SimulationMode": true,
   "Plc": {
-    "IpAddress": "0.0.0.0",
-    "Port": 502,
-    "UnitId": 0,
-    "RegTempPv": 100,
-    "RegTempSv": 101,
-    "RegHumPv": 102,
-    "RegHumSv": 103,
-    "RegServoPosSv": 104,
-    "RegBb1TempSv": 105,
-    "RegBb2TempSv": 106,
-    "RegBb1TempPv": 107,
-    "RegBb2TempPv": 108,
-    "CoilRunStop": 10,
-    "CoilServoArrival": 11,
-    "CoilEStop": 12
+    "IpAddress": "127.0.0.1",
+    "Port": 2004,
+    "StationNo": 0,
+    "CpuSeries": "XGB",
+    "UseHexBitIndex": true,
+    "TempPv": "D100",
+    "TempSv": "D102",
+    "HumPv": "D130",
+    "HumSv": "D131",
+    "Bb1Pv": "D140",
+    "Bb1Sv": "D142",
+    "Bb2Pv": "D150",
+    "Bb2Sv": "D152"
   },
   "Nats": {
     "Url": "nats://127.0.0.1:4222"
@@ -29,6 +27,7 @@
   },
   "RecipeEngine": {
     "TemperatureTolerance": 0.5,
-    "CaptureResultTimeoutSeconds": 30
+    "CaptureResultTimeoutSeconds": 30,
+    "RampStepIntervalSeconds": 60
   }
 }

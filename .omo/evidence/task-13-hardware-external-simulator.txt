@@ -1,0 +1,6 @@
+﻿T13 documentation reconciliation
+Result: PASS
+Checks:
+- stale term sweep over README.md docs/manual docs/deployment/simulation-mode.md docs/samples returned 0 matches for Modbus, FluentModbus, PlcModbusClient, port 502, 502/tcp, old test-count claims, RegTemp, Coil.
+- referenced local paths exist: docs/deployment/run-external-simulator-e2e.ps1, docs/deployment/start-external-simulator.ps1, HeatingCameraSystem.Simulator/simulator.example.json, docs/samples/hardware.simulation.json, docs/deployment/simulation-mode.md.
+- simulator.example.json and hardware.simulation.json parse as JSON.

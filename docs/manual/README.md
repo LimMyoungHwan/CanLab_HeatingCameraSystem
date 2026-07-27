@@ -19,16 +19,19 @@
 # 1. NATS 서버 (Docker)
 docker compose -f docs/deployment/docker-compose.yml up -d
 
-# 2. 빌드 + 자동 E2E (Agent 2대 + Driver + 4단계 Recipe 검증까지)
+# 2. 빌드 + 내부 Fake 자동 E2E
 dotnet build
 ./docs/deployment/run-e2e-simulation.ps1
+
+# 실제 프로토콜 경계까지 검증하려면 외부 Simulator E2E
+./docs/deployment/run-external-simulator-e2e.ps1
 
 # 기대 결과:
 # [E2E] *** PASS ***  → exit 0
 # %TEMP%\HCS_E2E\Agent\ImageStorage_0,1\capture_*.jpg 4개 생성
 ```
 
-성공하면 NATS / Master 로직 / Agent / 캡처 전체 흐름이 정상이라는 뜻. 이후 Master GUI 까지 시뮬로 보고 싶다면 [03-usage.md §4.2](./03-usage.md#42-master-gui-로-시뮬) 참고.
+성공하면 NATS / Master 로직 / Agent / 캡처 전체 흐름이 정상이라는 뜻. 외부 Simulator는 XGT FEnet 경계까지 검증한다. 이후 Master GUI 까지 시뮬로 보고 싶다면 [03-usage.md §4](./03-usage.md#4-시뮬레이션으로-검증) 참고.
 
 ## 5분 Quick Start (실 하드웨어)
 
@@ -59,6 +62,7 @@ dotnet publish HeatingCameraSystem.Agent -c Release -o publish\Agent
 - 샘플 설정 파일 [`docs/samples/`](../samples/)
 - 시뮬레이션 전체 가이드 [`docs/deployment/simulation-mode.md`](../deployment/simulation-mode.md)
 - 자동 E2E 러너 [`docs/deployment/run-e2e-simulation.ps1`](../deployment/run-e2e-simulation.ps1)
+- 외부 Simulator E2E 러너 [`docs/deployment/run-external-simulator-e2e.ps1`](../deployment/run-external-simulator-e2e.ps1)
 - PDCA 기능별 문서 [`docs/01-plan/`](../01-plan/), [`02-design/`](../02-design/), [`03-analysis/`](../03-analysis/), [`04-report/`](../04-report/)
 
 ## 문서 이력

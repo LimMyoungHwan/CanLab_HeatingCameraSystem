@@ -29,6 +29,7 @@ HeatingCameraSystem/
 ├── HeatingCameraSystem.Protocols/   # VagabondK (LS XGT FEnet), NATS.Net, System.IO.Ports
 ├── HeatingCameraSystem.Master/      # WPF 운영자 UI (.NET 8-windows)
 ├── HeatingCameraSystem.Agent/       # 카메라 PC 콘솔 앱 (.NET 8)
+├── HeatingCameraSystem.Simulator/   # 외부 XGT FEnet + NATS Simulator (.NET 8)
 ├── HeatingCameraSystem.Tests/       # xUnit + Moq (.NET 8-windows)
 └── docs/                            # PDCA 문서 + 배포 가이드
 ```
@@ -74,6 +75,14 @@ dotnet run --project HeatingCameraSystem.Agent
 # 인수 오버라이드
 dotnet run --project HeatingCameraSystem.Agent -- Agent_Bay1 nats://192.168.1.10:4222
 ```
+
+### 외부 Simulator E2E
+
+```powershell
+docs/deployment/run-external-simulator-e2e.ps1
+```
+
+Master/Driver를 `SimulationMode=false`로 두고 별도 Simulator가 XGT FEnet(`127.0.0.1:2004`)과 NATS Agent를 에뮬레이션한다.
 
 ## 설정 파일
 

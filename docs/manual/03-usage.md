@@ -86,7 +86,7 @@ C:\HeatingCameraSystem\Agent\HeatingCameraSystem.Agent.exe
 .\Agent.exe Agent_2 nats://127.0.0.1:4222 2 ImageStorage_2 true   # 합성
 ```
 
-CLI 인수를 모두 넘기는 다중 인스턴스 기동은 `agent.json` 을 사용하지 않으므로 동시 기동해도 안전 (v2.1+). 자동 러너: `docs/deployment/run-e2e-simulation.ps1`.
+CLI 인수를 모두 넘기는 다중 인스턴스 기동은 `agent.json` 을 사용하지 않으므로 동시 기동해도 안전. 내부 Fake 자동 러너: `docs/deployment/run-e2e-simulation.ps1`.
 
 ### 3.3 원격 시리얼 설정 전송
 
@@ -101,7 +101,7 @@ Master **Settings** 탭에서:
 
 ## 4. 시뮬레이션으로 검증
 
-### 4.1 자동 E2E 러너 (가장 빠름)
+### 4.1 내부 Fake 자동 E2E 러너
 
 ```powershell
 ./docs/deployment/run-e2e-simulation.ps1
@@ -124,7 +124,15 @@ Master **Settings** 탭에서:
 
 전체 시뮬레이션 상세는 [../deployment/simulation-mode.md](../deployment/simulation-mode.md).
 
-### 4.2 Master GUI 로 시뮬
+### 4.2 외부 Simulator E2E 러너
+
+```powershell
+./docs/deployment/run-external-simulator-e2e.ps1
+```
+
+내부 Fake 대신 별도 `HeatingCameraSystem.Simulator` 프로세스를 띄워 실제 XGT FEnet TCP와 NATS subject를 통과한다. Master를 GUI로 붙일 때도 `SimulationMode=false`, PLC `127.0.0.1:2004`, NATS `nats://127.0.0.1:4222` 로 맞춘다.
+
+### 4.3 Master GUI 로 내부 Fake 시뮬
 
 1. `%LOCALAPPDATA%\HeatingCameraSystem\hardware.json` 에 `"SimulationMode": true` 추가 (또는 `docs/samples/hardware.simulation.json` 복사)
 2. Master 재시작 → Debug Output 에서 `[AppServices] SimulationMode=true -> using Fake PLC + Fake Shutter`
@@ -133,11 +141,11 @@ Master **Settings** 탭에서:
 5. Dashboard → Recipe 선택 → START
 6. 진행률 100% → 완료 → History 탭에서 4건 확인
 
-### 4.3 단위·통합 테스트
+### 4.4 단위·통합 테스트
 
 ```powershell
 dotnet test --no-build
-# 통과 59 / 실패 0
+# 실패 0
 ```
 
 추가 시뮬 테스트는 `HeatingCameraSystem.Tests/SimulationTests.cs` (11건).
@@ -195,9 +203,9 @@ dotnet test --no-build
 
 | 증상 | 점검 |
 |---|---|
-| Dashboard 온/습도 `0` 고정 | Master Debug Output 에 `PLC connect failed` 로그 확인. `hardware.json` `Plc.IpAddress` / `Port` 정확한지, 핑·텔넷으로 502 도달 확인 |
+| Dashboard 온/습도 `0` 고정 | Master Debug Output 에 `PLC connect failed` 로그 확인. `hardware.json` `Plc.IpAddress` / `Port` 정확한지, `Test-NetConnection <ip> -Port 2004` 로 확인 |
 | 일시적 끊김 | `ConnectionMonitorService` 가 30초마다 재연결 시도 — 잠시 기다림 |
-| 값은 오는데 이상한 숫자 | `RegTempPv` 등 레지스터 주소 잘못. PLC 설계서 확인. 온도는 `/10` 스케일 |
+| 값은 오는데 이상한 숫자 | `TempPv` 등 D/M/P 디바이스 토큰 또는 `UseHexBitIndex` 설정 확인. 온도는 `/10` 스케일 |
 
 ### 7.4 시리얼 셔터 미응답
 
@@ -212,7 +220,7 @@ dotnet test --no-build
 | 멈춘 Phase | 원인 후보 |
 |---|---|
 | `챔버 안정화` | PLC 가 실제로 목표 온도에 도달 못함 (히터·습도제어기 오류). `_tempTolerance=0.5°C` 안에 못 들어오면 무한 대기 — `STOP` 으로 중단 후 PLC 확인 |
-| `서보 이동` | `IsServoAtPositionAsync` 가 계속 `false`. PLC `CoilServoArrival` 주소 또는 서보 자체 문제 |
+| `서보 이동` | `IsServoAtPositionAsync` 가 계속 `false`. PLC busy/current-point 디바이스 주소 또는 서보 자체 문제 |
 | `BB 안정화` | BB 히터 응답 안함. 또는 PV 레지스터 (`RegBb1TempPv`) 잘못 |
 | `캡처` | §7.2 참조 |
 

@@ -10,7 +10,7 @@
 - Agent N 대 — 콘솔 앱, 카메라 1대를 담당, NATS 로 명령 수신·결과 송신
 - NATS — 비동기 메시지 브로커 (Master ↔ Agent 분리)
 
-하드웨어가 없을 때는 모든 컴포넌트를 시뮬레이션 모드로 돌릴 수 있다 (매뉴얼 03).
+하드웨어가 없을 때는 내부 Fake 모드 또는 별도 외부 Simulator로 검증할 수 있다 (매뉴얼 03).
 
 ## 2. 아키텍처
 
@@ -22,7 +22,7 @@
 │  Camera Mapping / History     │  cmd  ►  │                      │
 │  Serial Settings              │ ◄ result │  Heartbeat 5s        │
 │                               │ ◄ status │  Serial config ACK   │
-│  ┌─ PLC (Modbus TCP) ──────┐  │          └──────────────────────┘
+│  ┌─ PLC (XGT FEnet TCP) ───┐  │          └──────────────────────┘
 │  │  챔버 온/습도, 서보, BB │  │                  ▲
 │  └─────────────────────────┘  │                  │
 │  ┌─ Serial Shutter (COM) ──┐  │           NATS Subjects
@@ -45,12 +45,13 @@
 | 어셈블리 | 타겟 | 역할 |
 |---|---|---|
 | `HeatingCameraSystem.Core` | `net8.0` | 인터페이스 + 모델 + Config. 외부 의존성 없음 |
-| `HeatingCameraSystem.Protocols` | `net8.0` | FluentModbus / NATS.Net / System.IO.Ports 구현체. `Simulation/` 폴더에 Fake 구현 포함 |
+| `HeatingCameraSystem.Protocols` | `net8.0` | VagabondK LS XGT FEnet / NATS.Net / System.IO.Ports 구현체. `Simulation/` 폴더에 Fake 구현 포함 |
 | `HeatingCameraSystem.Master` | `net8.0-windows` | WPF GUI. `AppServices` 정적 서비스 로케이터 |
 | `HeatingCameraSystem.Agent` | `net8.0` | 카메라 PC 콘솔 앱 |
 | `HeatingCameraSystem.AgentManager` | `net8.0` (win-x64) | PC당 1개 Windows Service. WMI 카메라 자동 발견 + Agent 프로세스 supervisor + NDJSON 로그 수집 |
-| `HeatingCameraSystem.Tests` | `net8.0-windows` | xUnit + Moq (59건) |
+| `HeatingCameraSystem.Tests` | `net8.0-windows` | xUnit + Moq |
 | `HeatingCameraSystem.E2EDriver` | `net8.0` | 헤드리스 캡처 roundtrip E2E 드라이버 |
+| `HeatingCameraSystem.Simulator` | `net8.0` | 외부 XGT FEnet + NATS 카메라 Agent Simulator |
 | `HeatingCameraSystem.ManagerE2EDriver` | `net8.0` (win-x64) | Manager 승인 루프 E2E 드라이버 (SC-12) — 발견→inventory→승인 검증 |
 
 ## 4. NATS 토픽 맵

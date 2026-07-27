@@ -34,28 +34,25 @@
 
 | 필드 | 타입 | 기본값 | 의미 |
 |---|---|---|---|
-| `IpAddress` | string | `192.168.1.100` | A&D PLC IP |
-| `Port` | int | `502` | Modbus TCP 표준 포트 |
-| `UnitId` | int | `0` | Modbus Unit / Slave ID |
-| `RegTempPv` | int | `100` | 챔버 온도 현재값 레지스터 (PV) |
-| `RegTempSv` | int | `101` | 챔버 온도 목표값 레지스터 (SV) |
-| `RegHumPv` | int | `102` | 챔버 습도 PV |
-| `RegHumSv` | int | `103` | 챔버 습도 SV |
-| `RegServoPosSv` | int | `104` | 서보 목표 위치 인덱스 |
-| `RegBb1TempSv` | int | `105` | 블랙바디 #1 목표온도 |
-| `RegBb2TempSv` | int | `106` | 블랙바디 #2 목표온도 |
-| `RegBb1TempPv` | int | `107` | 블랙바디 #1 현재온도 |
-| `RegBb2TempPv` | int | `108` | 블랙바디 #2 현재온도 |
-| `CoilRunStop` | int | `10` | 챔버 운전/정지 코일 |
-| `CoilServoArrival` | int | `11` | 서보 도착 신호 코일 |
-| `CoilEStop` | int | `12` | 비상정지 코일 |
+| `IpAddress` | string | `192.168.1.2` | LS XGT PLC IP. 외부 Simulator 사용 시 `127.0.0.1` |
+| `Port` | int | `2004` | XGT FEnet TCP 포트 |
+| `StationNo` | int | `0` | 국번 |
+| `CpuSeries` | enum | `XGB` | XGK / XGB / XGI |
+| `UseHexBitIndex` | bool | `true` | XGB P/M 비트 인덱스 16진 처리 |
+| `TempPv` / `TempSv` | string | `D100` / `D102` | 챔버 온도 PV/SV word |
+| `HumPv` / `HumSv` | string | `D130` / `D131` | 챔버 습도 PV/SV word |
+| `Bb1Pv` / `Bb1Sv` | string | `D140` / `D142` | 블랙바디 #1 PV/SV word |
+| `Bb2Pv` / `Bb2Sv` | string | `D150` / `D152` | 블랙바디 #2 PV/SV word |
+| `BitTempStart` / `BitTempStop` | string | `M10` / `M11` | 온도제어 시작/정지 bit |
+| `ServoPointMoveBase` | string | `P601` | 포인트 이동 one-touch bit base |
+| `ServoPointXBase` / `ServoPointYBase` | string | `D3010` / `D3012` | 포인트 좌표 word base |
 
-**스케일 규칙** (`PlcModbusClient` 참조):
+**스케일 규칙** (`PlcXgtClient` 참조):
 - 온도·습도 쓰기: `value * 10` → `short` (소수점 1자리)
 - 온도·습도 읽기: `short / 10f`
 - 즉 PLC 측은 0.1°C / 0.1%RH 단위 정수로 보관
 
-**플레이스홀더 주의**: 기본 레지스터 주소(100~108, 10~12)는 임시값. 실제 A&D PLC 명세에 맞춰 운영자가 수정. 샘플 `docs/samples/hardware.json` 은 4096~4104 / 256~258 등 실제 사이트 예시.
+**플레이스홀더 주의**: 일부 D/M/P 주소는 실제 장비 명세 확인 후 운영자가 수정해야 한다. 외부 Simulator는 기본 주소 그대로 동작한다.
 
 ### 2.2 NATS 섹션
 
@@ -94,7 +91,7 @@
 { "SimulationMode": false, ... }
 ```
 
-- Master: 실제 `PlcModbusClient` + `SerialShutterController` 사용
+- Master: 실제 `PlcXgtClient` + `SerialShutterController` + `PlcBlackBodyAdapter` 사용
 - Agent: 실제 `CameraCaptureService` (OpenCvSharp `VideoCapture`) 사용
 - `ConnectionMonitorService` 30초 주기 재연결 ON
 
@@ -113,9 +110,20 @@
 - Agent: `FakeCameraCaptureService` (합성 JPEG — HSV 그라디언트 + 카메라 인덱스/타임스탬프 텍스트)
 - `ConnectionMonitorService` 시작 안함
 
-전체 자동화 러너: `docs/deployment/run-e2e-simulation.ps1`
+내부 자동화 러너: `docs/deployment/run-e2e-simulation.ps1`
 
-### 3.3 하이브리드 — 실 웹캠 + Fake PLC/Shutter
+### 3.3 외부 Simulator — 실제 프로토콜 경계 검증
+
+```json
+// hardware.json (Master real mode)
+{ "SimulationMode": false, "Plc": { "IpAddress": "127.0.0.1", "Port": 2004 }, ... }
+```
+
+- 별도 `HeatingCameraSystem.Simulator` 프로세스가 XGT FEnet + NATS Agent를 에뮬레이션
+- Master/Driver는 실제 `PlcXgtClient`, `NatsCommunicationService` 경유
+- 한 번에 실행: `docs/deployment/run-external-simulator-e2e.ps1`
+
+### 3.4 하이브리드 — 실 웹캠 + Fake PLC/Shutter
 
 ```json
 // hardware.json (Master 시뮬)
@@ -243,7 +251,7 @@ Remove-Item "$env:LOCALAPPDATA\HeatingCameraSystem\data.db"
 | 하고 싶은 일 | 어디를 만지나 |
 |---|---|
 | NATS 서버 IP 변경 | `hardware.json` `Nats.Url` + 모든 Agent `agent.json` `NatsUrl` |
-| PLC 레지스터 주소 변경 | `hardware.json` `Plc.Reg*` / `Coil*` |
+| PLC 디바이스 주소 변경 | `hardware.json` `Plc.*` D/M/P 토큰 |
 | 카메라 한 대 추가 (PC 1대 추가) | 새 Agent PC 에 publish + `agent.json` 의 `AgentId=Agent_N`, `CameraIndex=N` |
 | 카메라 한 대 추가 (기존 PC 의 USB 두 번째 카메라) | 같은 Agent.exe 두 번째 인스턴스, `CameraIndex=1`, 다른 `AgentId`, 다른 `StoragePath` |
 | 캡처 보관기간 변경 | `App.xaml.cs` `retentionDays` (코드 수정 필요) |

@@ -11,9 +11,9 @@
 | Windows 10/11 (64-bit) | ✅ | Master 는 WPF 라 Windows 전용. Agent 도 OpenCvSharp 윈도우 런타임 사용 |
 | .NET 8 SDK (개발 PC) 또는 Runtime (운영 PC) | ✅ | Master = Desktop Runtime, Agent = Runtime |
 | NATS 서버 | ✅ | Docker 권장 (§2) |
-| PLC (Modbus TCP) | ⛔ (시뮬 시) | A&D PLC 등. IP + 포트 502 |
+| PLC (LS XGT FEnet) | ⛔ (시뮬 시) | XGT 전용 TCP, 기본 포트 2004 |
 | 카메라 + USB-C 가상 시리얼 | ⛔ (시뮬 시) | 일반 USB 웹캠으로도 동작 (`CameraIndex=0`) |
-| 네트워크 | ✅ | NATS 4222/tcp, PLC 502/tcp 접근 가능 |
+| 네트워크 | ✅ | NATS 4222/tcp, PLC 2004/tcp 접근 가능 |
 
 설치 도구:
 ```powershell
@@ -152,7 +152,7 @@ USB-C 열화상 카메라 연결 시 두 가지가 자동 잡힘:
 | 4222/tcp | 아웃바운드 | NATS 클라이언트 | Master, Agent |
 | 4222/tcp | 인바운드 | NATS 서버 수신 | NATS 호스트 PC |
 | 8222/tcp | 인바운드 | NATS 모니터링 (선택) | NATS 호스트 PC |
-| 502/tcp | 아웃바운드 | PLC Modbus TCP | Master |
+| 2004/tcp | 아웃바운드 | LS XGT FEnet TCP | Master |
 
 PowerShell 예시:
 ```powershell
@@ -171,7 +171,7 @@ New-NetFirewallRule -DisplayName "NATS 4222" -Direction Inbound -LocalPort 4222 
 | 5 | Agent 기동 | `HeatingCameraSystem.Agent.exe` 콘솔에 `Connected to NATS` 로그 |
 | 6 | Agent → Master 인식 | Master Dashboard 우측 Agent 패널에 녹색 점 (5초 내) |
 | 7 | (실 PLC) 온도/습도 표시 | Dashboard 좌상단 숫자 갱신 |
-| 8 | (시뮬) 단위·E2E 테스트 | 저장소 루트에서 `dotnet test --no-build` → 59/59 통과 |
+| 8 | (시뮬) 단위·E2E 테스트 | 저장소 루트에서 `dotnet test --no-build` 또는 `docs/deployment/run-external-simulator-e2e.ps1` 통과 |
 
 8번까지 모두 OK 면 기본 설치 완료. 카메라 자동 발견·Agent 자동 감독이 필요하면 §8 Agent Manager 설치(선택)로. 설정 세부는 [02-configuration.md](./02-configuration.md), 운영은 [03-usage.md](./03-usage.md).
 

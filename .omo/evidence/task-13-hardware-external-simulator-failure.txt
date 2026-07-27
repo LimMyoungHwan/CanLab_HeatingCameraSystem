@@ -1,0 +1,3 @@
+﻿T13 stale documentation failure sweep
+Result: PASS
+Search returned 0 stale hits for: Modbus|FluentModbus|PlcModbusClient|port 502|502/tcp|38/38|59/59|통과 59|59건|RegTemp|Coil
