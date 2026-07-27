@@ -86,12 +86,15 @@ namespace HeatingCameraSystem.Master.Services
                     cameraEnumerator, usbSerialEnumerator, CameraSerialClientFactory, Settings);
             }
 
-            BlackBodyController = new FakeBlackBodyController();
+            BlackBodyController = CreateBlackBodyController(Settings, PlcController);
 
             RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController);
             ConnectionMonitor = new ConnectionMonitorService(PlcController, ShutterController, Settings);
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
         }
+
+        public static IBlackBodyController CreateBlackBodyController(HardwareSettings settings, IPlcController plc)
+            => settings.SimulationMode ? new FakeBlackBodyController() : new PlcBlackBodyAdapter(plc);
 
         public static async Task TryConnectServicesAsync()
         {
