@@ -1,0 +1,13 @@
+Final local verification for hardware-external-simulator
+Result: PASS
+
+Checks run:
+- rtk dotnet build: PASS, 11 projects, 0 errors, 0 warnings.
+- dotnet test --no-build: PASS, 155 passed, 0 failed, 0 skipped.
+- docs/deployment/run-external-simulator-e2e.ps1: PASS, external simulator roundtrip received 4/4 captures, Agent_0=2, Agent_1=2, image files present, final PLC T=30.0 H=55.0 point=4 busy=False.
+- stale documentation sweep: PASS, 0 matches for Modbus, FluentModbus, PlcModbusClient, port 502, 502/tcp, old test-count claims, RegTemp, Coil.
+- F3 real Master UI QA: PASS, Master ran with SimulationMode=false against external Simulator on 127.0.0.1:2004 and NATS nats://127.0.0.1:4222; Dashboard rendered Agent_0/Agent_1 live cards and PLC status page showed green PLC status monitor with live values.
+
+Notes:
+- An initial rtk dotnet build attempt failed because a stale MSBuild node locked HeatingCameraSystem.Master.dll; after stopping that MSBuild process, the same build command passed.
+- C# LSP diagnostics were not available because the C# LSP server is not installed in this environment.
