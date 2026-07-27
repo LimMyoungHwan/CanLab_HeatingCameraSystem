@@ -1,0 +1,3 @@
+﻿T12 run-external-simulator-e2e occupied-port failure
+Result: expected failure
+Observed: with loopback port 2004 pre-bound, script exited nonzero and reported: FEnet port 2004 is already in use.

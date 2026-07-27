@@ -1,0 +1,3 @@
+﻿T12 run-external-simulator-e2e happy path
+Result: PASS
+Observed: script created config when absent, built solution with 0 errors/0 warnings, started simulator on port 2004, ran E2EDriver --external-simulator, received 4/4 capture results, verified 4 image files, final PLC T=30.0 H=55.0 point=4 busy=False, printed *** PASS ***.

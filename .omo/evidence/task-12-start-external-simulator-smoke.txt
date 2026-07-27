@@ -1,0 +1,2 @@
+﻿T12 start-external-simulator smoke
+START SCRIPT READY port=2004 configExists=True

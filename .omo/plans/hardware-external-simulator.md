@@ -172,7 +172,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios: Happy — exact command output `.omo/evidence/task-11-hardware-external-simulator.txt`; Failure — toggle Agent_1 Offline before its step and assert the driver exits its documented camera-timeout code within configured timeout, then toggle PLC Offline and assert the documented PLC error exit, evidence `.omo/evidence/task-11-hardware-external-simulator-failure.txt`.
   Commit: Y | `test(e2e): verify external simulator roundtrip`
 
-- [ ] 12. Add sample configuration and one-command lifecycle scripts
+- [x] 12. Add sample configuration and one-command lifecycle scripts
   What to do / Must NOT do: Add `HeatingCameraSystem.Simulator/simulator.example.json` matching T2 defaults and `docs/deployment/run-external-simulator-e2e.ps1`. Script parameters allow NATS URL, FEnet port and configuration; it builds, starts repo Docker NATS if requested, starts Simulator as a child, waits for the exact readiness line, runs T11, and always terminates only processes/containers it started in `finally`. Add a separate `start-external-simulator.ps1` that copies the example only when the target config is absent. Never overwrite `%LOCALAPPDATA%\HeatingCameraSystem\hardware.json`, existing simulator config, user NATS containers or dirty files.
   Parallelization: Wave 3 | Blocked by: T8 | Blocks: final verification
   References: `docs/deployment/run-e2e-simulation.ps1`; `docs/deployment/docker-compose.yml`; `docs/samples/hardware.simulation.json`; T8 readiness/exit contracts; T11 command.

@@ -1,0 +1,31 @@
+{
+  "Endpoint": {
+    "ListenAddress": "127.0.0.1",
+    "ListenPort": 2004,
+    "NatsUrl": "nats://127.0.0.1:4222"
+  },
+  "Dynamics": {
+    "TickMs": 100,
+    "TemperatureRatePerSecond": 20.0,
+    "HumidityRatePerSecond": 40.0,
+    "BlackbodyRatePerSecond": 30.0,
+    "ServoBusyMs": 500,
+    "HeartbeatSeconds": 5,
+    "LiveFrameIntervalMs": 100
+  },
+  "Frame": {
+    "Width": 640,
+    "Height": 480
+  },
+  "OutputPath": "ImageStorage",
+  "Cameras": [
+    {
+      "AgentId": "Agent_0",
+      "CameraIndex": 0
+    },
+    {
+      "AgentId": "Agent_1",
+      "CameraIndex": 1
+    }
+  ]
+}
