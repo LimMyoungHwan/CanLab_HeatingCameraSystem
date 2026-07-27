@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Master.Services;
 
@@ -25,6 +29,15 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         [ObservableProperty]
         private Core.Models.CameraStatus _cameraStatus = Core.Models.CameraStatus.Offline;
+
+        [ObservableProperty]
+        private BitmapSource? _liveImage;
+
+        [ObservableProperty]
+        private DateTime _lastLiveFrameUtc = DateTime.MinValue;
+
+        [ObservableProperty]
+        private bool _hasFreshLiveFrame;
     }
 
     public partial class AgentNode : ObservableObject
@@ -79,6 +92,15 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty]
         private string _currentPageInfo = "Page 1/8";
 
+        [ObservableProperty]
+        private int _onlineAgentCount;
+
+        [ObservableProperty]
+        private PointCollection _temperatureTrendPoints = new();
+
+        [ObservableProperty]
+        private PointCollection _humidityTrendPoints = new();
+
         public ObservableCollection<DashboardSlot> CameraFeeds { get; } = new ObservableCollection<DashboardSlot>();
         public ObservableCollection<AgentNode> Agents { get; } = new ObservableCollection<AgentNode>();
         public ObservableCollection<Recipe> Recipes { get; } = new ObservableCollection<Recipe>();
@@ -92,6 +114,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         private readonly List<CameraNode?> _mode5Assignments = new();
 
         private readonly Dictionary<string, AgentNode> _agentMap = new();
+        private readonly IPlcController? _plcController;
+        private readonly INatsCommunicationService? _natsService;
+        private readonly Func<IEnumerable<Recipe>> _loadRecipes;
+        private readonly Queue<(float Temperature, float Humidity)> _samples = new();
         private System.Windows.Threading.DispatcherTimer? _autoCycleTimer;
         private int _currentPageIndex = 0;
         private CancellationTokenSource? _recipeCts;
@@ -99,7 +125,23 @@ namespace HeatingCameraSystem.Master.ViewModels
         private System.Windows.Threading.DispatcherTimer? _offlineCheckTimer;
 
         public DashboardViewModel()
+            : this(
+                AppServices.PlcController,
+                AppServices.NatsService,
+                () => AppServices.RecipeRepo?.GetAllAsync().GetAwaiter().GetResult() ?? Array.Empty<Recipe>(),
+                true)
         {
+        }
+
+        public DashboardViewModel(
+            IPlcController? plcController,
+            INatsCommunicationService? natsService,
+            Func<IEnumerable<Recipe>>? loadRecipes,
+            bool startTimers)
+        {
+            _plcController = plcController;
+            _natsService = natsService;
+            _loadRecipes = loadRecipes ?? (() => Array.Empty<Recipe>());
             CurrentTemperature = 0f;
             CurrentHumidity = 0f;
 
@@ -111,21 +153,25 @@ namespace HeatingCameraSystem.Master.ViewModels
             LoadCameraFeeds();
             LoadRecipes();
 
-            _plcPollTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-            _plcPollTimer.Tick += async (_, _) => await PollPlcAsync();
-            _plcPollTimer.Start();
+            if (startTimers)
+            {
+                _plcPollTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                _plcPollTimer.Tick += async (_, _) => await PollPlcAsync();
+                _plcPollTimer.Start();
 
-            _offlineCheckTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-            _offlineCheckTimer.Tick += (_, _) => CheckOfflineAgents();
-            _offlineCheckTimer.Start();
+                _offlineCheckTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                _offlineCheckTimer.Tick += (_, _) => CheckOfflineAgents();
+                _offlineCheckTimer.Start();
+            }
 
             _ = SubscribeAgentStatusAsync();
+            _ = SubscribeLiveFramesAsync();
         }
 
         private void LoadRecipes()
         {
             Recipes.Clear();
-            foreach (var r in AppServices.RecipeRepo.GetAllAsync().GetAwaiter().GetResult())
+            foreach (var r in _loadRecipes())
                 Recipes.Add(r);
             SelectedRecipe = Recipes.FirstOrDefault();
         }
@@ -135,11 +181,11 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private async Task SubscribeAgentStatusAsync()
         {
-            if (AppServices.NatsService == null) return;
+            if (_natsService == null) return;
 
-            await AppServices.NatsService.SubscribeAgentStatusAsync(msg =>
+            await _natsService.SubscribeAgentStatusAsync(msg =>
             {
-                Application.Current.Dispatcher.Invoke(() =>
+                RunOnUi(() =>
                 {
                     if (!_agentMap.TryGetValue(msg.AgentId, out var agent))
                     {
@@ -159,8 +205,50 @@ namespace HeatingCameraSystem.Master.ViewModels
                         agent.Cameras.Add(cam);
                     }
                     cam.CameraStatus = msg.CameraStatus;
+                    UpdateOnlineAgentCount();
+                    LoadCameraFeeds();
                 });
             });
+        }
+
+        private async Task SubscribeLiveFramesAsync()
+        {
+            if (_natsService == null) return;
+
+            await _natsService.SubscribeLiveFrameAsync(msg =>
+            {
+                _ = Task.Run(() =>
+                {
+                    if (msg.ImageBytes is null || msg.ImageBytes.Length == 0) return;
+                    BitmapSource? image = Decode(msg.ImageBytes);
+                    if (image is null) return;
+
+                    RunOnUi(() => ApplyLiveFrame(msg, image));
+                });
+            });
+        }
+
+        private void ApplyLiveFrame(LiveFrameMessage msg, BitmapSource image)
+        {
+            if (!_agentMap.TryGetValue(msg.AgentId, out var agent))
+            {
+                agent = new AgentNode { Name = msg.AgentId, IsExpanded = true };
+                _agentMap[msg.AgentId] = agent;
+                Agents.Add(agent);
+            }
+
+            string camId = $"CAM-{msg.CameraIndex:D2}";
+            var cam = agent.Cameras.FirstOrDefault(c => c.Id == camId);
+            if (cam == null)
+            {
+                cam = new CameraNode { Id = camId };
+                agent.Cameras.Add(cam);
+            }
+
+            cam.LiveImage = image;
+            cam.LastLiveFrameUtc = msg.Timestamp.ToUniversalTime();
+            cam.HasFreshLiveFrame = true;
+            LoadCameraFeeds();
         }
 
         private void CheckOfflineAgents()
@@ -175,21 +263,89 @@ namespace HeatingCameraSystem.Master.ViewModels
                         cam.CameraStatus = CameraStatus.Offline;
                 }
             }
+            UpdateOnlineAgentCount();
         }
+
+        public void RefreshLiveFrameFreshness(DateTime utcNow)
+        {
+            foreach (var camera in Agents.SelectMany(a => a.Cameras))
+                camera.HasFreshLiveFrame = camera.LiveImage != null && camera.LastLiveFrameUtc >= utcNow.AddSeconds(-2);
+        }
+
+        public Task RefreshPlcSnapshotAsync() => PollPlcAsync();
 
         private async Task PollPlcAsync()
         {
-            if (AppServices.PlcController == null) return;
+            if (_plcController == null) return;
             try
             {
-                CurrentTemperature = await AppServices.PlcController.GetCurrentTemperatureAsync();
-                CurrentHumidity = await AppServices.PlcController.GetCurrentHumidityAsync();
+                CurrentTemperature = await _plcController.GetCurrentTemperatureAsync();
+                CurrentHumidity = await _plcController.GetCurrentHumidityAsync();
+                AddTrendSample(CurrentTemperature, CurrentHumidity);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[Dashboard] PLC poll failed: {ex.Message}");
             }
         }
+
+        private void AddTrendSample(float temperature, float humidity)
+        {
+            _samples.Enqueue((temperature, humidity));
+            while (_samples.Count > 60) _samples.Dequeue();
+
+            TemperatureTrendPoints = BuildPoints(_samples.Select(s => s.Temperature));
+            HumidityTrendPoints = BuildPoints(_samples.Select(s => s.Humidity));
+        }
+
+        private static PointCollection BuildPoints(IEnumerable<float> values)
+        {
+            var list = values.ToList();
+            var points = new PointCollection(list.Count);
+            if (list.Count == 0) return points;
+
+            double denominator = Math.Max(1, list.Count - 1);
+            for (int i = 0; i < list.Count; i++)
+            {
+                double x = i / denominator * 100.0;
+                double normalized = Math.Clamp(list[i], 0, 100) / 100.0;
+                points.Add(new Point(x, 40.0 - normalized * 40.0));
+            }
+            return points;
+        }
+
+        private static BitmapSource? Decode(byte[] jpeg)
+        {
+            try
+            {
+                var bmp = new BitmapImage();
+                using var ms = new MemoryStream(jpeg);
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.StreamSource = ms;
+                bmp.EndInit();
+                bmp.Freeze();
+                return bmp;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void RunOnUi(Action action)
+        {
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess())
+            {
+                action();
+                return;
+            }
+
+            dispatcher.Invoke(action);
+        }
+
+        private void UpdateOnlineAgentCount() => OnlineAgentCount = Agents.Count(a => a.IsOnline);
 
         private void LoadCameraFeeds()
         {

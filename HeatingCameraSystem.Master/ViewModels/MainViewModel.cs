@@ -11,6 +11,8 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty]
         private object? _currentViewModel;
 
+        private readonly DashboardViewModel _dashboardViewModel = new();
+
         public MainViewModel()
         {
             // Default View
@@ -21,7 +23,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void NavigateToDashboard()
         {
             CurrentViewTitle = "대시보드 (Dashboard)";
-            CurrentViewModel = new DashboardViewModel();
+            CurrentViewModel = _dashboardViewModel;
         }
 
         [RelayCommand]
