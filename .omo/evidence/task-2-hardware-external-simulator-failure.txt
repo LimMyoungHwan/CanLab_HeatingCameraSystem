@@ -1,0 +1,21 @@
+﻿=== T2 QA FAILURE PROOF (unit level) ===
+Scenario: malformed JSON (ListenPort is a string where an int is required) written to a temp file,
+then SimulatorSettings.Load(path) is called. It MUST throw a typed SimulatorSettingsException whose
+message NAMES the bad property ('ListenPort') and adds context ('invalid JSON') -- NOT a bare JsonException.
+Exit-code wiring (plan's 'exit code 2') is intentionally deferred to T8; T2 proves the throw at unit level.
+
+Test run for E:\Source\Canlab\HeatingCameraSystem\HeatingCameraSystem.Tests\bin\Debug\net8.0-windows\HeatingCameraSystem.Tests.dll (.NETCoreApp,Version=v8.0)
+A total of 1 test files matched the specified pattern.
+E:\Source\Canlab\HeatingCameraSystem\HeatingCameraSystem.Tests\bin\Debug\net8.0-windows\HeatingCameraSystem.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.29)
+[xUnit.net 00:00:00.10]   Discovering: HeatingCameraSystem.Tests
+[xUnit.net 00:00:00.18]   Discovered:  HeatingCameraSystem.Tests
+[xUnit.net 00:00:00.18]   Starting:    HeatingCameraSystem.Tests
+[xUnit.net 00:00:00.30]   Finished:    HeatingCameraSystem.Tests
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Load_MalformedJson_ThrowsActionableExceptionNamingProperty [54 ms]
+
+Test Run Successful.
+Total tests: 1
+     Passed: 1
+ Total time: 1.0105 Seconds
+

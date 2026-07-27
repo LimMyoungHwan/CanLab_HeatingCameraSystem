@@ -1,0 +1,35 @@
+﻿Test run for E:\Source\Canlab\HeatingCameraSystem\HeatingCameraSystem.Tests\bin\Debug\net8.0-windows\HeatingCameraSystem.Tests.dll (.NETCoreApp,Version=v8.0)
+A total of 1 test files matched the specified pattern.
+E:\Source\Canlab\HeatingCameraSystem\HeatingCameraSystem.Tests\bin\Debug\net8.0-windows\HeatingCameraSystem.Tests.dll
+[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 8.0.29)
+[xUnit.net 00:00:00.10]   Discovering: HeatingCameraSystem.Tests
+[xUnit.net 00:00:00.18]   Discovered:  HeatingCameraSystem.Tests
+[xUnit.net 00:00:00.19]   Starting:    HeatingCameraSystem.Tests
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Load_MissingFile_CreatesDefaultsAndPersists [58 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_OddFrameDimension_Rejected(w: 641, h: 480, prop: "Width") [1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_OddFrameDimension_Rejected(w: 640, h: 481, prop: "Height") [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_NonLoopbackListenAddress_Rejected(addr: "192.168.1.50") [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_NonLoopbackListenAddress_Rejected(addr: "0.0.0.0") [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_NonLoopbackListenAddress_Rejected(addr: "not-an-ip") [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_ZeroTick_Rejected [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Defaults_MatchSpecification [3 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.JsonRoundTrip_PreservesAllComponents [23 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.SimulatorState_ConcurrentTransitions_ConvergeConsistently [839 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_NegativeTemperatureRate_Rejected [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_DuplicateAgentId_Rejected [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_ZeroCameras_Rejected [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_TooManyCameras_Rejected [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_UnwritableOutputPath_Rejected [2 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_ZeroLiveFrameInterval_Rejected [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Load_MalformedJson_ThrowsActionableExceptionNamingProperty [23 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_DuplicateCameraIndex_Rejected [< 1 ms]
+[xUnit.net 00:00:01.21]   Finished:    HeatingCameraSystem.Tests
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_PortOutOfRange_Rejected(port: 0) [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.Validate_PortOutOfRange_Rejected(port: 70000) [< 1 ms]
+  Passed HeatingCameraSystem.Tests.SimulatorSettingsTests.SimulatorState_UnknownAgentAndBadFaultIndex_Throw [< 1 ms]
+
+Test Run Successful.
+Total tests: 21
+     Passed: 21
+ Total time: 1.8511 Seconds
+
