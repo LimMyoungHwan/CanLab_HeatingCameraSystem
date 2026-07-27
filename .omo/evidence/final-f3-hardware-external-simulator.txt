@@ -1,0 +1,15 @@
+﻿F3 real Master UI QA
+Result: PASS
+Setup:
+- Backed up %LOCALAPPDATA%\HeatingCameraSystem\hardware.json to hardware.json.omo-f3-backup.
+- Temporarily set SimulationMode=false, Plc.IpAddress=127.0.0.1, Plc.Port=2004, Nats.Url=nats://127.0.0.1:4222.
+- Started external Simulator with HeatingCameraSystem.Simulator\simulator.example.json and verified TCP listener on 127.0.0.1:2004.
+- Started Master from HeatingCameraSystem.Master/bin/Debug/net8.0-windows/HeatingCameraSystem.Master.dll.
+Observed:
+- Master window was responsive: Heating Camera Master System.
+- Dashboard rendered Agent_0 and Agent_1 as 2 Active Units with CAM-00/CAM-01 live preview cards.
+- Dashboard chamber widgets rendered TEMP 25.0C and HUMIDITY 50.0%RH from external simulator state.
+- PLC status page opened and showed green PLC status monitor, update timestamp, chamber/blackbody/servo/progress values, and bit-status lists.
+Cleanup:
+- Master and Simulator processes stopped after this evidence was recorded.
+- hardware.json restored from backup after this evidence was recorded.
