@@ -164,7 +164,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios: Happy — Windows MCP launches Simulator+Master, waits 6 s, captures `.omo/evidence/task-10-hardware-external-simulator.png`; Failure — issue `camera Agent_1 offline`, wait 6 s, capture Agent_1 `No Signal`, Agent_0 still moving, and updated online count in `.omo/evidence/task-10-hardware-external-simulator-failure.png`.
   Commit: Y | `feat(master): render dashboard live feeds and trends`
 
-- [ ] 11. Prove the full external hardware-free roundtrip
+- [x] 11. Prove the full external hardware-free roundtrip
   What to do / Must NOT do: Add an external mode to the existing `HeatingCameraSystem.E2EDriver` (preserve its current default behavior) that uses real `PlcXgtClient`, `PlcBlackBodyAdapter` and real NATS while the separate Simulator supplies PLC and camera endpoints. Execute a two-camera/four-step recipe-equivalent flow: chamber 30°C/55%RH convergence, XY/point move busy transition, BB targets 35/40/45/50°C convergence, capture commands, image-byte/path verification and final state. It must never instantiate any `Protocols.Simulation.Fake*` type in external mode. Include failure exits for missing Simulator, missing NATS, camera Offline and PLC drop. Do not launch internal fake Agents.
   Parallelization: Wave 3 | Blocked by: T6, T7, T8, T9, T10 | Blocks: final verification
   References: `HeatingCameraSystem.E2EDriver/Program.cs:10-129`; `HeatingCameraSystem.ManagerE2EDriver/Program.cs:26-28,310-318` exit-code pattern; `HeatingCameraSystem.Master/Services/RecipeEngine.cs:44-156`; `HeatingCameraSystem.Protocols/PlcXgtClient.cs:58-215`; `HeatingCameraSystem.Protocols/PlcBlackBodyAdapter.cs:18-37`.
