@@ -84,7 +84,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
 ## Todos
 > Implementation + Test = ONE todo. Never separate.
 <!-- APPEND TASK BATCHES BELOW THIS LINE WITH edit/apply_patch - never rewrite the headers above. -->
-- [ ] 1. Scaffold the standalone simulator and lock the FEnet package contract
+- [x] 1. Scaffold the standalone simulator and lock the FEnet package contract
   What to do / Must NOT do: Create `HeatingCameraSystem.Simulator/HeatingCameraSystem.Simulator.csproj` as a `net8.0` console executable, reference Core and Protocols, pin the already-used VagabondK package versions, add it to `HeatingCameraSystem.slnx`, and add a test-project reference. Add `ExternalFEnetContractTests` proving the official package pattern compiles and accepts a real `PlcXgtClient` loopback read/write: `IChannel channel = new TcpChannelProvider(IPAddress.Loopback, port)`, `new FEnetSimulationService(channel)`, register read/write callbacks, cast to `ChannelProvider` and call `Start()`. Do not write a packet parser or introduce another protocol dependency.
   Parallelization: Wave 1 | Blocked by: none | Blocks: T6, T7, T8
   References (executor has NO interview context - be exhaustive): `HeatingCameraSystem.slnx:1-11`; `HeatingCameraSystem.Protocols/HeatingCameraSystem.Protocols.csproj:7-16`; `HeatingCameraSystem.ManagerE2EDriver/HeatingCameraSystem.ManagerE2EDriver.csproj:1-22`; `HeatingCameraSystem.Protocols/PlcXgtClient.cs:32-47,297-378`; installed API `VagabondK.Protocols.LSElectric` 1.1.21 `FEnetSimulationService`; installed API `VagabondK.Protocols.Channels` 1.1.22 `TcpChannelProvider`; official sample `https://github.com/Vagabond-K/VagabondK.Protocols/blob/master/Samples/LS%20ELECTRIC/SimpleFEnetServerSimulation/Program.cs`.
@@ -92,7 +92,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios (exact tool + invocation): Happy — PowerShell runs the focused test and redirects full output to `.omo/evidence/task-1-hardware-external-simulator.txt`; Failure — start a `TcpListener` on the selected test port first, rerun the bind test, assert a deterministic address-in-use failure rather than a hang, record `.omo/evidence/task-1-hardware-external-simulator-failure.txt`.
   Commit: Y | `feat(simulator): scaffold external simulator`
 
-- [ ] 2. Define validated simulator settings and concurrent runtime state
+- [x] 2. Define validated simulator settings and concurrent runtime state
   What to do / Must NOT do: Add `SimulatorSettings.Load(string path)` and immutable settings records for endpoint, dynamics and cameras. Required defaults: loopback/2004; NATS localhost; output under simulator base directory; 100 ms dynamics tick; rates 20 °C/s, 40 %RH/s and 30 °C/s; servo 500 ms; 5 s heartbeat; 100 ms live frame interval; two cameras `Agent_0/0` and `Agent_1/1`. Add a single thread-safe `SimulatorState` containing PLC online/fault bits and camera mode (`Online`, `Faulted`, `Offline`). Validate unique/nonblank AgentIds, unique nonnegative indices, loopback-only listen address by default, ports 1-65535, positive rates/intervals, 1-64 cameras, positive even frame dimensions, and writable output path. Do not create a mutable global config singleton, hot reload or scenario DSL.
   Parallelization: Wave 1 | Blocked by: none | Blocks: T6, T7, T8
   References: `HeatingCameraSystem.AgentUI/Services/AgentUiConfig.cs:17-97` for load/create conventions; `HeatingCameraSystem.Core/Config/HardwareSettings.cs:47-177` for PLC/device defaults; `HeatingCameraSystem.AgentManager/Config/ManagerSettings.cs:3-29` for simple config style; `HeatingCameraSystem.Core/Models/CameraDescriptor.cs:1-10` for camera identity.
@@ -100,7 +100,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios: Happy — `dotnet test ... --filter FullyQualifiedName~SimulatorSettingsTests` with output `.omo/evidence/task-2-hardware-external-simulator.txt`; Failure — run Simulator with malformed JSON and assert exit code 2 plus one actionable error naming the property, evidence `.omo/evidence/task-2-hardware-external-simulator-failure.txt`.
   Commit: Y | `feat(simulator): add validated settings and state`
 
-- [ ] 3. Implement the generic XGT device-memory primitive
+- [x] 3. Implement the generic XGT device-memory primitive
   What to do / Must NOT do: Add `FEnetDeviceMemory`, a lock-protected byte store keyed by `DeviceType` using the package sample's Bit/Byte/Word/DoubleWord/LongWord semantics. Expose typed read/write helpers for `DeviceVariable` and logical `PlcSettings` tokens so the dynamics engine can update the same cells requested over FEnet. Support individual and continuous requests, bounds checking and NAK for unsupported/out-of-range access. Preserve `UseHexBitIndex=true` semantics for XGB bit areas and D-word dotted-bit masking. Do not encode business behavior in this class.
   Parallelization: Wave 1 | Blocked by: none | Blocks: T6
   References: official `SimpleFEnetServerSimulation/Program.cs` memory handlers; `HeatingCameraSystem.Protocols/PlcXgtClient.cs:252-307` token/index rules; `HeatingCameraSystem.Protocols/PlcXgtClient.cs:309-378` exact read/write shapes; `HeatingCameraSystem.Core/Config/HardwareSettings.cs:55-57,59-151` required device areas.
@@ -108,7 +108,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios: Happy — run the focused suite 20 times and save `.omo/evidence/task-3-hardware-external-simulator.txt`; Failure — request an unsupported area and an out-of-range address, assert NAK/error without process termination, save `.omo/evidence/task-3-hardware-external-simulator-failure.txt`.
   Commit: Y | `feat(simulator): add XGT device memory`
 
-- [ ] 4. Build deterministic synthetic thermal scenes and capture files
+- [x] 4. Build deterministic synthetic thermal scenes and capture files
   What to do / Must NOT do: Add `SyntheticThermalScene.NextFrame(cameraIndex)` producing valid 14-bit 640x480-by-default frames with stable per-camera background and moving hot spot, plus `SyntheticCaptureStore` that persists a JPEG under the configured simulator output and returns both path and bytes. Reuse existing `ThermalFrame`, `ThermalPreviewEncoder` and `ThermalColorizer`; do not copy OpenCV camera acquisition, NUC logic or invent another image DTO. Inject a tick/clock for deterministic tests; never use random pixels.
   Parallelization: Wave 1 | Blocked by: none | Blocks: T7
   References: `HeatingCameraSystem.Protocols/Simulation/FakeThermalFrameSource.cs:8-60` synthetic pattern precedent; `HeatingCameraSystem.Protocols/Simulation/FakeLiveThermalCamera.cs:102-129`; `HeatingCameraSystem.Protocols/Cameras/ThermalPreviewEncoder.cs`; `HeatingCameraSystem.Core/Models/NatsMessages.cs:42-60`; `HeatingCameraSystem.Agent/Services/FakeCameraCaptureService.cs:36-59` storage/identity precedent.
@@ -116,7 +116,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios: Happy — focused test output `.omo/evidence/task-4-hardware-external-simulator.txt`; Failure — configure an unwritable output path and assert a typed failure propagated to the caller without a partial success record, evidence `.omo/evidence/task-4-hardware-external-simulator-failure.txt`.
   Commit: Y | `feat(simulator): generate synthetic thermal captures`
 
-- [ ] 5. Make Dashboard live/trend data flow testable and bounded
+- [x] 5. Make Dashboard live/trend data flow testable and bounded
   What to do / Must NOT do: Extend `CameraNode`/`DashboardViewModel` with `LiveImage`, `LastLiveFrameUtc`, `OnlineAgentCount`, and bounded temperature/humidity samples. Add a public dependency-taking constructor (`IPlcController`, `INatsCommunicationService`, recipe repository/loader abstraction as required, `bool startTimers`) while preserving the parameterless production constructor. Subscribe to `agent.live.>` through existing service, decode on a background thread, freeze the bitmap, and marshal bound-property/collection changes to the Dispatcher. Normalize the latest 60 samples into two `PointCollection`s in a fixed 0..100 x 0..40 coordinate space. Cache the Dashboard instance in `MainViewModel` so navigation does not multiply long-lived NATS subscriptions/timers. Do not add a new event bus, global live-frame store or chart package.
   Parallelization: Wave 1 | Blocked by: none | Blocks: T10
   References: `HeatingCameraSystem.Master/ViewModels/DashboardViewModel.cs:59-123,136-192`; `HeatingCameraSystem.Master/ViewModels/LiveViewModel.cs:20-85` decode/Dispatcher precedent; `HeatingCameraSystem.Protocols/NatsCommunicationService.cs:72-83,111-135`; `HeatingCameraSystem.Master/ViewModels/MainViewModel.cs:14-32`; `HeatingCameraSystem.Master/Views/DashboardView.xaml:186-194,219-242,256-267`.
@@ -124,7 +124,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios: Happy — focused tests save `.omo/evidence/task-5-hardware-external-simulator.txt`; Failure — malformed JPEG and background callback must not crash or mutate `LiveImage`, and 61st sample must evict the oldest, evidence `.omo/evidence/task-5-hardware-external-simulator-failure.txt`.
   Commit: Y | `feat(master): add dashboard live trend pipeline`
 
-- [ ] 6. Implement the external FEnet chamber/blackbody/servo endpoint
+- [x] 6. Implement the external FEnet chamber/blackbody/servo endpoint
   What to do / Must NOT do: Add `FEnetPlcSimulator : IDisposable` with `Start()`/`Stop()` and `PlcDynamicsEngine`. Wire all four simulation-service request events to T3 memory. Initialize default PV/SV and status cells from settings. Every 100 ms move online chamber PV, humidity PV and both blackbody PVs toward their SVs at configured capped rates. Detect point/absolute move trigger rising edges; set X/Y busy bits immediately, hold for exactly configured 500 ms, then update target positions/current point and clear busy. Mirror equipment, admin, fan, error and IO writes/reads. `plc offline` stops accepting/responding; reconnect recreates the listener cleanly. Unsupported requests produce NAK, not crashes. No random behavior and no wall-clock sleeps inside request handlers.
   Parallelization: Wave 2 | Blocked by: T1, T2, T3 | Blocks: T8, T9, T11
   References: `HeatingCameraSystem.Protocols/PlcXgtClient.cs:58-215` full production request surface; `HeatingCameraSystem.Core/Config/HardwareSettings.cs:59-151` device map; `HeatingCameraSystem.Protocols/Simulation/FakePlcController.cs:33-241` expected state semantics only; official FEnet server sample; `HeatingCameraSystem.Master/Services/RecipeEngine.cs:57-96` polling/tolerance requirements.
@@ -132,7 +132,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios: Happy — focused suite output `.omo/evidence/task-6-hardware-external-simulator.txt`; Failure — toggle PLC offline mid-ramp, assert client read fails within its 3 s timeout and state resumes after online without corruption, evidence `.omo/evidence/task-6-hardware-external-simulator-failure.txt`.
   Commit: Y | `feat(simulator): emulate XGT chamber and blackbody`
 
-- [ ] 7. Implement external NATS camera agents
+- [x] 7. Implement external NATS camera agents
   What to do / Must NOT do: Add `NatsCameraAgentSimulator : IAsyncDisposable` using `NatsCommunicationService` and T4 generation/storage. For every configured camera, subscribe to its capture subject and the existing broadcast behavior, publish status every configured 5 s, publish color-JPEG live frames every 100 ms, and preserve AgentId/CameraIndex/RecipeStepId/Timestamp. Online cameras capture successfully with nonempty bytes/path; Faulted cameras publish an immediate failed result; Offline cameras publish no heartbeat/live/capture response. Prevent duplicate broadcast handling and isolate one camera failure from others. Do not add subjects, DTOs or bypass NATS serialization.
   Parallelization: Wave 2 | Blocked by: T1, T2, T4 | Blocks: T8, T11
   References: `HeatingCameraSystem.Protocols/Cameras/CameraNatsConnector.cs:11-20,81-99,101-223`; `HeatingCameraSystem.Protocols/NatsCommunicationService.cs:29-83`; `HeatingCameraSystem.Core/Models/NatsMessages.cs:27-60`; `HeatingCameraSystem.Tests/CameraNatsConnectorTests.cs`; `HeatingCameraSystem.Tests/NatsIntegrationTests.cs:10-104` broker probing pattern.
@@ -140,7 +140,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios: Happy — start repo Docker NATS, run focused integration tests, capture `.omo/evidence/task-7-hardware-external-simulator.txt`; Failure — set Agent_1 Offline, assert Agent_0 continues and Agent_1 emits no status/live/result, evidence `.omo/evidence/task-7-hardware-external-simulator-failure.txt`.
   Commit: Y | `feat(simulator): emulate NATS camera agents`
 
-- [ ] 8. Compose the simulator host and bounded console management
+- [x] 8. Compose the simulator host and bounded console management
   What to do / Must NOT do: Add `SimulatorHost` and `Program.Main`. Load one JSON path argument (default `simulator.json` next to executable), construct T6/T7, start PLC then NATS, print one readiness line `SIMULATOR READY plc=<address>:<port> cameras=<count> nats=<url>`, and stop gracefully on Ctrl+C/`quit`. Implement only approved commands: `status`, `plc online|offline`, `plc fault <0-19> on|off`, `camera <AgentId> online|fault|offline`, `quit`; invalid commands print usage without terminating. Exit codes: 0 normal, 2 config, 3 FEnet bind/start, 4 NATS connect. Dispose all timers/listeners/NATS once. Do not add background service installation, GUI, hot reload or command DSL.
   Parallelization: Wave 2 | Blocked by: T1, T2, T6, T7 | Blocks: T11, T12
   References: `HeatingCameraSystem.ManagerE2EDriver/Program.cs:38-87,310-318` exit/startup precedent; `HeatingCameraSystem.Agent/Program.cs:93-102` Ctrl+C lifetime; T2 contracts `SimulatorSettings`/`SimulatorState`; T6 `FEnetPlcSimulator`; T7 `NatsCameraAgentSimulator`.
@@ -148,7 +148,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios: Happy — PowerShell starts the executable, waits for readiness, pipes `status` then `quit`, verifies exit 0 and saves `.omo/evidence/task-8-hardware-external-simulator.txt`; Failure — occupy port 2004 and assert exit 3 within 5 s, then verify no listener remains, evidence `.omo/evidence/task-8-hardware-external-simulator-failure.txt`.
   Commit: Y | `feat(simulator): add host and console controls`
 
-- [ ] 9. Route real-mode blackbody operations through the external PLC boundary
+- [x] 9. Route real-mode blackbody operations through the external PLC boundary
   What to do / Must NOT do: Change only Master service selection so `SimulationMode=true` preserves `FakeBlackBodyController`, while `SimulationMode=false` creates `PlcBlackBodyAdapter(PlcController)`. Keep direct-controller replacement explicitly pending physical protocol/spec. Add adapter contract tests over T6's real FEnet endpoint and a focused service-selection assertion at the smallest testable seam; if necessary extract only a tiny `CreateBlackBodyController(settings, plc)` factory method, not a DI rewrite. Do not change recipe semantics or remove existing fakes.
   Parallelization: Wave 2 | Blocked by: T6 | Blocks: T11
   References: `HeatingCameraSystem.Master/Services/AppServices.cs:68-93`; `HeatingCameraSystem.Protocols/PlcBlackBodyAdapter.cs:8-39`; `HeatingCameraSystem.Protocols/Simulation/FakeBlackBodyController.cs:8-59`; `HeatingCameraSystem.Master/Services/RecipeEngine.cs:20-42,88-96`; `HeatingCameraSystem.Core/Interfaces/IBlackBodyController.cs:6-30`.
@@ -156,7 +156,7 @@ Your next move: start implementation, or request the optional high-accuracy dual
   QA scenarios: Happy — focused output `.omo/evidence/task-9-hardware-external-simulator.txt`; Failure — stop FEnet endpoint before `SetTemperatureAsync`, assert operation fails rather than silently snapping local fake state, evidence `.omo/evidence/task-9-hardware-external-simulator-failure.txt`.
   Commit: Y | `fix(master): route real blackbody through PLC`
 
-- [ ] 10. Replace Dashboard camera/chart placeholders with bound WPF primitives
+- [x] 10. Replace Dashboard camera/chart placeholders with bound WPF primitives
   What to do / Must NOT do: In each populated camera tile render `Image Source={Binding Camera.LiveImage}` and show `No Signal` only when image is null or older than 2 s; preserve empty-slot drag/drop state. Replace chart placeholder with a fixed-coordinate `Viewbox`/`Canvas` containing two bound `Polyline`s plus current value labels/legend. Bind the sidebar count to `OnlineAgentCount` instead of hardcoded `64 Active Units`. Add a clear empty/no-data state and preserve current dark resources/layout. Do not alter unrelated navigation, controls, drag/drop, recipe controls or add external chart packages.
   Parallelization: Wave 2 | Blocked by: T5 | Blocks: T11
   References: `HeatingCameraSystem.Master/Views/DashboardView.xaml:137-200,206-242,256-267`; `HeatingCameraSystem.Master/ViewModels/DashboardViewModel.cs:180-192`; T5 properties/tests; `HeatingCameraSystem.Master/Views/LiveView.xaml:18-30` image presentation precedent.

@@ -183,9 +183,34 @@
                                             <Border Background="#1a1f2e" Padding="8,4" CornerRadius="4,4,0,0">
                                                 <TextBlock Text="{Binding Camera.Id}" Foreground="{StaticResource TextOnSurface}" FontSize="12" FontWeight="Bold"/>
                                             </Border>
-                                            <!-- Thermal Image Placeholder -->
-                                            <Border Grid.Row="1" Background="#2f3444" Margin="8" CornerRadius="2">
-                                                <TextBlock Text="No Signal" Foreground="{StaticResource TextOnSurfaceVariant}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            <!-- Thermal Image -->
+                                            <Border Grid.Row="1" Background="#2f3444" Margin="8" CornerRadius="2" ClipToBounds="True">
+                                                <Grid>
+                                                    <Image Source="{Binding Camera.LiveImage}" Stretch="UniformToFill">
+                                                        <Image.Style>
+                                                            <Style TargetType="Image">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Camera.HasFreshLiveFrame}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Image.Style>
+                                                    </Image>
+                                                    <TextBlock Text="No Signal" Foreground="{StaticResource TextOnSurfaceVariant}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Camera.HasFreshLiveFrame}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Grid>
                                             </Border>
                                             <!-- Footer -->
                                             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,4">
@@ -236,9 +261,28 @@
                         </StackPanel>
                     </Grid>
                     
-                    <!-- Chart Placeholder -->
-                    <Border Grid.Row="1" Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4">
-                        <TextBlock Text="Chart Area Placeholder" Foreground="{StaticResource TextOnSurfaceVariant}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <!-- Chart -->
+                    <Border Grid.Row="1" Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="16">
+                        <Grid>
+                            <TextBlock Text="No trend data" Foreground="{StaticResource TextOnSurfaceVariant}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding TemperatureTrendPoints.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <Viewbox Stretch="Fill">
+                                <Canvas Width="100" Height="40">
+                                    <Polyline Points="{Binding TemperatureTrendPoints}" Stroke="#ffb4ab" StrokeThickness="1.4" StrokeLineJoin="Round"/>
+                                    <Polyline Points="{Binding HumidityTrendPoints}" Stroke="{StaticResource Primary}" StrokeThickness="1.4" StrokeLineJoin="Round"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Grid>
                     </Border>
                 </Grid>
             </Border>
@@ -257,7 +301,7 @@
                 <StackPanel Grid.Row="0" Margin="16">
                     <Grid Margin="0,0,0,8">
                         <TextBlock Text="Cameras" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource TextOnSurface}"/>
-                        <TextBlock Text="64 Active Units" FontSize="11" Foreground="{StaticResource Secondary}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding OnlineAgentCount, StringFormat={}{0} Active Units}" FontSize="11" Foreground="{StaticResource Secondary}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </Grid>
                     <TextBox Background="#090e1c" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}" Padding="8,6" Text="Search devices..."/>
                 </StackPanel>
