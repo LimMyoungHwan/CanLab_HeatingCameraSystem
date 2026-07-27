@@ -7,5 +7,6 @@
   <Project Path="HeatingCameraSystem.ManagerE2EDriver/HeatingCameraSystem.ManagerE2EDriver.csproj" />
   <Project Path="HeatingCameraSystem.Master/HeatingCameraSystem.Master.csproj" />
   <Project Path="HeatingCameraSystem.Protocols/HeatingCameraSystem.Protocols.csproj" />
+  <Project Path="HeatingCameraSystem.Simulator/HeatingCameraSystem.Simulator.csproj" />
   <Project Path="HeatingCameraSystem.Tests/HeatingCameraSystem.Tests.csproj" />
 </Solution>
