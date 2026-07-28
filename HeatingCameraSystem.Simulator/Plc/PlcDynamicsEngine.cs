@@ -12,6 +12,7 @@ public sealed class PlcDynamicsEngine : IDisposable
     private readonly Timer _timer;
     private readonly object _gate = new();
     private readonly bool[] _moveLatch;
+    private readonly CancellationTokenSource _cts = new();
     private bool _disposed;
 
     public PlcDynamicsEngine(FEnetDeviceMemory memory, PlcSettings plc, DynamicsSettings dynamics)
@@ -28,7 +29,9 @@ public sealed class PlcDynamicsEngine : IDisposable
     public void Dispose()
     {
         _disposed = true;
+        _cts.Cancel();
         _timer.Dispose();
+        // ponytail: not disposing _cts — an in-flight Tick may still reference its Token; Cancel is enough
     }
 
     private void Tick()
@@ -85,9 +88,17 @@ public sealed class PlcDynamicsEngine : IDisposable
     {
         _memory.WriteBitToken(_plc.ServoXBusyBit, true);
         _memory.WriteBitToken(_plc.ServoYBusyBit, true);
-        await Task.Delay(_dynamics.ServoBusyMs).ConfigureAwait(false);
+        try
+        {
+            await Task.Delay(_dynamics.ServoBusyMs, _cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // engine disposed mid-move: stop before mutating shared memory
+        }
         lock (_gate)
         {
+            if (_disposed) return;
             var (xToken, yToken) = PointCoordDevices(position);
             _memory.WriteWordToken(_plc.ServoXPos, _memory.ReadWordToken(xToken));
             _memory.WriteWordToken(_plc.ServoYPos, _memory.ReadWordToken(yToken));

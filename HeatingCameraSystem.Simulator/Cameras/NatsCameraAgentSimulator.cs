@@ -92,13 +92,25 @@ public sealed class NatsCameraAgentSimulator : ICameraAgentEndpoint
         {
             CameraMode mode = _state.GetCameraMode(camera.AgentId);
             if (mode == CameraMode.Offline) continue;
-            _ = _nats.PublishAgentStatusAsync(new AgentStatusMessage
+            _ = PublishStatusSafeAsync(camera);
+        }
+    }
+
+    private async Task PublishStatusSafeAsync(CameraSettings camera)
+    {
+        try
+        {
+            await _nats.PublishAgentStatusAsync(new AgentStatusMessage
             {
                 AgentId = camera.AgentId,
                 CameraIndex = camera.CameraIndex,
                 CameraStatus = CameraStatus.Connected,
                 Timestamp = DateTime.UtcNow
-            });
+            }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Simulator] status publish dropped: {ex.Message}");
         }
     }
 
@@ -112,15 +124,22 @@ public sealed class NatsCameraAgentSimulator : ICameraAgentEndpoint
                 if (_state.GetCameraMode(camera.AgentId) != CameraMode.Online) continue;
                 ThermalFrame frame = _scene.NextFrame(camera.CameraIndex);
                 byte[] jpeg = ThermalPreviewEncoder.EncodeColorJpeg(frame);
-                await _nats.PublishLiveFrameAsync(new LiveFrameMessage
+                try
                 {
-                    AgentId = camera.AgentId,
-                    CameraIndex = camera.CameraIndex,
-                    ImageBytes = jpeg,
-                    Width = frame.Width,
-                    Height = frame.Height,
-                    Timestamp = DateTime.UtcNow
-                }).ConfigureAwait(false);
+                    await _nats.PublishLiveFrameAsync(new LiveFrameMessage
+                    {
+                        AgentId = camera.AgentId,
+                        CameraIndex = camera.CameraIndex,
+                        ImageBytes = jpeg,
+                        Width = frame.Width,
+                        Height = frame.Height,
+                        Timestamp = DateTime.UtcNow
+                    }).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Simulator] live frame publish dropped: {ex.Message}");
+                }
             }
         }
     }
