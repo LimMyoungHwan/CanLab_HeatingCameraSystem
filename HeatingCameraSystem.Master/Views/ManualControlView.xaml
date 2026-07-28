@@ -140,6 +140,28 @@
                         </ItemsControl>
                     </StackPanel>
                 </Border>
+
+                <Border Style="{StaticResource Card}" Width="360">
+                    <StackPanel>
+                        <TextBlock Text="흑체 (Black Body)" Style="{StaticResource Head}"/>
+                        
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="흑체1 목표(℃)" Style="{StaticResource Lbl}"/>
+                            <TextBox Text="{Binding BlackBody1Target}" Width="80" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="12,8" VerticalAlignment="Center"/>
+                            <Button Content="적용" Style="{StaticResource Btn}" Command="{Binding ApplyBlackBody1Command}"/>
+                            <TextBlock Text="현재:" Style="{StaticResource Lbl}" Margin="10,0,10,0"/>
+                            <TextBlock Text="{Binding BlackBody1Current, StringFormat={}{0:0.0} ℃}" Foreground="#47eaed" FontWeight="Bold" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="흑체2 목표(℃)" Style="{StaticResource Lbl}"/>
+                            <TextBox Text="{Binding BlackBody2Target}" Width="80" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="12,8" VerticalAlignment="Center"/>
+                            <Button Content="적용" Style="{StaticResource Btn}" Command="{Binding ApplyBlackBody2Command}"/>
+                            <TextBlock Text="현재:" Style="{StaticResource Lbl}" Margin="10,0,10,0"/>
+                            <TextBlock Text="{Binding BlackBody2Current, StringFormat={}{0:0.0} ℃}" Foreground="#47eaed" FontWeight="Bold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
             </WrapPanel>
         </ScrollViewer>
     </DockPanel>

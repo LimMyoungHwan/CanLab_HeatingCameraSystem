@@ -33,6 +33,13 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private bool _pairGlass;
         [ObservableProperty] private bool _humidityControl;
 
+        [ObservableProperty] private float _blackBody1Target = 25f;
+        [ObservableProperty] private float _blackBody2Target = 25f;
+        [ObservableProperty] private float _blackBody1Current;
+        [ObservableProperty] private float _blackBody2Current;
+
+        private bool _blackBodyPolling;
+
         public int[] PointNumbers { get; } = Enumerable.Range(1, 20).ToArray();
 
         public ManualControlViewModel()
@@ -72,6 +79,12 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand]
         private Task MoveToPoint(int index) => RunAsync(p => p.MoveServoToPositionAsync(index), $"{index}포인트 이동");
 
+        [RelayCommand]
+        private Task ApplyBlackBody1() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(0, BlackBody1Target), "흑체1 온도");
+
+        [RelayCommand]
+        private Task ApplyBlackBody2() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(1, BlackBody2Target), "흑체2 온도");
+
         public Task Jog(ServoAxis axis, bool positive, bool on)
         {
             var plc = AppServices.PlcController;
@@ -98,6 +111,41 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[ManualControl] {ex.Message}");
+            }
+
+            await PollBlackBodyAsync();
+        }
+
+        private async Task PollBlackBodyAsync()
+        {
+            var bb = AppServices.BlackBodyController;
+            if (bb == null || _blackBodyPolling) return;
+            _blackBodyPolling = true;
+            try
+            {
+                if (bb.Count > 0) BlackBody1Current = await bb.GetCurrentTemperatureAsync(0);
+                if (bb.Count > 1) BlackBody2Current = await bb.GetCurrentTemperatureAsync(1);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ManualControl] blackbody poll: {ex.Message}");
+            }
+            finally { _blackBodyPolling = false; }
+        }
+
+        private async Task RunBlackBodyAsync(Func<IBlackBodyController, Task> action, string label)
+        {
+            var bb = AppServices.BlackBodyController;
+            if (bb == null) { StatusMessage = "흑체 컨트롤러 미초기화"; return; }
+            try
+            {
+                await action(bb);
+                StatusMessage = $"{label} 적용됨";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"{label} 오류: {ex.Message}";
                 System.Diagnostics.Debug.WriteLine($"[ManualControl] {ex.Message}");
             }
         }
