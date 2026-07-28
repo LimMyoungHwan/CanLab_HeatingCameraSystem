@@ -264,6 +264,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 }
             }
             UpdateOnlineAgentCount();
+            RefreshLiveFrameFreshness(DateTime.UtcNow);
         }
 
         public void RefreshLiveFrameFreshness(DateTime utcNow)
