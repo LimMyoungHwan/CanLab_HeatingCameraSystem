@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Threading;
 using HeatingCameraSystem.AgentUI.Services;
 using HeatingCameraSystem.AgentUI.ViewModels;
+using HeatingCameraSystem.Core.Config;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Protocols;
@@ -52,6 +53,14 @@ namespace HeatingCameraSystem.AgentUI
             Func<CameraDescriptor, ICameraSerialClient?> serialFactory = config.SimulationMode
                 ? (d => string.IsNullOrWhiteSpace(d.SerialPortName) ? null : new FakeCameraSerialClient(d.SerialPortName!))
                 : (d => string.IsNullOrWhiteSpace(d.SerialPortName) ? null : new ClSerialCameraClient(d.SerialPortName!));
+
+            ICameraComPairingService pairing = config.SimulationMode
+                ? new FakeCameraComPairingService()
+                : new CameraComPairingService(
+                    new WmiCameraEnumerator(),
+                    new WmiUsbSerialEnumerator(),
+                    portName => new ClSerialCameraClient(portName),
+                    new HardwareSettings());
 
             _manager = new CameraRuntimeManager(sourceFactory);
             _mainViewModel = new MainViewModel(config.SimulationMode ? "AgentUI — SIMULATION" : "AgentUI");
@@ -116,7 +125,7 @@ namespace HeatingCameraSystem.AgentUI
 
             _mainViewModel.DataBrowser = new DataBrowserViewModel(_store);
             _mainViewModel.Logs = new LogViewerViewModel(AgentUiLog.LogDir);
-            _mainViewModel.Settings = new SettingsViewModel(config);
+            _mainViewModel.Settings = new SettingsViewModel(config, pairing);
 
             var window = new MainWindow { DataContext = _mainViewModel };
             MainWindow = window;

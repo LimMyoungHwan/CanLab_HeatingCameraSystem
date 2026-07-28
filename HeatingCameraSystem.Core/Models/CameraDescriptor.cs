@@ -5,5 +5,5 @@ namespace HeatingCameraSystem.Core.Models
     /// <see cref="AgentId"/> is the stable logical NATS identity (see BuildAgentId);
     /// <see cref="OpenCvIndex"/> is the physical OpenCV/DirectShow device index.
     /// </summary>
-    public sealed record CameraDescriptor(string AgentId, int OpenCvIndex, string Alias, string? SerialPortName = null);
+    public sealed record CameraDescriptor(string AgentId, int OpenCvIndex, string Alias, string? SerialPortName = null, string? DeviceName = null);
 }

@@ -240,6 +240,7 @@
                                 <DataGridTextColumn Header="Agent Id" Width="*" Binding="{Binding AgentId}"/>
                                 <DataGridTextColumn Header="OpenCV Index" Width="110" Binding="{Binding OpenCvIndex}"/>
                                 <DataGridTextColumn Header="Alias" Width="*" Binding="{Binding Alias}"/>
+                                <DataGridTextColumn Header="Device Name" Width="*" Binding="{Binding DeviceName}"/>
                                 <DataGridTextColumn Header="Serial COM" Width="100" Binding="{Binding SerialPortName}"/>
                                 <DataGridTemplateColumn Header="" Width="80">
                                     <DataGridTemplateColumn.CellTemplate>
@@ -254,6 +255,7 @@
                         </DataGrid>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <Button Content="Add camera" Command="{Binding AddCameraCommand}"/>
+                            <Button Content="COM 자동 감지" Command="{Binding AutoDetectSerialCommand}"/>
                             <Button Content="Save" Command="{Binding SaveCommand}"/>
                         </StackPanel>
                         <TextBlock Text="{Binding StatusText}" Foreground="#B0B0B0" Margin="0,8,0,0"/>
