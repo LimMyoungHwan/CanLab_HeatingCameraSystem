@@ -167,23 +167,23 @@ namespace HeatingCameraSystem.Core.Config
     }
 
     /// <summary>
-    /// CI Systems SR-800R 흑체 직접-제어 설정. Enabled=true이면 PLC 경유 대신 SR-800R 컨트롤러를
+    /// CI Systems SR-800N 흑체 직접-제어 설정. Enabled=true이면 PLC 경유 대신 SR-800N 컨트롤러를
     /// RS-232로 직접 제어한다(컨트롤러 1대 = 흑체 1개, 대수 = Units.Count). 시리얼 파라미터는
-    /// Units에서 포트별로 지정(SR-800R 규격 기본 9600 8N1). InterMessageDelayMs는 프로토콜상
-    /// 메시지 간 최소 간격(300ms 규격). Simulated=true이면 물리 장비 없이 동일한 컨트롤러/프로토콜
-    /// 경로로 인메모리 SR-800R을 구동한다(현재값이 SimulatedRampCelsiusPerSecond 속도로 목표에 수렴).
+    /// Units에서 포트별로 지정(SR-800N 규격 115200 8N1). InterMessageDelayMs는 메시지 간
+    /// 안전 간격(SR-800N 규격상 필수 아님, 기본 50ms). Simulated=true이면 물리 장비 없이 동일한
+    /// 컨트롤러/프로토콜 경로로 인메모리 SR-800N을 구동한다(현재값이 SimulatedRampCelsiusPerSecond 속도로 목표에 수렴).
     /// </summary>
     public class BlackBodySettings
     {
         public bool Enabled { get; set; } = false;
         public bool Simulated { get; set; } = false;
         public double SimulatedRampCelsiusPerSecond { get; set; } = 5.0;
-        public int InterMessageDelayMs { get; set; } = 300;
+        public int InterMessageDelayMs { get; set; } = 50;
         public int ReadTimeoutMs { get; set; } = 1500;
         public List<SerialSettings> Units { get; set; } = new()
         {
-            new SerialSettings { PortName = "COM4" },
-            new SerialSettings { PortName = "COM5" }
+            new SerialSettings { PortName = "COM4", BaudRate = 115200 },
+            new SerialSettings { PortName = "COM5", BaudRate = 115200 }
         };
     }
 

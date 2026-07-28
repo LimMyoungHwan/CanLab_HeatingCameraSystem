@@ -9,10 +9,11 @@ using HeatingCameraSystem.Core.Interfaces;
 namespace HeatingCameraSystem.Protocols
 {
     /// <summary>
-    /// CI Systems SR-800R 흑체 직접-제어. 컨트롤러 1대 = 흑체 1개이므로 유닛마다 독립
+    /// CI Systems SR-800N 흑체 직접-제어. 컨트롤러 1대 = 흑체 1개이므로 유닛마다 독립
     /// <see cref="ISrLink"/>(대수 = <see cref="BlackBodySettings.Units"/>.Count)를 연다.
-    /// 프로토콜(매뉴얼 Chapter 6): 9600 8N1, Host→기기 EOM=CR, 기기→Host EOM=CR+LF,
-    /// 메시지 간 최소 300ms. 연결 시 각 유닛을 Absolute 모드(SETMODE 1)로 맞춘다.
+    /// 프로토콜(SR-800N 통신 규격 6057060): RS-232 115200 8N1, 바이너리 VIP 프레임
+    /// (0xAA sync + 파라미터 코드 + IEEE754 big-endian + 체크섬). 연결 시 각 유닛을
+    /// Absolute 모드(OperationMode 0x07F0=1)로 맞춘다.
     /// <see cref="BlackBodySettings.Simulated"/>=true이면 실 시리얼 대신 <see cref="SimulatedSrDevice"/>를
     /// 사용해 물리 장비 없이 동일 경로로 동작한다.
     /// </summary>
@@ -87,10 +88,10 @@ namespace HeatingCameraSystem.Protocols
             => WithUnit(blackBodyIndex, u => SendNoReplyLocked(u, SrProtocol.SetTemperature(celsius)));
 
         public Task<float> GetCurrentTemperatureAsync(int blackBodyIndex)
-            => WithUnit(blackBodyIndex, u => QueryLocked(u, SrProtocol.GetTemperature()));
+            => WithUnit(blackBodyIndex, u => QueryFloatLocked(u, SrProtocol.GetTemperature(), SrProtocol.ParamCurrentTemperature));
 
         public Task<float> GetTargetTemperatureAsync(int blackBodyIndex)
-            => WithUnit(blackBodyIndex, u => QueryLocked(u, SrProtocol.GetTargetTemperature()));
+            => WithUnit(blackBodyIndex, u => QueryFloatLocked(u, SrProtocol.GetTargetTemperature(), SrProtocol.ParamCurrentSetPoint));
 
         public void Dispose()
         {
@@ -130,7 +131,7 @@ namespace HeatingCameraSystem.Protocols
             if (!u.Link.IsOpen) u.Link.Open();
         }
 
-        private Task SendNoReplyLocked(Unit u, string command)
+        private Task SendNoReplyLocked(Unit u, byte[] command)
             => Task.Run(() =>
             {
                 if (!_settings.Simulated) RespectGap(u);
@@ -138,14 +139,14 @@ namespace HeatingCameraSystem.Protocols
                 u.LastSendTicks = Stopwatch.GetTimestamp();
             });
 
-        private Task<float> QueryLocked(Unit u, string command)
+        private Task<float> QueryFloatLocked(Unit u, byte[] request, ushort parameterId)
             => Task.Run(() =>
             {
                 if (!_settings.Simulated) RespectGap(u);
                 u.Link.DiscardInBuffer();
-                u.Link.Write(command);
+                u.Link.Write(request);
                 u.LastSendTicks = Stopwatch.GetTimestamp();
-                return SrProtocol.ParseTemperature(u.Link.ReadLine());
+                return SrProtocol.ParseFloat(u.Link.Read(), parameterId);
             });
 
         private void RespectGap(Unit u)

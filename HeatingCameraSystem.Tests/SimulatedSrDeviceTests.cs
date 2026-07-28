@@ -59,17 +59,20 @@ public class SimulatedSrDeviceTests
         device.Write(SrProtocol.SetTemperature(40f));
         device.Write(SrProtocol.GetTargetTemperature());
 
-        Assert.Equal(40f, SrProtocol.ParseTemperature(device.ReadLine()), precision: 1);
+        Assert.Equal(40f, SrProtocol.ParseFloat(device.Read(), SrProtocol.ParamCurrentSetPoint), precision: 1);
     }
 
     [Fact]
-    public void SimulatedDevice_UnknownCommand_ReportsInvalid()
+    public void SimulatedDevice_GetCurrentTemperature_ReturnsFloatFrame()
     {
         var device = new SimulatedSrDevice(Sim());
         device.Open();
 
-        device.Write("BOGUS\r");
+        device.Write(SrProtocol.SetTemperature(30f));
+        device.Write(SrProtocol.GetTemperature());
 
-        Assert.Contains("Invalid", device.ReadLine());
+        byte[] frame = device.Read();
+        Assert.Equal(SrProtocol.Sync, frame[0]);
+        Assert.Equal(30f, SrProtocol.ParseFloat(frame, SrProtocol.ParamCurrentTemperature), precision: 1);
     }
 }

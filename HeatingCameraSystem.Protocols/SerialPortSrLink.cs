@@ -4,7 +4,6 @@ using HeatingCameraSystem.Core.Config;
 
 namespace HeatingCameraSystem.Protocols
 {
-    /// <summary>실제 RS-232 포트를 감싼 <see cref="ISrLink"/> 구현 (9600 8N1, 기기→Host EOM=CR+LF).</summary>
     public sealed class SerialPortSrLink : ISrLink
     {
         private readonly SerialSettings _cfg;
@@ -26,7 +25,6 @@ namespace HeatingCameraSystem.Protocols
             var stop = Enum.TryParse<StopBits>(_cfg.StopBits, true, out var sb) ? sb : StopBits.One;
             _port = new SerialPort(_cfg.PortName, _cfg.BaudRate, parity, _cfg.DataBits, stop)
             {
-                NewLine = "\r\n",
                 ReadTimeout = _readTimeoutMs,
                 WriteTimeout = 2000
             };
@@ -38,9 +36,36 @@ namespace HeatingCameraSystem.Protocols
             if (_port?.IsOpen == true) _port.Close();
         }
 
-        public void Write(string data) => _port!.Write(data);
+        public void Write(byte[] data) => _port!.Write(data, 0, data.Length);
 
-        public string ReadLine() => _port!.ReadLine();
+        public byte[] Read()
+        {
+            SerialPort port = _port ?? throw new InvalidOperationException("SR-800N serial port not open.");
+
+            int sync;
+            do { sync = port.ReadByte(); } while (sync != SrProtocol.Sync);
+
+            int address = port.ReadByte();
+            int sizeHi = port.ReadByte();
+            int sizeLo = port.ReadByte();
+            int size = (sizeHi << 8) | sizeLo;
+
+            var frame = new byte[4 + size];
+            frame[0] = (byte)sync;
+            frame[1] = (byte)address;
+            frame[2] = (byte)sizeHi;
+            frame[3] = (byte)sizeLo;
+
+            int read = 0;
+            while (read < size)
+            {
+                int n = port.Read(frame, 4 + read, size - read);
+                if (n <= 0) throw new TimeoutException("SR-800N serial read returned no data.");
+                read += n;
+            }
+
+            return frame;
+        }
 
         public void DiscardInBuffer() => _port!.DiscardInBuffer();
 

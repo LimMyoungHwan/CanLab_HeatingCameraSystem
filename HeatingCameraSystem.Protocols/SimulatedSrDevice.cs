@@ -1,23 +1,18 @@
 using System;
+using System.Buffers.Binary;
 using System.Diagnostics;
-using System.Globalization;
 using HeatingCameraSystem.Core.Config;
 
 namespace HeatingCameraSystem.Protocols
 {
-    /// <summary>
-    /// 물리 장비 없이 SR-800R과 동일하게 동작하는 인메모리 흑체 (<see cref="ISrLink"/> 구현).
-    /// <see cref="SrBlackBodyController"/>가 실장비와 똑같이 명령 문자열을 Write하고 응답을 ReadLine하므로
-    /// 명령/응답/파싱 경로가 동일하다. 현재값(PV)은 SETTEMPERATURE로 정한 목표(SV)를 향해
-    /// 램프 속도(℃/s)만큼 시간에 따라 수렴한다(흑체 열적 관성 재현).
-    /// </summary>
     public sealed class SimulatedSrDevice : ISrLink
     {
         private readonly double _rampPerSec;
         private double _sv = 25.0;
         private double _pvAtSet = 25.0;
         private long _setAtTicks;
-        private string _pendingReply = "*InvalidCommand*";
+        private byte _mode = SrProtocol.ModeAbsolute;
+        private byte[] _pendingResponse = Array.Empty<byte>();
         private bool _open;
 
         public SimulatedSrDevice(BlackBodySettings settings)
@@ -30,45 +25,56 @@ namespace HeatingCameraSystem.Protocols
         public void Open() => _open = true;
         public void Close() => _open = false;
         public void DiscardInBuffer() { }
-        public string ReadLine() => _pendingReply;
+        public byte[] Read() => _pendingResponse;
         public void Dispose() => Close();
 
-        public void Write(string data)
+        public void Write(byte[] data)
         {
-            string line = data.TrimEnd('\r', '\n').Trim();
-            string[] parts = line.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            string cmd = parts.Length > 0 ? parts[0].ToUpperInvariant() : string.Empty;
-            string? arg = parts.Length > 1 ? parts[1] : null;
+            if (data is null || data.Length < 7 || data[0] != SrProtocol.Sync) return;
 
-            switch (cmd)
+            byte service = data[4];
+            int size = (data[2] << 8) | data[3];
+            int checksumIndex = 4 + size - 1;
+            if (checksumIndex >= data.Length) return;
+
+            int i = 5;
+            while (i + 4 <= checksumIndex)
             {
-                case "SETMODE":
-                    _pendingReply = string.Empty;
+                ushort id = (ushort)((data[i] << 8) | data[i + 1]);
+                int parameterSize = (data[i + 2] << 8) | data[i + 3];
+                int parameterData = i + 4;
+
+                if (service == SrProtocol.ServiceSetParameters)
+                    ApplySet(id, data, parameterData, parameterSize);
+                else if (service == SrProtocol.ServiceGetParameters)
+                    _pendingResponse = BuildGetResponse(id);
+
+                i = parameterData + parameterSize;
+            }
+        }
+
+        private void ApplySet(ushort id, byte[] data, int offset, int size)
+        {
+            switch (id)
+            {
+                case SrProtocol.ParamOperationMode when size >= 1:
+                    _mode = data[offset];
                     break;
-                case "SETTEMPERATURE":
-                    if (double.TryParse(arg, NumberStyles.Float, CultureInfo.InvariantCulture, out double v))
-                    {
-                        _pvAtSet = CurrentPv();
-                        _sv = v;
-                        _setAtTicks = Stopwatch.GetTimestamp();
-                        _pendingReply = string.Empty;
-                    }
-                    else
-                    {
-                        _pendingReply = "*InvalidOperand*";
-                    }
-                    break;
-                case "GETTEMPERATURE":
-                    _pendingReply = Fmt(CurrentPv());
-                    break;
-                case "GETTARGETTEMPERATURE":
-                    _pendingReply = Fmt(_sv);
-                    break;
-                default:
-                    _pendingReply = "*InvalidCommand*";
+                case SrProtocol.ParamSetPointAbsolute when size >= 4:
+                    _pvAtSet = CurrentPv();
+                    _sv = BinaryPrimitives.ReadSingleBigEndian(data.AsSpan(offset, 4));
+                    _setAtTicks = Stopwatch.GetTimestamp();
                     break;
             }
         }
+
+        private byte[] BuildGetResponse(ushort id) => id switch
+        {
+            SrProtocol.ParamCurrentTemperature => SrProtocol.BuildSetFloat(id, (float)CurrentPv()),
+            SrProtocol.ParamCurrentSetPoint => SrProtocol.BuildSetFloat(id, (float)_sv),
+            SrProtocol.ParamOperationMode => SrProtocol.BuildSetByte(id, _mode),
+            _ => Array.Empty<byte>()
+        };
 
         private double CurrentPv()
         {
@@ -78,7 +84,5 @@ namespace HeatingCameraSystem.Protocols
             if (Math.Abs(delta) <= maxStep) return _sv;
             return _pvAtSet + Math.Sign(delta) * maxStep;
         }
-
-        private static string Fmt(double v) => v.ToString("0.000", CultureInfo.InvariantCulture);
     }
 }
