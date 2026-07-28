@@ -7,6 +7,11 @@ x64/
 x86/
 [Ww][Ii][Nn]32/
 
+# Deployment output (publish.ps1)
+master_bin/
+agent_bin/
+agent_console_bin/
+
 # Visual Studio / Rider
 .vs/
 .idea/
