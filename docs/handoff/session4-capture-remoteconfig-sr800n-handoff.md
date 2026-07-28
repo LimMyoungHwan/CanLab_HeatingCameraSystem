@@ -38,7 +38,16 @@
 데이터-무결성 리스크(핸드오프 최우선 항목)는 **직렬화기-레벨 + 실 브로커** 두 각도로 종결:
 - **영구 가드**(`HeatingCameraSystem.Tests/AgentConfigSerializationTests.cs`, 3건, 외부의존 0): 실제 `NatsJsonSerializerRegistry.Default`(=`NatsCommunicationService`가 쓰는 그 직렬화기)로 `AgentConfigApplyMessage`/`AgentConfigSnapshotMessage` 왕복. JSON 바이트는 TCP 전송에서 무손실이므로 이 자기-왕복이 config 무결성의 **완전한** 증명. `CameraDescriptor`(positional record)의 전 필드 — `AgentId/OpenCvIndex/Alias` + nullable `SerialPortName/DeviceName`(값 설정/null 둘 다) + 비-기본 enum `Tiff16` — 보존 확인.
 - **실 브로커 스모크**(임시, 통과 후 제거): 가동 NATS(4222) 대상 production `NatsCommunicationService` 2인스턴스로 Master↔Agent 배선 미러(get→snapshot→set→ack). 토픽 배선 + 구독 전달 + record 왕복 실 와이어 통과.
-- **결론**: `CameraDescriptor` record 왕복 정상 → **plain-DTO 불필요**. 남은 것은 순수 시각 확인뿐(두 WPF 앱 클릭)이며, 그 밑단 전송/직렬화/토픽은 위로 증명됨 — 필요 시 운영자가 UI로 최종 육안 확인.
+- **실 AgentUI 프로세스 QA**(2026-07-28 후속, 임시 테스트로 실행 후 제거): 실제 `HeatingCameraSystem.AgentUI.exe`(sim, Agent_1/Agent_2) 기동 → NATS heartbeat 수신(프로세스 생존+연결 증명) → Master측 실 `NatsCommunicationService`로 `get`→snapshot(실 agentui.json 반영 확인: SimMode·Tiff16·COM7/COM8) → `set`(CaptureBurstCount=7·HeartbeatSeconds=11·StoragePath 마커)→ack → **agentui.json 디스크 실제 갱신 확인**. inline 람다 아니라 **실 App.xaml.cs `getConfigSnapshot`/`applyConfigSnapshot`+`config.Save()` 영속화**까지 증명.
+- **결론**: `CameraDescriptor` record 왕복 정상 → **plain-DTO 불필요**. Phase 2는 **직렬화 · 실 브로커 · 실 AgentUI 프로세스 · 디스크 영속화 4중 증명 완료**.
+
+### ⚠️ Phase 2 잔여 — 다음 세션 (디스플레이 필요)
+- **남은 것은 Master WPF 시각 클릭 하나뿐**: Master "Agent 설정" 화면에서 온라인 드롭다운→조회→카메라그리드 로드→필드 편집→전송→ack 표시를 **육안 확인**. 밑단(전송/직렬화/토픽/영속화)은 위로 전부 증명됨 = 남은 건 사소한 MVVM 커맨드 바인딩 확인.
+- **이번 세션 환경은 headless** → Windows `State-Tool: screen grab failed`. WPF 프로세스는 정상 기동·로직 실행되나 **스크린샷 자동화 불가**. ⇒ **디스플레이 가능한 머신에서** 아래 절차로 진행:
+  1. `agentui.json` 백업 → sim + Agent_1/Agent_2로 임시 설정.
+  2. `AgentUI.exe`(NATS heartbeat/config 구독) + `Master.exe` 동시 실행.
+  3. Master "Agent 설정" → 온라인 표시 → 조회(카메라그리드 로드=CameraDescriptor 라운드트립 육안) → 필드 편집 → 전송 → ack "저장됨. 재시작 필요" → `agentui.json` 반영 확인.
+  4. `agentui.json` 복원.
 
 ### SR-800N 실운영
 - `hardware.json`의 `BlackBody.Units` 포트(COM4/COM5 placeholder)를 실 SR-800N COM으로, `BlackBody.Enabled=true` 설정.
@@ -55,8 +64,8 @@
 
 ## 빌드/테스트
 ```powershell
-dotnet build HeatingCameraSystem.slnx          # 12 proj 0/0
-dotnet test HeatingCameraSystem.Tests/HeatingCameraSystem.Tests.csproj  # 173 (flaky 1 주의)
+dotnet build HeatingCameraSystem.slnx          # 0/0
+dotnet test HeatingCameraSystem.Tests/HeatingCameraSystem.Tests.csproj  # 176 (flaky 1 주의)
 ```
 
 ## 환경
