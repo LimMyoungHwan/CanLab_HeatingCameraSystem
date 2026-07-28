@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -60,7 +61,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private string _syncStatusText = "Ready";
 
         [ObservableProperty]
-        private double _syncProgress = 75;
+        private double _syncProgress;
 
         public ObservableCollection<MappingAgent> AvailableAgents { get; } = new ObservableCollection<MappingAgent>();
         public ObservableCollection<MappingSlot> Slots { get; } = new ObservableCollection<MappingSlot>();
@@ -82,22 +83,22 @@ namespace HeatingCameraSystem.Master.ViewModels
                 });
             }
 
-            // 2. Available Cameras & Agents
-            // 4 Agents, each with 16 cameras
-            for (int i = 1; i <= 4; i++)
+            foreach (var group in AppServices.CameraDeviceRepo.GetAllAsync().GetAwaiter().GetResult()
+                         .OrderBy(d => d.PCId).ThenBy(d => d.OpenCvIndex)
+                         .GroupBy(d => string.IsNullOrEmpty(d.PCId) ? "Unknown PC" : d.PCId))
             {
                 var agent = new MappingAgent
                 {
-                    Name = $"Agent PC #{i}",
-                    TotalCount = 16,
-                    IsExpanded = i == 1
+                    Name = group.Key,
+                    TotalCount = group.Count(),
+                    IsExpanded = true
                 };
 
-                for (int j = 1; j <= 16; j++)
+                foreach (var d in group)
                 {
                     agent.Cameras.Add(new MappingCamera
                     {
-                        Id = $"CAM-{(i - 1) * 16 + j:D2}",
+                        Id = string.IsNullOrEmpty(d.Alias) ? d.AgentId : d.Alias,
                         IsAssigned = false
                     });
                 }
@@ -121,6 +122,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void UpdateAssignedCount()
         {
             AssignedCount = Slots.Count(s => s.HasCamera);
+            SyncProgress = TotalSlots > 0 ? (double)AssignedCount / TotalSlots * 100 : 0;
         }
 
         [RelayCommand]
@@ -140,6 +142,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
 
             UpdateAssignedCount();
+            SyncStatusText = "Unsaved changes";
         }
 
         [RelayCommand]
@@ -147,6 +150,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             var mappings = Slots.Select(s => new CameraMappingConfig { SlotId = s.PositionId, CameraId = s.CameraId });
             AppServices.MappingRepo.SaveAllAsync(mappings).GetAwaiter().GetResult();
+            SyncStatusText = $"Saved {DateTime.Now:HH:mm:ss}";
         }
 
         [RelayCommand]
@@ -178,6 +182,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             slot.CameraId = camera.Id;
             camera.IsAssigned = true;
             UpdateAssignedCount();
+            SyncStatusText = "Unsaved changes";
         }
 
         [RelayCommand]
@@ -195,6 +200,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
 
             UpdateAssignedCount();
+            SyncStatusText = "Unsaved changes";
         }
     }
 }

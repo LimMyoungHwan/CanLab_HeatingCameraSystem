@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Config;
@@ -19,6 +20,7 @@ namespace HeatingCameraSystem.Master.Services
         private readonly string? _imageCacheDir;
         private readonly ICameraDeviceRepository? _deviceRepo;
         private readonly IBlackBodyController _blackBody;
+        private readonly ICameraMappingRepository? _mappingRepo;
 
         public RecipeEngine(
             IPlcController plcController,
@@ -27,7 +29,8 @@ namespace HeatingCameraSystem.Master.Services
             RecipeEngineSettings? settings = null,
             string? imageCacheDir = null,
             ICameraDeviceRepository? deviceRepo = null,
-            IBlackBodyController? blackBody = null)
+            IBlackBodyController? blackBody = null,
+            ICameraMappingRepository? mappingRepo = null)
         {
             _plcController = plcController;
             _natsService = natsService;
@@ -39,6 +42,7 @@ namespace HeatingCameraSystem.Master.Services
             _imageCacheDir  = imageCacheDir;
             _deviceRepo     = deviceRepo;
             _blackBody      = blackBody ?? new HeatingCameraSystem.Protocols.PlcBlackBodyAdapter(plcController);
+            _mappingRepo    = mappingRepo;
         }
 
         public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null)
@@ -68,6 +72,8 @@ namespace HeatingCameraSystem.Master.Services
             }
 
             Console.WriteLine("[RecipeEngine] Chamber ready. Executing steps...");
+
+            var positionAgentMap = await LoadPositionAgentMapAsync();
 
             for (int i = 0; i < recipe.Steps.Count; i++)
             {
@@ -100,7 +106,7 @@ namespace HeatingCameraSystem.Master.Services
                     TaskCreationOptions.RunContinuationsAsynchronously);
                 resultWaiters[step.StepId] = tcs;
 
-                string targetAgentId = await ResolveAgentIdAsync(step);
+                string targetAgentId = await ResolveAgentIdAsync(step, positionAgentMap);
 
                 await _natsService.PublishCaptureCommandAsync(new CaptureCommandMessage
                 {
@@ -188,8 +194,12 @@ namespace HeatingCameraSystem.Master.Services
             await _plcController.SetTargetTemperatureAsync(target);
         }
 
-        private async Task<string> ResolveAgentIdAsync(RecipeStep step)
+        private async Task<string> ResolveAgentIdAsync(RecipeStep step, IReadOnlyDictionary<int, string> positionAgentMap)
         {
+            // Priority: saved position→camera mapping overrides the step's own alias/CameraIndex.
+            if (positionAgentMap.TryGetValue(step.TargetPositionIndex, out var mappedAgent))
+                return mappedAgent;
+
             if (!string.IsNullOrEmpty(step.CameraAlias) && _deviceRepo != null)
             {
                 var device = await _deviceRepo.GetByAliasAsync(step.CameraAlias);
@@ -198,7 +208,52 @@ namespace HeatingCameraSystem.Master.Services
 
                 Console.WriteLine($"[RecipeEngine] Alias '{step.CameraAlias}' not found, falling back to CameraIndex");
             }
+
             return $"Agent_{step.CameraIndex}";
+        }
+
+        // Position(1~64) → AgentId from the saved mapping. CameraId = device Alias (preferred) or AgentId.
+        private async Task<IReadOnlyDictionary<int, string>> LoadPositionAgentMapAsync()
+        {
+            var map = new Dictionary<int, string>();
+            if (_mappingRepo == null) return map;
+
+            IEnumerable<CameraMappingConfig> mappings;
+            try
+            {
+                mappings = await _mappingRepo.GetAllAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RecipeEngine] mapping load failed: {ex.Message}");
+                return map;
+            }
+
+            foreach (var m in mappings)
+            {
+                if (string.IsNullOrEmpty(m.CameraId)) continue;
+                if (!TryParseSlotIndex(m.SlotId, out int pos)) continue;
+                map[pos] = await ResolveCameraIdToAgentAsync(m.CameraId);
+            }
+            return map;
+        }
+
+        private async Task<string> ResolveCameraIdToAgentAsync(string cameraId)
+        {
+            if (_deviceRepo != null)
+            {
+                var device = await _deviceRepo.GetByAliasAsync(cameraId);
+                if (device != null && !string.IsNullOrEmpty(device.AgentId))
+                    return device.AgentId;
+            }
+            return cameraId;
+        }
+
+        private static bool TryParseSlotIndex(string? slotId, out int index)
+        {
+            index = 0;
+            if (string.IsNullOrEmpty(slotId) || slotId[0] != 'P') return false;
+            return int.TryParse(slotId.Substring(1), out index);
         }
 
         private string? TryStoreImageLocally(CaptureResultMessage result)
