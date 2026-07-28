@@ -37,22 +37,33 @@ try {
     dotnet build (Join-Path $repoRoot "HeatingCameraSystem.slnx") --nologo
 
     Remove-Item -LiteralPath $simOut,$simErr -ErrorAction SilentlyContinue
+    Set-Content -LiteralPath $simOut -Value "" -NoNewline
+    Set-Content -LiteralPath $simErr -Value "" -NoNewline
     $psi = [System.Diagnostics.ProcessStartInfo]::new("dotnet", "run --no-build --project `"$repoRoot\HeatingCameraSystem.Simulator`" -- `"$configFullPath`"")
     $psi.UseShellExecute = $false
     $psi.RedirectStandardInput = $true
-    $psi.RedirectStandardOutput = $false
-    $psi.RedirectStandardError = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
     $simulator = [System.Diagnostics.Process]::Start($psi)
+    $onOut = Register-ObjectEvent -InputObject $simulator -EventName OutputDataReceived -MessageData $simOut -Action {
+        if ($EventArgs.Data) { Add-Content -LiteralPath $Event.MessageData -Value $EventArgs.Data }
+    }
+    $onErr = Register-ObjectEvent -InputObject $simulator -EventName ErrorDataReceived -MessageData $simErr -Action {
+        if ($EventArgs.Data) { Add-Content -LiteralPath $Event.MessageData -Value $EventArgs.Data }
+    }
+    $simulator.BeginOutputReadLine()
+    $simulator.BeginErrorReadLine()
 
+    # Wait for the simulator's exact readiness line: PLC listening AND NATS cameras subscribed.
     $ready = $false
-    for ($i = 0; $i -lt 80; $i++) {
+    for ($i = 0; $i -lt 120; $i++) {
         Start-Sleep -Milliseconds 250
         if ($simulator.HasExited) { break }
-        if (Test-TcpPort $FEnetPort) { $ready = $true; break }
+        if (Select-String -LiteralPath $simOut -Pattern 'SIMULATOR READY plc=' -SimpleMatch -Quiet -ErrorAction SilentlyContinue) { $ready = $true; break }
     }
-    if (-not $ready) { throw "Simulator did not open FEnet port $FEnetPort" }
-    "SIMULATOR READY port=$FEnetPort pid=$($simulator.Id)" | Tee-Object -FilePath $simOut
+    if (-not $ready) { throw "Simulator did not print 'SIMULATOR READY plc=' readiness line (see $simOut / $simErr)" }
+    Write-Host "[E2E] simulator readiness line detected; raw stdout captured at $simOut"
 
     dotnet run --no-build --project (Join-Path $repoRoot "HeatingCameraSystem.E2EDriver") -- --external-simulator $NatsUrl 127.0.0.1 $FEnetPort 30
     exit $LASTEXITCODE
@@ -67,6 +78,8 @@ finally {
             Write-Warning "Simulator quit signal failed: $($_.Exception.Message)"
         }
         if (-not $simulator.WaitForExit(5000)) { $simulator.Kill() }
+        if ($onOut) { Unregister-Event -SourceIdentifier $onOut.Name -ErrorAction SilentlyContinue }
+        if ($onErr) { Unregister-Event -SourceIdentifier $onErr.Name -ErrorAction SilentlyContinue }
         $simulator.Dispose()
     }
 

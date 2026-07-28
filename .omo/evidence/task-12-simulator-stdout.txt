@@ -1,1 +1,1 @@
-﻿SIMULATOR READY port=2004
+SIMULATOR READY plc=127.0.0.1:2004 cameras=2 nats=nats://127.0.0.1:4222
