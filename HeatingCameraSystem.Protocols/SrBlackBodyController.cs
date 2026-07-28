@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO.Ports;
 using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Config;
@@ -10,18 +9,25 @@ using HeatingCameraSystem.Core.Interfaces;
 namespace HeatingCameraSystem.Protocols
 {
     /// <summary>
-    /// CI Systems SR-800R 흑체 직접-제어 (RS-232). 컨트롤러 1대 = 흑체 1개이므로 유닛(포트)마다
-    /// 독립 <see cref="SerialPort"/>를 연다(대수 = <see cref="BlackBodySettings.Units"/>.Count).
+    /// CI Systems SR-800R 흑체 직접-제어. 컨트롤러 1대 = 흑체 1개이므로 유닛마다 독립
+    /// <see cref="ISrLink"/>(대수 = <see cref="BlackBodySettings.Units"/>.Count)를 연다.
     /// 프로토콜(매뉴얼 Chapter 6): 9600 8N1, Host→기기 EOM=CR, 기기→Host EOM=CR+LF,
     /// 메시지 간 최소 300ms. 연결 시 각 유닛을 Absolute 모드(SETMODE 1)로 맞춘다.
+    /// <see cref="BlackBodySettings.Simulated"/>=true이면 실 시리얼 대신 <see cref="SimulatedSrDevice"/>를
+    /// 사용해 물리 장비 없이 동일 경로로 동작한다.
     /// </summary>
     public sealed class SrBlackBodyController : IBlackBodyController
     {
         private sealed class Unit
         {
-            public Unit(SerialSettings config) => Config = config;
+            public Unit(SerialSettings config, ISrLink link)
+            {
+                Config = config;
+                Link = link;
+            }
+
             public SerialSettings Config { get; }
-            public SerialPort? Port;
+            public ISrLink Link { get; }
             public readonly SemaphoreSlim Gate = new(1, 1);
             public long LastSendTicks;
         }
@@ -30,14 +36,20 @@ namespace HeatingCameraSystem.Protocols
         private readonly Unit[] _units;
         private volatile bool _connected;
 
-        public SrBlackBodyController(BlackBodySettings settings)
+        public SrBlackBodyController(BlackBodySettings settings, Func<SerialSettings, ISrLink>? linkFactory = null)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            Func<SerialSettings, ISrLink> factory = linkFactory ?? DefaultLink;
             var units = new List<Unit>();
             foreach (SerialSettings cfg in settings.Units)
-                units.Add(new Unit(cfg));
+                units.Add(new Unit(cfg, factory(cfg)));
             _units = units.ToArray();
         }
+
+        private ISrLink DefaultLink(SerialSettings cfg)
+            => _settings.Simulated
+                ? new SimulatedSrDevice(_settings)
+                : new SerialPortSrLink(cfg, _settings.ReadTimeoutMs);
 
         public int Count => _units.Length;
         public bool IsConnected => _connected;
@@ -49,7 +61,7 @@ namespace HeatingCameraSystem.Protocols
                 await u.Gate.WaitAsync().ConfigureAwait(false);
                 try
                 {
-                    u.Port ??= OpenPort(u.Config);
+                    if (!u.Link.IsOpen) u.Link.Open();
                     await SendNoReplyLocked(u, SrProtocol.SetMode(1)).ConfigureAwait(false);
                 }
                 catch (Exception ex)
@@ -65,10 +77,8 @@ namespace HeatingCameraSystem.Protocols
         {
             foreach (Unit u in _units)
             {
-                try { if (u.Port?.IsOpen == true) u.Port.Close(); }
+                try { if (u.Link.IsOpen) u.Link.Close(); }
                 catch (Exception ex) { Debug.WriteLine($"[SrBlackBody] close {u.Config.PortName}: {ex.Message}"); }
-                u.Port?.Dispose();
-                u.Port = null;
             }
             _connected = false;
         }
@@ -82,20 +92,14 @@ namespace HeatingCameraSystem.Protocols
         public Task<float> GetTargetTemperatureAsync(int blackBodyIndex)
             => WithUnit(blackBodyIndex, u => QueryLocked(u, SrProtocol.GetTargetTemperature()));
 
-        public void Dispose() => Disconnect();
-
-        private SerialPort OpenPort(SerialSettings c)
+        public void Dispose()
         {
-            var parity = Enum.TryParse<Parity>(c.Parity, true, out var p) ? p : Parity.None;
-            var stop = Enum.TryParse<StopBits>(c.StopBits, true, out var sb) ? sb : StopBits.One;
-            var port = new SerialPort(c.PortName, c.BaudRate, parity, c.DataBits, stop)
+            foreach (Unit u in _units)
             {
-                NewLine = "\r\n",
-                ReadTimeout = _settings.ReadTimeoutMs,
-                WriteTimeout = 2000
-            };
-            port.Open();
-            return port;
+                try { u.Link.Dispose(); }
+                catch (Exception ex) { Debug.WriteLine($"[SrBlackBody] dispose {u.Config.PortName}: {ex.Message}"); }
+            }
+            _connected = false;
         }
 
         private async Task WithUnit(int index, Func<Unit, Task> body)
@@ -121,28 +125,27 @@ namespace HeatingCameraSystem.Protocols
             return _units[index];
         }
 
-        private void EnsureOpen(Unit u)
+        private static void EnsureOpen(Unit u)
         {
-            u.Port ??= OpenPort(u.Config);
-            if (!u.Port.IsOpen) u.Port.Open();
+            if (!u.Link.IsOpen) u.Link.Open();
         }
 
         private Task SendNoReplyLocked(Unit u, string command)
             => Task.Run(() =>
             {
-                RespectGap(u);
-                u.Port!.Write(command);
+                if (!_settings.Simulated) RespectGap(u);
+                u.Link.Write(command);
                 u.LastSendTicks = Stopwatch.GetTimestamp();
             });
 
         private Task<float> QueryLocked(Unit u, string command)
             => Task.Run(() =>
             {
-                RespectGap(u);
-                u.Port!.DiscardInBuffer();
-                u.Port.Write(command);
+                if (!_settings.Simulated) RespectGap(u);
+                u.Link.DiscardInBuffer();
+                u.Link.Write(command);
                 u.LastSendTicks = Stopwatch.GetTimestamp();
-                return SrProtocol.ParseTemperature(u.Port.ReadLine());
+                return SrProtocol.ParseTemperature(u.Link.ReadLine());
             });
 
         private void RespectGap(Unit u)
