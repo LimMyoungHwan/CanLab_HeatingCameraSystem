@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HeatingCameraSystem.Core.Models;
@@ -195,9 +196,24 @@ namespace HeatingCameraSystem.Master.ViewModels
         }
 
         [RelayCommand]
-        private void EmergencyStop()
+        private async Task EmergencyStop()
         {
-            SystemStatusText = "System Status: EMERGENCY STOPPED";
+            var plc = AppServices.PlcController;
+            if (plc == null)
+            {
+                SystemStatusText = "System Status: PLC OFFLINE — E-STOP UNAVAILABLE";
+                return;
+            }
+            try
+            {
+                await plc.TriggerEmergencyStopAsync();
+                SystemStatusText = "System Status: EMERGENCY STOPPED";
+            }
+            catch (Exception ex)
+            {
+                SystemStatusText = $"System Status: E-STOP FAILED — {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"[History] emergency stop: {ex.Message}");
+            }
         }
 
         [RelayCommand]
