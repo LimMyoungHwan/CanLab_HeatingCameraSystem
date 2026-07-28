@@ -24,6 +24,19 @@ public class BlackBodyRoutingTests
     }
 
     [Fact]
+    public void AppServices_SelectsSrControllerWhenBlackBodyEnabled()
+    {
+        using var plc = new FakePlcController();
+        var settings = new HardwareSettings { SimulationMode = false };
+        settings.BlackBody.Enabled = true;
+
+        using var bb = AppServices.CreateBlackBodyController(settings, plc);
+
+        Assert.IsType<SrBlackBodyController>(bb);
+        Assert.Equal(2, bb.Count);
+    }
+
+    [Fact]
     public async Task PlcBlackBodyAdapter_WritesAndReads_BothBlackBodies_ThroughExternalFEnet()
     {
         int port = GetFreeTcpPort();

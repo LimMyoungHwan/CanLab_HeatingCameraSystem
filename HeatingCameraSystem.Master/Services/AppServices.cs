@@ -94,7 +94,11 @@ namespace HeatingCameraSystem.Master.Services
         }
 
         public static IBlackBodyController CreateBlackBodyController(HardwareSettings settings, IPlcController plc)
-            => settings.SimulationMode ? new FakeBlackBodyController() : new PlcBlackBodyAdapter(plc);
+        {
+            if (settings.SimulationMode) return new FakeBlackBodyController();
+            if (settings.BlackBody.Enabled) return new SrBlackBodyController(settings.BlackBody);
+            return new PlcBlackBodyAdapter(plc);
+        }
 
         public static async Task TryConnectServicesAsync()
         {
