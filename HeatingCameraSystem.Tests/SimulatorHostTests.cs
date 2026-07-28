@@ -64,6 +64,22 @@ public class SimulatorHostTests
         Assert.True(cameras.Disposed);
     }
 
+    [Fact]
+    public async Task InvalidFaultIndexAndUnknownCamera_PrintUsage_WithoutThrowing()
+    {
+        var output = new StringWriter();
+        var state = new SimulatorState(new[] { "Agent_0" });
+        await using var host = new SimulatorHost(Settings(), state, output: output, plcFactory: (_, _) => new FakePlcEndpoint(), cameraFactory: (_, _) => new FakeCameraEndpoint());
+
+        await host.StartAsync();
+
+        Assert.False(host.HandleCommand("plc fault 99 on"));
+        Assert.False(host.HandleCommand("plc fault -1 on"));
+        Assert.False(host.HandleCommand("camera Nope offline"));
+        Assert.Contains("usage:", output.ToString());
+        Assert.Equal(CameraMode.Online, state.GetCameraMode("Agent_0"));
+    }
+
     private static SimulatorSettings Settings() => SimulatorSettings.CreateDefaults() with
     {
         OutputPath = Path.Combine(Path.GetTempPath(), "hcs_host_" + Guid.NewGuid().ToString("N"))

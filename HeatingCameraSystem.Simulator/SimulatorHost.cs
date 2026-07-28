@@ -89,6 +89,7 @@ public sealed class SimulatorHost : IAsyncDisposable
         }
         if (parts.Length == 4 && parts[0] == "plc" && parts[1] == "fault" && int.TryParse(parts[2], out int fault))
         {
+            if (fault is < 0 or >= SimulatorState.FaultCount) { Usage(); return false; }
             if (parts[3] == "on") _state.SetFault(fault);
             else if (parts[3] == "off") _state.ClearFault(fault);
             else Usage();
@@ -96,7 +97,8 @@ public sealed class SimulatorHost : IAsyncDisposable
         }
         if (parts.Length == 3 && parts[0] == "camera" && Enum.TryParse(parts[2], ignoreCase: true, out CameraMode mode))
         {
-            _state.SetCameraMode(parts[1], mode);
+            try { _state.SetCameraMode(parts[1], mode); }
+            catch (ArgumentException) { Usage(); }
             return false;
         }
 
