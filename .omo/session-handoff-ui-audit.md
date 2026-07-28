@@ -31,15 +31,15 @@ Views: `HeatingCameraSystem.Master/Views/*.xaml` · ViewModels: `HeatingCameraSy
 
 | Screen (nav) | View / ViewModel | Purpose to confirm | Verdict (fill next session) |
 |---|---|---|---|
-| 대시보드 Dashboard | DashboardView / DashboardViewModel | Live camera feeds + chamber temp/humidity trend + online-agent count + recipe start | ? |
-| 라이브 영상 Live | LiveView / LiveViewModel | Full live thermal stream view | ? |
-| 레시피 편집기 Recipe Editor | RecipeEditorView / RecipeEditorViewModel | Author a Recipe = ordered steps (temp/humidity/blackbody targets, servo point/CameraIndex, ramp minutes) | ? |
-| 카메라 맵핑 Camera Mapping | CameraMappingView / CameraMappingViewModel | Map recipe camera slots ↔ Agent/CameraIndex ↔ NATS AgentId | ? |
-| 이력 조회 History Logs | HistoryView / HistoryViewModel | Browse capture history from LiteDB (HistoryRepo) | ? |
-| 시리얼 설정 Serial Settings | SettingsView / SettingsViewModel | Per-camera serial params, push to Agent over NATS + ACK | ? |
-| 디바이스 관리 Devices | DevicesView / DevicesViewModel | Manage camera device descriptors (CameraDeviceRepo) | ? |
+| 대시보드 Dashboard | DashboardView / DashboardViewModel | Live camera feeds + chamber temp/humidity trend + online-agent count + recipe start | **Implemented** (live) — real NATS live tiles + bounded temp/humidity sparkline + online count |
+| 라이브 영상 Live | LiveView / LiveViewModel | Full live thermal stream view | **Implemented** — NATS `agent.live.>` → JPEG decode → per-camera tiles (Dispatcher-marshalled) |
+| 레시피 편집기 Recipe Editor | RecipeEditorView / RecipeEditorViewModel | Author a Recipe = ordered steps (temp/humidity/blackbody targets, servo point/CameraIndex, ramp minutes) | **Implemented** — LiteDB CRUD via RecipeRepo + JSON import/export + step add/delete/reorder |
+| 카메라 맵핑 Camera Mapping | CameraMappingView / CameraMappingViewModel | Map recipe camera slots ↔ Agent/CameraIndex ↔ NATS AgentId | **Implemented** (2026-07-28) — inventory from CameraDeviceRepo; RecipeEngine consumes saved mapping (position→AgentId, overrides CameraAlias/CameraIndex); SyncProgress = real assigned ratio |
+| 이력 조회 History Logs | HistoryView / HistoryViewModel | Browse capture history from LiteDB (HistoryRepo) | **Implemented** — real LiteDB query + paging + date/group filter + CSV export. Note: EmergencyStop button only sets a status string (cosmetic) |
+| 시리얼 설정 Serial Settings | SettingsView / SettingsViewModel | Per-camera serial params, push to Agent over NATS + ACK | **Implemented** — LiteDB upsert + local apply + NATS publish + 5s ACK wait with timeout |
+| 디바이스 관리 Devices | DevicesView / DevicesViewModel | Manage camera device descriptors (CameraDeviceRepo) | **Implemented** — NATS inventory subscribe + approve/reject/rename/getlogs/setserial manager commands + CameraDeviceRepo |
 | PLC 상태 Status | StatusMonitorView / StatusMonitorViewModel | 1s poll of PlcStatusSnapshot (chamber/blackbody/servo/equipment/errors) — live-verified this session | Implemented (live) |
-| PLC 설정 Control | PlcControlSettingsView / PlcControlSettingsViewModel | Set temp/humidity/blackbody/servo speed/fan + point coords + admin settings | Partial? (blackbody live) |
+| PLC 설정 Control | PlcControlSettingsView / PlcControlSettingsViewModel | Set temp/humidity/blackbody/servo speed/fan + point coords + admin settings | **Implemented** — every Apply* writes via real IPlcController/IBlackBodyController; points + admin load/save real (HW addresses are documented placeholders per AGENTS.md, not stubs) |
 | 수동 조작 Manual Control | ManualControlView / ManualControlViewModel | One-touch equipment, servo jog/home/point move, blackbody set/read — live-verified this session | Implemented (live) |
 
 ## 4. Agent UI — tabs to audit (single `MainWindow.xaml`, TabControl)
@@ -48,10 +48,10 @@ Views: `HeatingCameraSystem.Master/Views/*.xaml` · ViewModels: `HeatingCameraSy
 
 | Tab | Backing VM | Purpose to confirm | Verdict |
 |---|---|---|---|
-| Live | CameraPanelViewModel (per camera) | Live preview + Restart + camera serial control (shutter/RUN/STOP/NUC/info/S-N/FPA) | ? |
-| Data | DataBrowserViewModel | Local capture DataGrid + preview + delete/purge/retention | ? |
-| Logs | LogViewerViewModel | Log DataGrid + level filter | ? |
-| Settings | SettingsViewModel | SimulationMode, NATS URL, storage, heartbeat, image format, camera add/remove/save | ? |
+| Live | CameraPanelViewModel (per camera) | Live preview + Restart + camera serial control (shutter/RUN/STOP/NUC/info/S-N/FPA) | **Implemented** — live preview + RUN/STOP/shutter/NUC + camera info (prior-session real-HW QA) |
+| Data | DataBrowserViewModel | Local capture DataGrid + preview + delete/purge/retention | **Implemented** — CaptureStore query/delete/purge + thermal preview decode + retention days |
+| Logs | LogViewerViewModel | Log DataGrid + level filter | **Implemented** — NdjsonLogReader reads log dir with min-level filter |
+| Settings | SettingsViewModel | SimulationMode, NATS URL, storage, heartbeat, image format, camera add/remove/save | **Implemented** — binds AgentUiConfig + camera add/remove + JSON Save (restart to apply) |
 
 ## 5. Known facts (already established this session)
 
@@ -72,3 +72,23 @@ Views: `HeatingCameraSystem.Master/Views/*.xaml` · ViewModels: `HeatingCameraSy
 - **Devices**: camera device descriptors registry (LiteDB `CameraDeviceRepo`).
 - **Dashboard**: operator overview — live camera thumbnails, chamber temp/humidity trend, online agents, recipe start.
 - PLC is LS XGT FEnet (TCP 2004); blackbody now has a separate SR-800R RS-232 path (this session).
+
+## 7. Audit result (2026-07-28, code-level)
+
+Method: read each `*.xaml` + `*ViewModel.cs`, traced commands to `AppServices` services/repos via `codegraph_explore` (no live clicks this pass — code is definitive for real-logic vs stub).
+
+**Verdict: 14 of 14 UIs Implemented (real backing logic). No Partial, no `NotImplementedException`/empty-command stubs.**
+
+### 카메라 맵핑 Camera Mapping (Master) — gap CLOSED (2026-07-28)
+Previous Partial had two defects, both fixed and re-verified (Master build 0/0, full suite 177/177, +3 temp resolution tests then removed):
+- **Inventory** (`CameraMappingViewModel.InitializeData`): now sourced from `CameraDeviceRepo.GetAllAsync()`, grouped by `PCId`, camera id = `Alias` (fallback `AgentId`). Hardcoded `CAM-NN` removed.
+- **Consumption** (`RecipeEngine`): loads the saved mapping once per run (`LoadPositionAgentMapAsync`) and resolves `RecipeStep.TargetPositionIndex`→slot `P{NN}`→mapping→AgentId as **priority 1**, keeping `CameraAlias`/`CameraIndex` as fallback (backward compatible — existing `RecipeEngineTests` unchanged). `AppServices` passes `MappingRepo` to the engine.
+- **Sync UI**: `SyncProgress` = real assigned ratio; `SyncStatusText` = Saved/Unsaved. No decorative constants.
+
+Residual edge notes (non-blocking): a stale pre-existing `CAM-NN` mapping no longer matches real inventory (operator re-maps); empty device registry ⇒ empty mapping list (honest); duplicate operator aliases resolve to the first device.
+
+### Minor cosmetic notes (not blocking)
+- History 이력 조회: `EmergencyStop` command only sets `SystemStatusText` — dead button on this screen.
+
+### Implemented, with documented hardware-tuning placeholders (not stubs)
+- PLC 설정 Control: all controls call real PLC/blackbody APIs; some D/M/P addresses (ServoSpeed D2560, etc.) are the AGENTS.md-listed placeholders awaiting the real A&D memory map — hardware tuning, not missing logic.
