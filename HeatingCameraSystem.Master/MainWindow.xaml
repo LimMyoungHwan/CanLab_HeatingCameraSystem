@@ -35,6 +35,9 @@
         <DataTemplate DataType="{x:Type vm:DevicesViewModel}">
             <views:DevicesView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:AgentSettingsViewModel}">
+            <views:AgentSettingsView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:StatusMonitorViewModel}">
             <views:StatusMonitorView />
         </DataTemplate>
@@ -77,6 +80,9 @@
                         Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
 
                 <Button Content="Devices" Command="{Binding NavigateToDevicesCommand}" 
+                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+
+                <Button Content="Agent 설정" Command="{Binding NavigateToAgentSettingsCommand}" 
                         Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
 
                 <Button Content="PLC 상태" Command="{Binding NavigateToStatusMonitorCommand}" 

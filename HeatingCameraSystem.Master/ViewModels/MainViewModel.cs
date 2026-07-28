@@ -69,6 +69,13 @@ namespace HeatingCameraSystem.Master.ViewModels
         }
 
         [RelayCommand]
+        private void NavigateToAgentSettings()
+        {
+            CurrentViewTitle = "Agent 원격 설정 (Agent Settings)";
+            CurrentViewModel = new AgentSettingsViewModel();
+        }
+
+        [RelayCommand]
         private void NavigateToStatusMonitor()
         {
             CurrentViewTitle = "PLC 상태 (Status)";

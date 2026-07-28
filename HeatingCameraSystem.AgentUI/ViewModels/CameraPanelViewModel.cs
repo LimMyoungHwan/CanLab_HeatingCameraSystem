@@ -17,6 +17,9 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private readonly Dispatcher _dispatcher;
         private readonly ICameraSerialClient? _serial;
         private readonly ThermalNucCorrector _nuc;
+        private readonly CaptureStore _store;
+        private readonly string _agentId;
+        private readonly int _captureBurstCount;
 
         [ObservableProperty]
         private string _title;
@@ -36,16 +39,22 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         [ObservableProperty]
         private string _serialStatus = string.Empty;
 
+        [ObservableProperty]
+        private string _captureStatus = string.Empty;
+
         public bool HasSerialControl => _serial is not null;
 
         public int CameraIndex => _runtime.CameraIndex;
 
-        public CameraPanelViewModel(string title, ICameraRuntime runtime, Dispatcher dispatcher, ThermalNucCorrector nuc, ICameraSerialClient? serial = null)
+        public CameraPanelViewModel(string title, string agentId, ICameraRuntime runtime, Dispatcher dispatcher, ThermalNucCorrector nuc, CaptureStore store, int captureBurstCount = 1, ICameraSerialClient? serial = null)
         {
             _title = title;
+            _agentId = agentId;
             _runtime = runtime;
             _dispatcher = dispatcher;
             _nuc = nuc;
+            _store = store;
+            _captureBurstCount = captureBurstCount > 0 ? captureBurstCount : 1;
             _serial = serial;
             _status = runtime.Status.ToString();
 
@@ -78,6 +87,36 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         {
             await _runtime.StopAsync();
             await _runtime.StartAsync();
+        }
+
+        [RelayCommand]
+        private async Task CaptureSaveAsync()
+        {
+            int saved = 0;
+            try
+            {
+                for (int i = 0; i < _captureBurstCount; i++)
+                {
+                    bool forceFreshFrame = i > 0;
+                    ThermalFrame? snap = await _runtime.CaptureSnapshotAsync(
+                        maxAge: forceFreshFrame ? TimeSpan.Zero : TimeSpan.FromSeconds(1),
+                        nextFrameTimeout: TimeSpan.FromSeconds(2));
+
+                    if (snap is not null)
+                    {
+                        _store.Save(snap, _agentId, _runtime.CameraIndex);
+                        saved++;
+                    }
+                }
+
+                CaptureStatus = saved > 0
+                    ? $"{saved}/{_captureBurstCount}장 저장됨 {DateTime.Now:HH:mm:ss}"
+                    : "저장 실패: 프레임 없음";
+            }
+            catch (Exception ex)
+            {
+                CaptureStatus = $"저장 오류: {ex.Message}";
+            }
         }
 
         [RelayCommand(CanExecute = nameof(HasSerialControl))]

@@ -108,6 +108,58 @@ namespace HeatingCameraSystem.Protocols
             return Task.CompletedTask;
         }
 
+        public async Task PublishAgentConfigRequestAsync(AgentConfigRequestMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"master.config.agent.get.{message.AgentId}", message);
+        }
+
+        public Task SubscribeAgentConfigRequestAsync(string agentId, Action<AgentConfigRequestMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop($"master.config.agent.get.{agentId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
+        public async Task PublishAgentConfigSnapshotAsync(AgentConfigSnapshotMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"agent.config.agent.snapshot.{message.AgentId}", message);
+        }
+
+        public Task SubscribeAgentConfigSnapshotAsync(string agentId, Action<AgentConfigSnapshotMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop($"agent.config.agent.snapshot.{agentId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
+        public async Task PublishAgentConfigApplyAsync(AgentConfigApplyMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"master.config.agent.set.{message.AgentId}", message);
+        }
+
+        public Task SubscribeAgentConfigApplyAsync(string agentId, Action<AgentConfigApplyMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop($"master.config.agent.set.{agentId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
+        public async Task PublishAgentConfigAckAsync(AgentConfigAckMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"agent.config.agent.ack.{message.AgentId}", message);
+        }
+
+        public Task SubscribeAgentConfigAckAsync(string agentId, Action<AgentConfigAckMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop($"agent.config.agent.ack.{agentId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
         private void RunSubscriptionLoop<T>(string subject, Action<T> onMessageReceived)
         {
             _ = Task.Run(async () =>

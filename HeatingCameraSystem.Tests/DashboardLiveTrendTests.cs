@@ -160,6 +160,14 @@ public class DashboardLiveTrendTests
         public Task SubscribeSerialConfigAsync(string agentId, Action<SerialConfigMessage> onMessageReceived) => Task.CompletedTask;
         public Task PublishSerialConfigAckAsync(SerialConfigAckMessage message) => Task.CompletedTask;
         public Task SubscribeSerialConfigAckAsync(string agentId, Action<SerialConfigAckMessage> onMessageReceived) => Task.CompletedTask;
+        public Task PublishAgentConfigRequestAsync(AgentConfigRequestMessage message) => Task.CompletedTask;
+        public Task SubscribeAgentConfigRequestAsync(string agentId, Action<AgentConfigRequestMessage> onMessageReceived) => Task.CompletedTask;
+        public Task PublishAgentConfigSnapshotAsync(AgentConfigSnapshotMessage message) => Task.CompletedTask;
+        public Task SubscribeAgentConfigSnapshotAsync(string agentId, Action<AgentConfigSnapshotMessage> onMessageReceived) => Task.CompletedTask;
+        public Task PublishAgentConfigApplyAsync(AgentConfigApplyMessage message) => Task.CompletedTask;
+        public Task SubscribeAgentConfigApplyAsync(string agentId, Action<AgentConfigApplyMessage> onMessageReceived) => Task.CompletedTask;
+        public Task PublishAgentConfigAckAsync(AgentConfigAckMessage message) => Task.CompletedTask;
+        public Task SubscribeAgentConfigAckAsync(string agentId, Action<AgentConfigAckMessage> onMessageReceived) => Task.CompletedTask;
         public Task PublishCameraInventoryAsync(CameraInventoryMessage message) => Task.CompletedTask;
         public Task SubscribeCameraInventoryAsync(Action<CameraInventoryMessage> onMessageReceived) => Task.CompletedTask;
         public Task PublishManagerCommandAsync(ManagerCommandMessage message) => Task.CompletedTask;

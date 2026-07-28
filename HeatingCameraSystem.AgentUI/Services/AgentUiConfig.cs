@@ -35,6 +35,8 @@ namespace HeatingCameraSystem.AgentUI.Services
 
         public CaptureImageFormat CaptureImageFormat { get; set; } = CaptureImageFormat.Y16Raw;
 
+        public int CaptureBurstCount { get; set; } = 1;
+
         public string EffectiveStorageDir =>
             string.IsNullOrWhiteSpace(StoragePath)
                 ? Path.Combine(ConfigDir, "Captures")

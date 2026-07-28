@@ -115,8 +115,11 @@
                                             <Run Text="Status: "/>
                                             <Run Text="{Binding Status}"/>
                                         </TextBlock>
-                                        <Button Content="Restart" Command="{Binding RestartCommand}"
-                                                HorizontalAlignment="Left" Margin="2,8,0,0" Padding="12,3"/>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="2,8,0,0">
+                                            <Button Content="Restart" Command="{Binding RestartCommand}" Padding="12,3"/>
+                                            <Button Content="캡처 저장" Command="{Binding CaptureSaveCommand}" Padding="12,3" Margin="6,0,0,0"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding CaptureStatus}" Foreground="#B0B0B0" Margin="2,4,0,0" TextWrapping="Wrap"/>
                                         <Border Margin="2,10,0,0" Padding="0,8,0,0" BorderBrush="#3C3C3C" BorderThickness="0,1,0,0"
                                                 Visibility="{Binding HasSerialControl, Converter={StaticResource BoolToVis}}">
                                             <StackPanel>
@@ -234,6 +237,8 @@
                         <TextBlock Text="Capture image format"/>
                         <ComboBox ItemsSource="{Binding ImageFormats}" SelectedItem="{Binding CaptureImageFormat}"
                                   Width="160" HorizontalAlignment="Left" Margin="0,2,0,8"/>
+                        <TextBlock Text="Capture 장수 (Save 1회당 프레임 수)"/>
+                        <TextBox Text="{Binding CaptureBurstCount}" Width="80" HorizontalAlignment="Left" Margin="0,2,0,8"/>
                         <TextBlock Text="Cameras" FontWeight="SemiBold" Margin="0,6,0,4"/>
                         <DataGrid ItemsSource="{Binding Cameras}" IsReadOnly="False" Height="180">
                             <DataGrid.Columns>

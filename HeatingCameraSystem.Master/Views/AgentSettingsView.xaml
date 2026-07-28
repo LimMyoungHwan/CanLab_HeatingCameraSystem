@@ -1,0 +1,214 @@
+<UserControl x:Class="HeatingCameraSystem.Master.Views.AgentSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="768" d:DesignWidth="1024" Background="#0e1321" Foreground="#dee2f7">
+
+    <UserControl.Resources>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#859493"/>
+            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="Margin"     Value="0,0,0,4"/>
+        </Style>
+
+        <Style x:Key="FieldBox" TargetType="TextBox">
+            <Setter Property="Background"      Value="#1a1f2e"/>
+            <Setter Property="Foreground"      Value="#dee2f7"/>
+            <Setter Property="BorderBrush"     Value="#3b4949"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="8,6"/>
+            <Setter Property="FontSize"        Value="13"/>
+        </Style>
+
+        <Style x:Key="FieldCombo" TargetType="ComboBox">
+            <Setter Property="Background"      Value="#1a1f2e"/>
+            <Setter Property="Foreground"      Value="#dee2f7"/>
+            <Setter Property="BorderBrush"     Value="#3b4949"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="8,6"/>
+            <Setter Property="FontSize"        Value="13"/>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background"      Value="#47eaed"/>
+            <Setter Property="Foreground"      Value="#001f1f"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding"         Value="24,10"/>
+            <Setter Property="FontWeight"      Value="Bold"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#5ff5f8"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#3b4949"/>
+                                <Setter Property="Foreground" Value="#859493"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Background"      Value="#1a1f2e"/>
+            <Setter Property="Foreground"      Value="#dee2f7"/>
+            <Setter Property="BorderBrush"     Value="#3b4949"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="16,8"/>
+            <Setter Property="FontSize"        Value="13"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top Bar: agent selection + load -->
+        <Border Grid.Row="0" Background="#252a39" BorderBrush="#3b4949" BorderThickness="0,0,0,1" Padding="24,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Agent 원격 설정" FontSize="20" FontWeight="Bold"
+                           Foreground="#dee2f7" VerticalAlignment="Center" Margin="0,0,24,0"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="온라인 Agent" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox Width="240" ItemsSource="{Binding OnlineAgents}"
+                              SelectedItem="{Binding SelectedAgent, Mode=TwoWay}"
+                              Style="{StaticResource FieldCombo}"/>
+                </StackPanel>
+                <Button Grid.Column="2" Content="조회" Command="{Binding LoadCommand}"
+                        Style="{StaticResource PrimaryButton}"/>
+            </Grid>
+        </Border>
+
+        <!-- Body -->
+        <Grid Grid.Row="1">
+
+            <!-- Empty state -->
+            <TextBlock Text="상단에서 Agent를 선택하고 '조회'를 눌러 설정을 불러오세요."
+                       Foreground="#859493" FontSize="14"
+                       HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Visible"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsLoaded}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <!-- Form -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ScrollViewer.Style>
+                    <Style TargetType="ScrollViewer">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsLoaded}" Value="True">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ScrollViewer.Style>
+
+                <StackPanel Margin="40,28" MaxWidth="720" HorizontalAlignment="Left">
+
+                    <CheckBox Content="Simulation mode (가짜 카메라)"
+                              IsChecked="{Binding SimulationMode, Mode=TwoWay}"
+                              Foreground="#dee2f7" Margin="0,0,0,18"/>
+
+                    <TextBlock Text="NATS URL" Style="{StaticResource FieldLabel}"/>
+                    <TextBox Text="{Binding NatsUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource FieldBox}" Margin="0,0,0,18"/>
+
+                    <TextBlock Text="Storage path (빈 값 = config 폴더 기본값)" Style="{StaticResource FieldLabel}"/>
+                    <TextBox Text="{Binding StoragePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource FieldBox}" Margin="0,0,0,18"/>
+
+                    <Grid Margin="0,0,0,18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Heartbeat (초)" Style="{StaticResource FieldLabel}"/>
+                            <TextBox Text="{Binding HeartbeatSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource FieldBox}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Capture 이미지 포맷" Style="{StaticResource FieldLabel}"/>
+                            <ComboBox ItemsSource="{Binding ImageFormats}"
+                                      SelectedItem="{Binding CaptureImageFormat, Mode=TwoWay}"
+                                      Style="{StaticResource FieldCombo}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Text="Capture 장수 (Save 1회당)" Style="{StaticResource FieldLabel}"/>
+                            <TextBox Text="{Binding CaptureBurstCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource FieldBox}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="카메라" FontWeight="SemiBold" Foreground="#dee2f7" Margin="0,8,0,6"/>
+                    <DataGrid ItemsSource="{Binding Cameras}" AutoGenerateColumns="False"
+                              IsReadOnly="False" CanUserAddRows="False" HeadersVisibility="Column"
+                              Background="#1a1f2e" Foreground="#dee2f7" BorderBrush="#3b4949"
+                              RowBackground="#1a1f2e" AlternatingRowBackground="#161b2a"
+                              GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#3b4949"
+                              Height="200" Margin="0,0,0,18">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Agent Id" Width="*" Binding="{Binding AgentId, Mode=TwoWay}"/>
+                            <DataGridTextColumn Header="OpenCV Idx" Width="90" Binding="{Binding OpenCvIndex, Mode=TwoWay}"/>
+                            <DataGridTextColumn Header="Alias" Width="*" Binding="{Binding Alias, Mode=TwoWay}"/>
+                            <DataGridTextColumn Header="Device Name" Width="*" Binding="{Binding DeviceName, Mode=TwoWay}"/>
+                            <DataGridTextColumn Header="Serial COM" Width="100" Binding="{Binding SerialPortName, Mode=TwoWay}"/>
+                            <DataGridTemplateColumn Header="" Width="80">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="삭제"
+                                                Command="{Binding DataContext.RemoveCameraCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource SecondaryButton}" Padding="8,3"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,28">
+                        <Button Content="+ 카메라 추가" Command="{Binding AddCameraCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="0,0,12,0"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="설정 전송" Command="{Binding ApplyCommand}"
+                                Style="{StaticResource PrimaryButton}" Margin="0,0,20,0"/>
+                        <TextBlock Text="{Binding StatusMessage}"
+                                   Foreground="#47eaed" FontSize="13"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

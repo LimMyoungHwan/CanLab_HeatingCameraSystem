@@ -30,9 +30,19 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
             (ushort min, ushort max) = MinMax(frame.Pixels);
 
-            string baseName = $"{MakeFileSafe(agentId)}_{frame.Timestamp:yyyyMMdd_HHmmss_fff}";
-            string y16Path = Path.Combine(_rootDir, baseName + ".y16");
-            string jsonPath = Path.Combine(_rootDir, baseName + ".json");
+            string safeAgent = MakeFileSafe(agentId);
+            string agentDir = Path.Combine(_rootDir, safeAgent);
+            Directory.CreateDirectory(agentDir);
+
+            string stamp = frame.Timestamp.ToString("yyyyMMdd_HHmmss_fff");
+            string baseName = $"{safeAgent}_{stamp}";
+            string y16Path = Path.Combine(agentDir, baseName + ".y16");
+            for (int dup = 1; File.Exists(y16Path); dup++)
+            {
+                baseName = $"{safeAgent}_{stamp}_{dup}";
+                y16Path = Path.Combine(agentDir, baseName + ".y16");
+            }
+            string jsonPath = Path.Combine(agentDir, baseName + ".json");
 
             var bytes = new byte[frame.Pixels.Length * sizeof(ushort)];
             Buffer.BlockCopy(frame.Pixels, 0, bytes, 0, bytes.Length);
@@ -56,7 +66,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
             if (_format == CaptureImageFormat.Tiff16)
             {
-                WriteTiff16(Path.Combine(_rootDir, baseName + ".tif"), frame);
+                WriteTiff16(Path.Combine(agentDir, baseName + ".tif"), frame);
             }
 
             return new CaptureFiles(meta, y16Path, jsonPath, PngPath: null);

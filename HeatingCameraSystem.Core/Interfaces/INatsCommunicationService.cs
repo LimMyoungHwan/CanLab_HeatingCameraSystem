@@ -32,6 +32,22 @@ namespace HeatingCameraSystem.Core.Interfaces
         Task PublishSerialConfigAckAsync(SerialConfigAckMessage message);
         Task SubscribeSerialConfigAckAsync(string agentId, Action<SerialConfigAckMessage> onMessageReceived);
 
+        // Master -> Agent (Agent Config request): master.config.agent.get.{AgentId}
+        Task PublishAgentConfigRequestAsync(AgentConfigRequestMessage message);
+        Task SubscribeAgentConfigRequestAsync(string agentId, Action<AgentConfigRequestMessage> onMessageReceived);
+
+        // Agent -> Master (Agent Config snapshot): agent.config.agent.snapshot.{AgentId}
+        Task PublishAgentConfigSnapshotAsync(AgentConfigSnapshotMessage message);
+        Task SubscribeAgentConfigSnapshotAsync(string agentId, Action<AgentConfigSnapshotMessage> onMessageReceived);
+
+        // Master -> Agent (Agent Config apply): master.config.agent.set.{AgentId}
+        Task PublishAgentConfigApplyAsync(AgentConfigApplyMessage message);
+        Task SubscribeAgentConfigApplyAsync(string agentId, Action<AgentConfigApplyMessage> onMessageReceived);
+
+        // Agent -> Master (Agent Config apply ACK): agent.config.agent.ack.{AgentId}
+        Task PublishAgentConfigAckAsync(AgentConfigAckMessage message);
+        Task SubscribeAgentConfigAckAsync(string agentId, Action<AgentConfigAckMessage> onMessageReceived);
+
         // Manager -> Server (Inventory): agent-mgr.inventory.{PCId}
         Task PublishCameraInventoryAsync(CameraInventoryMessage message);
         Task SubscribeCameraInventoryAsync(Action<CameraInventoryMessage> onMessageReceived);

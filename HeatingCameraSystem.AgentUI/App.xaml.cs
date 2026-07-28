@@ -65,6 +65,10 @@ namespace HeatingCameraSystem.AgentUI
             _manager = new CameraRuntimeManager(sourceFactory);
             _mainViewModel = new MainViewModel(config.SimulationMode ? "AgentUI — SIMULATION" : "AgentUI");
 
+            string storageDir = config.EffectiveStorageDir;
+            Directory.CreateDirectory(storageDir);
+            _store = new CaptureStore(storageDir, new LiteDbCaptureIndex(Path.Combine(storageDir, "index.db")), config.CaptureImageFormat);
+
             Dispatcher dispatcher = Dispatcher;
             var nucs = new Dictionary<string, ThermalNucCorrector>();
             foreach (CameraDescriptor cam in config.Cameras)
@@ -98,7 +102,7 @@ namespace HeatingCameraSystem.AgentUI
                 var nuc = new ThermalNucCorrector();
                 nucs[cam.AgentId] = nuc;
 
-                var panel = new CameraPanelViewModel(cam.Alias, runtime, dispatcher, nuc, serial);
+                var panel = new CameraPanelViewModel(cam.Alias, cam.AgentId, runtime, dispatcher, nuc, _store, config.CaptureBurstCount, serial);
                 _mainViewModel.Cameras.Add(panel);
 
                 // 영상 ON: 카메라 RUN + 셔터 열기 (기본 셔터 닫힘 → 흰 화면 방지). 카메라별 격리.
@@ -111,12 +115,29 @@ namespace HeatingCameraSystem.AgentUI
             // Fire-and-forget: per-camera start failures are isolated inside the manager.
             _ = _manager.StartAllAsync();
 
-            string storageDir = config.EffectiveStorageDir;
-            Directory.CreateDirectory(storageDir);
-            _store = new CaptureStore(storageDir, new LiteDbCaptureIndex(Path.Combine(storageDir, "index.db")), config.CaptureImageFormat);
-
             _nats = new NatsCommunicationService();
-            _natsConnector = new CameraNatsConnector(_nats, _manager, _store, config.Cameras, config.HeartbeatSeconds, nucs);
+            _natsConnector = new CameraNatsConnector(_nats, _manager, _store, config.Cameras, config.HeartbeatSeconds, nucs, config.CaptureBurstCount,
+                getConfigSnapshot: () => new AgentConfigSnapshot
+                {
+                    SimulationMode = config.SimulationMode,
+                    NatsUrl = config.NatsUrl,
+                    StoragePath = config.StoragePath,
+                    HeartbeatSeconds = config.HeartbeatSeconds,
+                    CaptureImageFormat = config.CaptureImageFormat,
+                    CaptureBurstCount = config.CaptureBurstCount,
+                    Cameras = config.Cameras
+                },
+                applyConfigSnapshot: snap =>
+                {
+                    config.SimulationMode = snap.SimulationMode;
+                    config.NatsUrl = snap.NatsUrl;
+                    config.StoragePath = snap.StoragePath;
+                    config.HeartbeatSeconds = snap.HeartbeatSeconds;
+                    config.CaptureImageFormat = snap.CaptureImageFormat;
+                    config.CaptureBurstCount = snap.CaptureBurstCount;
+                    config.Cameras = snap.Cameras ?? new List<CameraDescriptor>();
+                    config.Save();
+                });
             _natsConnector.Start(config.NatsUrl);
 
             AgentUiLog.Logger.Information(

@@ -27,7 +27,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly CaptureStore _store;
         private readonly IReadOnlyList<CameraDescriptor> _cameras;
         private readonly int _heartbeatSeconds;
+        private readonly int _captureBurstCount;
         private readonly IReadOnlyDictionary<string, ThermalNucCorrector>? _nucs;
+        private readonly Func<AgentConfigSnapshot>? _getConfigSnapshot;
+        private readonly Action<AgentConfigSnapshot>? _applyConfigSnapshot;
 
         private readonly CancellationTokenSource _cts = new();
         private Timer? _heartbeat;
@@ -39,14 +42,20 @@ namespace HeatingCameraSystem.Protocols.Cameras
             CaptureStore store,
             IReadOnlyList<CameraDescriptor> cameras,
             int heartbeatSeconds = 5,
-            IReadOnlyDictionary<string, ThermalNucCorrector>? nucs = null)
+            IReadOnlyDictionary<string, ThermalNucCorrector>? nucs = null,
+            int captureBurstCount = 1,
+            Func<AgentConfigSnapshot>? getConfigSnapshot = null,
+            Action<AgentConfigSnapshot>? applyConfigSnapshot = null)
         {
             _nats = nats ?? throw new ArgumentNullException(nameof(nats));
             _manager = manager ?? throw new ArgumentNullException(nameof(manager));
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _cameras = cameras ?? throw new ArgumentNullException(nameof(cameras));
             _heartbeatSeconds = heartbeatSeconds > 0 ? heartbeatSeconds : 5;
+            _captureBurstCount = captureBurstCount > 0 ? captureBurstCount : 1;
             _nucs = nucs;
+            _getConfigSnapshot = getConfigSnapshot;
+            _applyConfigSnapshot = applyConfigSnapshot;
         }
 
         public bool IsConnected => _connected;
@@ -91,6 +100,22 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 {
                     Debug.WriteLine($"[CameraNats] subscribe failed for {descriptor.AgentId}: {ex.Message}");
                 }
+
+                if (_getConfigSnapshot is not null || _applyConfigSnapshot is not null)
+                {
+                    string agentId = descriptor.AgentId;
+                    try
+                    {
+                        if (_getConfigSnapshot is not null)
+                            await _nats.SubscribeAgentConfigRequestAsync(agentId, req => _ = PublishConfigSnapshotAsync(agentId)).ConfigureAwait(false);
+                        if (_applyConfigSnapshot is not null)
+                            await _nats.SubscribeAgentConfigApplyAsync(agentId, msg => _ = ApplyConfigAsync(msg)).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[CameraNats] config subscribe failed for {agentId}: {ex.Message}");
+                    }
+                }
             }
 
             _heartbeat = new Timer(_ => PublishHeartbeats(), null, TimeSpan.Zero, TimeSpan.FromSeconds(_heartbeatSeconds));
@@ -108,16 +133,20 @@ namespace HeatingCameraSystem.Protocols.Cameras
             {
                 if (_manager.TryGet(descriptor.AgentId, out ICameraRuntime runtime))
                 {
-                    ThermalFrame? snap = await runtime.CaptureSnapshotAsync(
-                        maxAge: TimeSpan.FromSeconds(1),
-                        nextFrameTimeout: TimeSpan.FromSeconds(2)).ConfigureAwait(false);
-
-                    if (snap is not null)
+                    for (int i = 0; i < _captureBurstCount; i++)
                     {
-                        CaptureRecord record = _store.Save(snap, descriptor.AgentId, descriptor.OpenCvIndex, cmd.RecipeStepId);
-                        imagePath = record.Y16Path;
-                        bytes = ThermalPreviewEncoder.EncodeJpeg(snap);
-                        success = true;
+                        bool forceFreshFrame = i > 0;
+                        ThermalFrame? snap = await runtime.CaptureSnapshotAsync(
+                            maxAge: forceFreshFrame ? TimeSpan.Zero : TimeSpan.FromSeconds(1),
+                            nextFrameTimeout: TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+
+                        if (snap is not null)
+                        {
+                            CaptureRecord record = _store.Save(snap, descriptor.AgentId, descriptor.OpenCvIndex, cmd.RecipeStepId);
+                            imagePath = record.Y16Path;
+                            bytes = ThermalPreviewEncoder.EncodeJpeg(snap);
+                            success = true;
+                        }
                     }
                 }
             }
@@ -142,6 +171,55 @@ namespace HeatingCameraSystem.Protocols.Cameras
             catch (Exception ex)
             {
                 Debug.WriteLine($"[CameraNats] publish result failed for {descriptor.AgentId}: {ex.Message}");
+            }
+        }
+
+        private async Task PublishConfigSnapshotAsync(string agentId)
+        {
+            if (_getConfigSnapshot is null) return;
+            try
+            {
+                await _nats.PublishAgentConfigSnapshotAsync(new AgentConfigSnapshotMessage
+                {
+                    AgentId = agentId,
+                    Config = _getConfigSnapshot(),
+                    Timestamp = DateTime.UtcNow
+                }).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[CameraNats] config snapshot publish failed for {agentId}: {ex.Message}");
+            }
+        }
+
+        private async Task ApplyConfigAsync(AgentConfigApplyMessage msg)
+        {
+            bool success = true;
+            string message = "저장됨. AgentUI 재시작 후 적용됩니다.";
+            try
+            {
+                _applyConfigSnapshot?.Invoke(msg.Config);
+            }
+            catch (Exception ex)
+            {
+                success = false;
+                message = ex.Message;
+                Debug.WriteLine($"[CameraNats] config apply failed for {msg.AgentId}: {ex.Message}");
+            }
+
+            try
+            {
+                await _nats.PublishAgentConfigAckAsync(new AgentConfigAckMessage
+                {
+                    AgentId = msg.AgentId,
+                    IsSuccess = success,
+                    Message = message,
+                    Timestamp = DateTime.UtcNow
+                }).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[CameraNats] config ack publish failed for {msg.AgentId}: {ex.Message}");
             }
         }
 

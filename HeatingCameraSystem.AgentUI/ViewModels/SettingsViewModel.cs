@@ -69,6 +69,9 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         [ObservableProperty]
         private CaptureImageFormat _captureImageFormat;
 
+        [ObservableProperty]
+        private int _captureBurstCount;
+
         public CaptureImageFormat[] ImageFormats { get; } = Enum.GetValues<CaptureImageFormat>();
 
         [ObservableProperty]
@@ -85,6 +88,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _storagePath = config.StoragePath;
             _heartbeatSeconds = config.HeartbeatSeconds;
             _captureImageFormat = config.CaptureImageFormat;
+            _captureBurstCount = config.CaptureBurstCount;
 
             foreach (CameraDescriptor camera in config.Cameras)
             {
@@ -112,6 +116,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _config.StoragePath = StoragePath;
             _config.HeartbeatSeconds = HeartbeatSeconds;
             _config.CaptureImageFormat = CaptureImageFormat;
+            _config.CaptureBurstCount = CaptureBurstCount;
             _config.Cameras = Cameras.Select(row => row.ToDescriptor()).ToList();
 
             try
