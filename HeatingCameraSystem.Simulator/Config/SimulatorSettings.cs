@@ -100,8 +100,19 @@ public sealed record SimulatorSettings(
                 $"Simulator settings file '{path}' contains invalid JSON at {where}: {ex.Message}", ex);
         }
 
+        settings = settings.NormalizeOutputPath(path);
         settings.Validate();
         return settings;
+    }
+
+    /// <summary>Resolves a relative <see cref="OutputPath"/> against the config file's directory,
+    /// so captures land deterministically regardless of the caller's working directory.</summary>
+    private SimulatorSettings NormalizeOutputPath(string configPath)
+    {
+        if (string.IsNullOrWhiteSpace(OutputPath) || Path.IsPathRooted(OutputPath))
+            return this;
+        string baseDir = Path.GetDirectoryName(Path.GetFullPath(configPath)) ?? AppContext.BaseDirectory;
+        return this with { OutputPath = Path.GetFullPath(Path.Combine(baseDir, OutputPath)) };
     }
 
     /// <summary>Throws <see cref="SimulatorSettingsException"/> naming the first invalid property.</summary>
@@ -140,6 +151,8 @@ public sealed record SimulatorSettings(
         {
             if (string.IsNullOrWhiteSpace(cam.AgentId))
                 throw Bad(nameof(cam.AgentId), "must be non-blank.");
+            if (!IsValidSubjectToken(cam.AgentId))
+                throw Bad(nameof(cam.AgentId), $"'{cam.AgentId}' must be a single NATS subject token ([A-Za-z0-9_-]).");
             if (!ids.Add(cam.AgentId))
                 throw Bad(nameof(cam.AgentId), $"'{cam.AgentId}' is duplicated.");
             if (cam.CameraIndex < 0)
@@ -180,6 +193,13 @@ public sealed record SimulatorSettings(
         {
             throw new SimulatorSettingsException($"{name} '{path}' is not writable: {ex.Message}", ex);
         }
+    }
+
+    private static bool IsValidSubjectToken(string id)
+    {
+        foreach (char c in id)
+            if (!char.IsAsciiLetterOrDigit(c) && c is not ('_' or '-')) return false;
+        return true;
     }
 
     private static SimulatorSettingsException Bad(string property, string reason) =>

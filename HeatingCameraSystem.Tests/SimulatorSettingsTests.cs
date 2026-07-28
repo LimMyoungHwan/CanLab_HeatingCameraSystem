@@ -118,6 +118,34 @@ public class SimulatorSettingsTests
             },
             "CameraIndex");
 
+    [Theory]
+    [InlineData("Agent.1")]
+    [InlineData("Agent*")]
+    [InlineData("Agent>")]
+    [InlineData("Agent 1")]
+    public void Validate_AgentIdWithSubjectControlChars_Rejected(string agentId) =>
+        AssertRejects(
+            ValidWith(NewTempPath()) with { Cameras = new[] { new CameraSettings(agentId, 0) } },
+            "AgentId");
+
+    [Fact]
+    public void Load_RelativeOutputPath_NormalizedAgainstConfigDir()
+    {
+        string dir = NewTempPath();
+        string path = Path.Combine(dir, "simulator.json");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(path, JsonSerializer.Serialize(ValidWith("ImageStorage")));
+
+            var loaded = SimulatorSettings.Load(path);
+
+            Assert.True(Path.IsPathRooted(loaded.OutputPath));
+            Assert.Equal(Path.GetFullPath(Path.Combine(dir, "ImageStorage")), loaded.OutputPath);
+        }
+        finally { Cleanup(dir); }
+    }
+
     // (e) invalid (non-loopback / unparseable) listen address
     [Theory]
     [InlineData("192.168.1.50")]
