@@ -22,6 +22,7 @@ namespace HeatingCameraSystem.Core.Config
         public PlcSettings Plc { get; set; } = new();
         public NatsSettings Nats { get; set; } = new();
         public SerialSettings Serial { get; set; } = new();
+        public BlackBodySettings BlackBody { get; set; } = new();
         public RecipeEngineSettings RecipeEngine { get; set; } = new();
     }
 
@@ -163,6 +164,24 @@ namespace HeatingCameraSystem.Core.Config
         public int DataBits { get; set; } = 8;
         public string Parity { get; set; } = "None";
         public string StopBits { get; set; } = "One";
+    }
+
+    /// <summary>
+    /// CI Systems SR-800R 흑체 직접-제어 설정. Enabled=true이면 PLC 경유 대신 SR-800R 컨트롤러를
+    /// RS-232로 직접 제어한다(컨트롤러 1대 = 흑체 1개, 대수 = Units.Count). 시리얼 파라미터는
+    /// Units에서 포트별로 지정(SR-800R 규격 기본 9600 8N1). InterMessageDelayMs는 프로토콜상
+    /// 메시지 간 최소 간격(300ms 규격).
+    /// </summary>
+    public class BlackBodySettings
+    {
+        public bool Enabled { get; set; } = false;
+        public int InterMessageDelayMs { get; set; } = 300;
+        public int ReadTimeoutMs { get; set; } = 1500;
+        public List<SerialSettings> Units { get; set; } = new()
+        {
+            new SerialSettings { PortName = "COM4" },
+            new SerialSettings { PortName = "COM5" }
+        };
     }
 
     public class RecipeEngineSettings
