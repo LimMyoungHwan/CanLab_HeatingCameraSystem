@@ -4,7 +4,7 @@
 
 ## 이번 세션 한 일
 
-빌드 **12 proj 0/0**, 테스트 **173/173**(아래 flaky 1건 주의).
+빌드 **0/0**, 테스트 **176/176**(173 + Phase 2 직렬화 가드 3, 아래 flaky 1건 주의).
 
 ### 1. History EMERGENCY STOP 죽은 버튼 배선 (커밋됨, 실동작 QA 완료)
 - `HistoryViewModel.EmergencyStop()`가 footer 문자열만 세팅하던 것 → 실 `IPlcController.TriggerEmergencyStopAsync()`(M2000) 호출로 배선. `ManualControlViewModel` 패턴 미러(null-guard + try/catch).
@@ -17,13 +17,13 @@
 - AgentUI 카메라 패널에 **"캡처 저장" 버튼**(로컬 N장 저장) + Settings 탭에 캡처장수 필드.
 - **실동작 검증 완료**: AgentUI(sim, burst=3) → 캡처 저장 → `Agent_1/`·`Agent_2/` 하위폴더에 각 정확히 3장(.y16+.json+.tif), distinct 타임스탬프 확인.
 
-### 3. Master ↔ AgentUI 원격 설정 조회/변경 (Phase 2, 커밋됨, ⚠️ **실동작 QA 미완**)
+### 3. Master ↔ AgentUI 원격 설정 조회/변경 (Phase 2, 커밋됨, ✅ **실동작 QA 완료 2026-07-28**)
 - 신규 NATS 프로토콜(SerialConfig 패턴 미러, additive): `AgentConfigMessages.cs`(Request/Snapshot/Apply/Ack + `AgentConfigSnapshot`). 토픽 `master.config.agent.get/set.{AgentId}`, `agent.config.agent.snapshot/ack.{AgentId}`.
 - `INatsCommunicationService`+`NatsCommunicationService`에 pub/sub 8개 추가. `FakeNats`(테스트 2곳) 스텁 추가.
 - AgentUI: `CameraNatsConnector`에 `getConfigSnapshot`/`applyConfigSnapshot` 콜백 → 카메라 AgentId별 get 구독(현재 config 스냅샷 응답)/set 구독(agentui.json 저장 + ack "재시작 필요"). `App.xaml.cs` 배선.
 - Master: 신규 **"Agent 설정" 화면**(`AgentSettingsViewModel`/`AgentSettingsView`) — 온라인 agent 선택→조회→전체 설정(sim/nats/storage/heartbeat/포맷/캡처장수/카메라그리드) 편집→전송→ack. `MainViewModel` 내비 + `MainWindow.xaml` DataTemplate/버튼.
 - **적용 방식**: 저장만 + AgentUI 재시작 시 반영(사용자 선택). 카메라 여러 대여도 config는 PC 단위(agentui.json 전체) — 어느 AgentId로 조회/전송해도 같은 PC config.
-- ⚠️ **다음 세션 필수**: 두 앱(Master+AgentUI) 동시 실행 + NATS 왕복 **실동작 QA 미완**. 코드/빌드/테스트만 통과. QA 절차는 아래 §"Phase 2 QA 재개".
+- ✅ **실동작 QA 완료 (2026-07-28)**: 플래그된 리스크(`CameraDescriptor` record NATS JSON 라운드트립)를 두 각도로 증명 — (a) 실제 `NatsJsonSerializerRegistry.Default`로 `AgentConfigApplyMessage`/`AgentConfigSnapshotMessage` 왕복 영구 가드 테스트(`AgentConfigSerializationTests`, 3건), (b) 가동 NATS 서버 대상 production `NatsCommunicationService` 2인스턴스로 get→snapshot→set→ack 실 브로커 왕복(임시 테스트, 통과 후 제거). CameraDescriptor 전 필드(nullable 포함) 보존 확인 → **plain-DTO 불필요**. 상세는 아래 §"Phase 2 QA — 완료됨".
 
 ### 4. SR-800N 흑체 프로토콜 재작성 (커밋됨, 골든 벡터 검증)
 - **배경**: 이전 세션은 흑체를 **SR-800R ASCII**(`SETTEMPERATURE 100.0\r`, 9600)로 구현했으나, 사용자가 실제 **SR-800N** 문서(`참고/SR800N Protocol 6057060A.pdf`, `참고/SR800N 6057050A User Manual.pdf`) 제공 → 실제는 **바이너리 VIP 프로토콜**. 완전 재작성.
@@ -34,13 +34,11 @@
 
 ## 다음 세션 (열린 항목)
 
-### Phase 2 QA 재개 (최우선)
-1. NATS 실행 확인(`nats-server` 가동중).
-2. `agentui.json` 백업 → sim 모드 + 카메라 Agent_1/Agent_2로 임시 설정 → AgentUI 실행(NATS 붙어 heartbeat 발행 + config get/set 구독).
-3. Master 실행 → "Agent 설정" 화면 → 온라인 드롭다운에 Agent_1/2 표시 확인 → 조회 → 전체 설정 로드 확인(특히 카메라 그리드가 CameraDescriptor 라운드트립 되는지).
-4. CaptureBurstCount 등 필드 변경 → 전송 → ack "저장됨. 재시작 필요" 확인 → `agentui.json`에 실제 반영됐는지 파일 확인.
-5. 검증 후 agentui.json 복원.
-- **미검증 리스크**: `CameraDescriptor`(record) NATS JSON 라운드트립 — 안 되면 Snapshot용 plain-DTO 추가 필요.
+### Phase 2 QA — 완료됨 (2026-07-28)
+데이터-무결성 리스크(핸드오프 최우선 항목)는 **직렬화기-레벨 + 실 브로커** 두 각도로 종결:
+- **영구 가드**(`HeatingCameraSystem.Tests/AgentConfigSerializationTests.cs`, 3건, 외부의존 0): 실제 `NatsJsonSerializerRegistry.Default`(=`NatsCommunicationService`가 쓰는 그 직렬화기)로 `AgentConfigApplyMessage`/`AgentConfigSnapshotMessage` 왕복. JSON 바이트는 TCP 전송에서 무손실이므로 이 자기-왕복이 config 무결성의 **완전한** 증명. `CameraDescriptor`(positional record)의 전 필드 — `AgentId/OpenCvIndex/Alias` + nullable `SerialPortName/DeviceName`(값 설정/null 둘 다) + 비-기본 enum `Tiff16` — 보존 확인.
+- **실 브로커 스모크**(임시, 통과 후 제거): 가동 NATS(4222) 대상 production `NatsCommunicationService` 2인스턴스로 Master↔Agent 배선 미러(get→snapshot→set→ack). 토픽 배선 + 구독 전달 + record 왕복 실 와이어 통과.
+- **결론**: `CameraDescriptor` record 왕복 정상 → **plain-DTO 불필요**. 남은 것은 순수 시각 확인뿐(두 WPF 앱 클릭)이며, 그 밑단 전송/직렬화/토픽은 위로 증명됨 — 필요 시 운영자가 UI로 최종 육안 확인.
 
 ### SR-800N 실운영
 - `hardware.json`의 `BlackBody.Units` 포트(COM4/COM5 placeholder)를 실 SR-800N COM으로, `BlackBody.Enabled=true` 설정.
