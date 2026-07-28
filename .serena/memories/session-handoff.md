@@ -1,21 +1,23 @@
-# Session Handoff (2026-07-28 세션3) — Camera Mapping 소비 + AgentUI 시리얼 자동페어링 + 배포
+# Session Handoff (세션4) — 캡처 버스트 + Master 원격설정 + SR-800N 재작성
 
-Full doc: `docs/handoff/session3-mapping-serial-deploy-handoff.md` (read first). UI 감사: `.omo/session-handoff-ui-audit.md`.
+Full doc: `docs/handoff/session4-capture-remoteconfig-sr800n-handoff.md` (read first). UI 감사: `.omo/session-handoff-ui-audit.md`.
 
 ## Done this session (커밋됨)
-빌드 솔루션 12개 0/0, 테스트 177/177, 실 하드웨어 검증.
+빌드 12 proj 0/0, 테스트 173/173(flaky 1건 주의).
 
-1. **UI 구현 감사**: Master 10 + AgentUI 4 화면 전수 → 전부 실구현(빈껍데기 0). 코드감사+실행스윕.
-2. **Camera Mapping 실동작화(Master)**: 인벤토리 `CameraDeviceRepo`에서 소싱(하드코딩 제거). `RecipeEngine.LoadPositionAgentMapAsync`가 저장 맵핑을 `TargetPositionIndex`→슬롯→AgentId 1순위 해석(폴백 보존). `AppServices`가 `MappingRepo` 주입.
-3. **AgentUI 시리얼 COM 자동페어링**: `CameraDescriptor.DeviceName` 추가. `SettingsViewModel.AutoDetectSerialCommand`가 `CameraComPairingService.GetPairsAsync`(USB ContainerID 매칭)로 장치명(FriendlyName) 매칭해 COM 자동 채움. Settings에 Device Name 컬럼 + "COM 자동 감지" 버튼.
-4. **실 HW 검증**: r150→COM7(S/N 545308020), r200→COM8(S/N 545308059), ContainerID=포트독립. 최초 OpenCvIndex 조인 버그(WMI idx≠DirectShow idx) 발견→장치명 매칭으로 수정.
-5. **배포**: `publish.ps1`(루트) → `master_bin`/`agent_bin`(AgentUI)/`agent_console_bin`(Agent 콘솔). `-SelfContained` 포터블. `docs/deployment/deployment-guide.md`.
+1. **History EMERGENCY STOP 배선**: footer 문자열만 → 실 `IPlcController.TriggerEmergencyStopAsync()`(M2000). 실동작 QA 완료.
+2. **캡처 N장 + AgentId 하위폴더**(Phase 1): `AgentUiConfig.CaptureBurstCount`, `ThermalCaptureWriter` 하위폴더+충돌가드, `CameraNatsConnector` 버스트 루프, AgentUI "캡처 저장" 버튼. 실동작 QA 완료(3장/하위폴더 확인).
+3. **Master↔AgentUI 원격 설정**(Phase 2): 신규 NATS 프로토콜(`AgentConfigMessages`, get/set/ack, SerialConfig 패턴 미러), AgentUI 콜백 핸들러, Master "Agent 설정" 화면(`AgentSettingsViewModel/View`). ⚠️ **실동작 왕복 QA 미완** — 코드/빌드/테스트만 통과.
+4. **SR-800N 흑체 프로토콜 재작성**: 이전 SR-800R ASCII(9600) → 실제 SR-800N 바이너리 VIP(115200, `0xAA`+파라미터코드+IEEE754 BE+체크섬). `SrProtocol/ISrLink/SerialPortSrLink/SimulatedSrDevice/SrBlackBodyController/BlackBodySettings` 재작성. 골든 벡터 검증(문서 §3.1.2 프레임 바이트 일치).
 
-## 다음 세션 (열린 항목)
-- **AgentManager 레인(S5/S7/S8)**: 다른 세션 동시 편집 중 — 회피.
-- 실 `agentui.json`에 DeviceName 채우면(Agent_1=r150, Agent_2=r200) 자동감지 바로 동작(선택).
-- 2점 NUC(실 블랙바디 필요), PLC 실주소 치환(A&D 명세), History EmergencyStop 죽은버튼.
+## 다음 세션 (최우선)
+- **Phase 2 실동작 QA**: Master+AgentUI 동시 실행, NATS 왕복(조회→편집→전송→agentui.json 반영) 검증. 리스크: `CameraDescriptor`(record) NATS JSON 라운드트립 안 되면 plain-DTO 필요.
+- SR-800N 실운영: `hardware.json` BlackBody.Units 실 COM + Enabled=true. `GetTargetTemperature`=0x07F3(SV) 매핑 확인.
+- AgentManager 레인 회피 지속. 2점 NUC/PLC 실주소는 하드웨어 대기.
+
+## 이슈
+- `CaptureStoreTests`: LiteDB 전역 BsonMapper 병렬 flaky(격리·재실행 통과, 무관).
 
 ## 환경
-- `hardware.json` SimMode=true(가짜 PLC/BB). `agentui.json` SimMode=false(실카메라 r150/COM7, r200/COM8).
-- 실 카메라 연결됨. NATS 가동중. branch master, upstream origin/master (github LimMyoungHwan/CanLab_HeatingCameraSystem).
+- `hardware.json` SimMode=true. `agentui.json` SimMode=false(실카메라 Agent_1/COM7·Agent_2/COM8). NATS 가동중. branch master, upstream origin/master.
+- `참고/` SR-800N PDF 2종 = 참조용(커밋 제외).
