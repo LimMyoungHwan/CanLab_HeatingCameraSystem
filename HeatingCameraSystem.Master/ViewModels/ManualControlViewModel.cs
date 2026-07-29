@@ -1,6 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -10,9 +15,29 @@ using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
+    public partial class CameraTileModel : ObservableObject
+    {
+        public string AgentId { get; }
+        public int CameraIndex { get; }
+        public string Title { get; }
+
+        [ObservableProperty] private BitmapSource? _liveImage;
+        [ObservableProperty] private string _lastAckStatus = "";
+
+        public CameraTileModel(string agentId, int cameraIndex, string title)
+        {
+            AgentId = agentId;
+            CameraIndex = cameraIndex;
+            Title = title;
+        }
+    }
+
     public partial class ManualControlViewModel : ObservableObject
     {
         private readonly DispatcherTimer _timer;
+        private readonly HashSet<string> _subscribedAgentIds = new();
+
+        public ObservableCollection<CameraTileModel> Cameras { get; } = new();
 
         [ObservableProperty] private string _statusMessage = "대기";
         [ObservableProperty] private int _servoXPosition;
@@ -47,6 +72,114 @@ namespace HeatingCameraSystem.Master.ViewModels
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _timer.Tick += async (_, _) => await PollAsync();
             _timer.Start();
+
+            SubscribeCameraServices();
+        }
+
+        private void SubscribeCameraServices()
+        {
+            var nats = AppServices.NatsService;
+            if (nats == null) return;
+
+            try
+            {
+                nats.SubscribeAgentStatusAsync(OnAgentStatus);
+                nats.SubscribeLiveFrameAsync(OnLiveFrame);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ManualControl] NATS subscribe failed: {ex.Message}");
+            }
+        }
+
+        private void OnAgentStatus(AgentStatusMessage msg)
+        {
+            if (string.IsNullOrEmpty(msg.AgentId)) return;
+            
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                var existing = Cameras.FirstOrDefault(c => c.AgentId == msg.AgentId && c.CameraIndex == msg.CameraIndex);
+                if (existing == null)
+                {
+                    var newTile = new CameraTileModel(msg.AgentId, msg.CameraIndex, $"{msg.AgentId} (cam {msg.CameraIndex})");
+                    Cameras.Add(newTile);
+                    
+                    if (_subscribedAgentIds.Add(msg.AgentId))
+                    {
+                        try
+                        {
+                            AppServices.NatsService?.SubscribeCameraControlAckAsync(msg.AgentId, OnCameraAck);
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[ManualControl] Ack subscribe failed for {msg.AgentId}: {ex.Message}");
+                        }
+                    }
+                }
+            });
+        }
+
+        private void OnCameraAck(CameraControlAckMessage ack)
+        {
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                var tile = Cameras.FirstOrDefault(c => c.AgentId == ack.AgentId && c.CameraIndex == ack.CameraIndex);
+                if (tile != null)
+                {
+                    tile.LastAckStatus = ack.IsSuccess ? $"✔ {ack.Op} {ack.Message}" : $"✘ {ack.Op} {ack.Message}";
+                }
+            });
+        }
+
+        private void OnLiveFrame(LiveFrameMessage msg)
+        {
+            if (msg.ImageBytes is null || msg.ImageBytes.Length == 0) return;
+
+            BitmapSource? bmp = Decode(msg.ImageBytes);
+            if (bmp is null) return;
+
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                var tile = Cameras.FirstOrDefault(c => c.AgentId == msg.AgentId && c.CameraIndex == msg.CameraIndex);
+                if (tile == null)
+                {
+                    tile = new CameraTileModel(msg.AgentId, msg.CameraIndex, $"{msg.AgentId} (cam {msg.CameraIndex})");
+                    Cameras.Add(tile);
+                    
+                    if (_subscribedAgentIds.Add(msg.AgentId))
+                    {
+                        try
+                        {
+                            AppServices.NatsService?.SubscribeCameraControlAckAsync(msg.AgentId, OnCameraAck);
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[ManualControl] Ack subscribe failed for {msg.AgentId}: {ex.Message}");
+                        }
+                    }
+                }
+
+                tile.LiveImage = bmp;
+            });
+        }
+
+        private static BitmapSource? Decode(byte[] jpeg)
+        {
+            try
+            {
+                var bmp = new BitmapImage();
+                using var ms = new MemoryStream(jpeg);
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.StreamSource = ms;
+                bmp.EndInit();
+                bmp.Freeze();
+                return bmp;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         partial void OnCooler1stChanged(bool value) => _ = EquipmentAsync(PlcEquipment.Cooler1st, value);
@@ -84,6 +217,39 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         [RelayCommand]
         private Task ApplyBlackBody2() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(1, BlackBody2Target), "흑체2 온도");
+
+        private async Task PublishCameraCommandAsync(CameraTileModel tile, string op)
+        {
+            if (tile == null || AppServices.NatsService == null) return;
+
+            tile.LastAckStatus = "⏳ 전송됨…";
+            var msg = new CameraControlMessage
+            {
+                AgentId = tile.AgentId,
+                CameraIndex = tile.CameraIndex,
+                Op = op,
+                Timestamp = DateTime.UtcNow
+            };
+
+            try
+            {
+                await AppServices.NatsService.PublishCameraControlAsync(msg);
+            }
+            catch (Exception ex)
+            {
+                tile.LastAckStatus = $"✘ 전송 실패: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"[ManualControl] Publish failed: {ex.Message}");
+            }
+        }
+
+        [RelayCommand] private Task SendRun(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Run);
+        [RelayCommand] private Task SendStop(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Stop);
+        [RelayCommand] private Task SendShutterOpen(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.ShutterOpen);
+        [RelayCommand] private Task SendShutterClose(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.ShutterClose);
+        [RelayCommand] private Task SendCapture(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Capture);
+        [RelayCommand] private Task SendNuc(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Nuc);
+        [RelayCommand] private Task SendSaveConfig(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.SaveConfig);
+        [RelayCommand] private Task SendRefreshInfo(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.RefreshInfo);
 
         public Task Jog(ServoAxis axis, bool positive, bool on)
         {
