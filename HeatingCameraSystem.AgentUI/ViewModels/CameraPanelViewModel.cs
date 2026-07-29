@@ -44,6 +44,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
         public bool HasSerialControl => _serial is not null;
 
+        public string AgentId => _agentId;
+
         public int CameraIndex => _runtime.CameraIndex;
 
         public CameraPanelViewModel(string title, string agentId, ICameraRuntime runtime, Dispatcher dispatcher, ThermalNucCorrector nuc, CaptureStore store, int captureBurstCount = 1, ICameraSerialClient? serial = null)

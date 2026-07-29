@@ -31,6 +31,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly IReadOnlyDictionary<string, ThermalNucCorrector>? _nucs;
         private readonly Func<AgentConfigSnapshot>? _getConfigSnapshot;
         private readonly Action<AgentConfigSnapshot>? _applyConfigSnapshot;
+        private readonly Func<CameraDescriptor, string, Task<(bool Success, string Message)>>? _cameraControlHandler;
 
         private readonly CancellationTokenSource _cts = new();
         private Timer? _heartbeat;
@@ -45,7 +46,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
             IReadOnlyDictionary<string, ThermalNucCorrector>? nucs = null,
             int captureBurstCount = 1,
             Func<AgentConfigSnapshot>? getConfigSnapshot = null,
-            Action<AgentConfigSnapshot>? applyConfigSnapshot = null)
+            Action<AgentConfigSnapshot>? applyConfigSnapshot = null,
+            Func<CameraDescriptor, string, Task<(bool Success, string Message)>>? cameraControlHandler = null)
         {
             _nats = nats ?? throw new ArgumentNullException(nameof(nats));
             _manager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -56,6 +58,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _nucs = nucs;
             _getConfigSnapshot = getConfigSnapshot;
             _applyConfigSnapshot = applyConfigSnapshot;
+            _cameraControlHandler = cameraControlHandler;
         }
 
         public bool IsConnected => _connected;
@@ -99,6 +102,17 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"[CameraNats] subscribe failed for {descriptor.AgentId}: {ex.Message}");
+                }
+
+                try
+                {
+                    await _nats.SubscribeCameraControlAsync(
+                        descriptor.AgentId,
+                        msg => _ = HandleCameraControlAsync(descriptor, msg)).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[CameraNats] camera control subscribe failed for {descriptor.AgentId}: {ex.Message}");
                 }
 
                 if (_getConfigSnapshot is not null || _applyConfigSnapshot is not null)
@@ -171,6 +185,42 @@ namespace HeatingCameraSystem.Protocols.Cameras
             catch (Exception ex)
             {
                 Debug.WriteLine($"[CameraNats] publish result failed for {descriptor.AgentId}: {ex.Message}");
+            }
+        }
+
+        public async Task HandleCameraControlAsync(CameraDescriptor cam, CameraControlMessage msg)
+        {
+            bool success = false;
+            string message = "control handler not wired";
+
+            try
+            {
+                if (_cameraControlHandler is not null)
+                {
+                    (success, message) = await _cameraControlHandler(cam, msg.Op).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+                Debug.WriteLine($"[CameraNats] camera control failed for {cam.AgentId}: {ex.Message}");
+            }
+
+            try
+            {
+                await _nats.PublishCameraControlAckAsync(new CameraControlAckMessage
+                {
+                    AgentId = cam.AgentId,
+                    CameraIndex = msg.CameraIndex,
+                    Op = msg.Op,
+                    IsSuccess = success,
+                    Message = message,
+                    Timestamp = DateTime.UtcNow
+                }).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[CameraNats] camera control ack publish failed for {cam.AgentId}: {ex.Message}");
             }
         }
 

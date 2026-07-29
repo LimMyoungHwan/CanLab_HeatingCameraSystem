@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using CommunityToolkit.Mvvm.Input;
 using HeatingCameraSystem.AgentUI.Services;
 using HeatingCameraSystem.AgentUI.ViewModels;
 using HeatingCameraSystem.Core.Config;
@@ -137,6 +139,42 @@ namespace HeatingCameraSystem.AgentUI
                     config.CaptureBurstCount = snap.CaptureBurstCount;
                     config.Cameras = snap.Cameras ?? new List<CameraDescriptor>();
                     config.Save();
+                },
+                cameraControlHandler: async (descriptor, op) =>
+                {
+                    try
+                    {
+                        CameraPanelViewModel? panel = _mainViewModel?.Cameras
+                            .FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId);
+                        if (panel is null)
+                        {
+                            return (false, $"camera panel not found: {descriptor.AgentId}");
+                        }
+
+                        IAsyncRelayCommand? command = op switch
+                        {
+                            CameraControlOps.Run => panel.RunCameraCommand,
+                            CameraControlOps.Stop => panel.StopCameraCommand,
+                            CameraControlOps.ShutterOpen => panel.OpenShutterCommand,
+                            CameraControlOps.ShutterClose => panel.CloseShutterCommand,
+                            CameraControlOps.Capture => panel.CaptureSaveCommand,
+                            CameraControlOps.Nuc => panel.RunNucCommand,
+                            CameraControlOps.SaveConfig => panel.SaveConfigCommand,
+                            CameraControlOps.RefreshInfo => panel.RefreshInfoCommand,
+                            _ => null
+                        };
+                        if (command is null)
+                        {
+                            return (false, $"unknown camera control op: {op}");
+                        }
+
+                        await dispatcher.InvokeAsync(() => command.ExecuteAsync(null)).Task.Unwrap();
+                        return (true, "ok");
+                    }
+                    catch (Exception ex)
+                    {
+                        return (false, ex.Message);
+                    }
                 });
             _natsConnector.Start(config.NatsUrl);
 
