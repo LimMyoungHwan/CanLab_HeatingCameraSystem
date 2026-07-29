@@ -35,3 +35,25 @@ Set_Cameras=Cameras
 Set_AddCamera=Add camera
 Set_AutoDetectCom=Auto-detect COM
 Set_Save=Save
+
+# Data tab grid columns
+Data_ColTime=Time (UTC)
+Data_ColAgent=Agent
+Data_ColCam=Cam
+Data_ColSize=Size
+Data_ColMin=Min
+Data_ColMax=Max
+
+# Logs tab grid columns
+Logs_ColTime=Time (UTC)
+Logs_ColLevel=Level
+Logs_ColMessage=Message
+Logs_ColException=Exception
+
+# Settings camera grid columns
+Set_ColAgentId=Agent Id
+Set_ColOpenCvIndex=OpenCV Index
+Set_ColAlias=Alias
+Set_ColDeviceName=Device Name
+Set_ColSerialCom=Serial COM
+Set_Remove=Remove

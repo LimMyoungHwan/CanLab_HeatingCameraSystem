@@ -127,7 +127,7 @@
 
                     <Border Background="#7a2020" CornerRadius="3" Padding="8,3" Margin="0,0,0,10" HorizontalAlignment="Left"
                             Visibility="{Binding IsEmergencyStop, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="비상정지" Foreground="#ffd9d6" FontWeight="Bold" FontSize="12"/>
+                        <TextBlock Text="{loc:Loc Equip_EStop}" Foreground="#ffd9d6" FontWeight="Bold" FontSize="12"/>
                     </Border>
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
@@ -137,55 +137,64 @@
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                        <TextBlock Text="{Binding Snapshot.CurrentTemperature, StringFormat='온도 {0:0.0}℃'}" Foreground="#47eaed" FontSize="13" FontWeight="Bold"/>
-                        <TextBlock Text="{Binding Snapshot.CurrentHumidity, StringFormat='습도 {0:0.0}%'}" Foreground="#47eaed" FontSize="13" FontWeight="Bold" Margin="12,0,0,0"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{loc:Loc Equip_Temperature}" Foreground="#47eaed" FontSize="13" FontWeight="Bold" Margin="0,0,4,0"/>
+                            <TextBlock Text="{Binding Snapshot.CurrentTemperature, StringFormat=\'{0:0.0}℃\'}" Foreground="#47eaed" FontSize="13" FontWeight="Bold"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="12,0,0,0">
+                            <TextBlock Text="{loc:Loc Equip_Humidity}" Foreground="#47eaed" FontSize="13" FontWeight="Bold" Margin="0,0,4,0"/>
+                            <TextBlock Text="{Binding Snapshot.CurrentHumidity, StringFormat=\'{0:0.0}%\'}" Foreground="#47eaed" FontSize="13" FontWeight="Bold"/>
+                        </StackPanel>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <TextBlock Text="{Binding Snapshot.ServoXPosition, StringFormat='서보  X {0}'}" Foreground="#bac9c9" FontSize="12"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{loc:Loc Equip_Servo}" Foreground="#bac9c9" FontSize="12"/>
+                            <TextBlock Text="{Binding Snapshot.ServoXPosition, StringFormat=\' X {0}\'}" Foreground="#bac9c9" FontSize="12"/>
+                        </StackPanel>
                         <TextBlock Text="{Binding Snapshot.ServoYPosition, StringFormat='Y {0}'}" Foreground="#bac9c9" FontSize="12" Margin="10,0,0,0"/>
                     </StackPanel>
 
                     <UniformGrid Columns="2">
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Heater, Converter={StaticResource Lamp}}"/>
-                            <TextBlock Text="히터" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:Loc Equip_Heater}" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Cooler1st, Converter={StaticResource Lamp}}"/>
-                            <TextBlock Text="1차 냉동기" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:Loc Equip_Cooler1}" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Cooler2nd, Converter={StaticResource Lamp}}"/>
-                            <TextBlock Text="2차 냉동기" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:Loc Equip_Cooler2}" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.CoolerRoom, Converter={StaticResource Lamp}}"/>
-                            <TextBlock Text="상온 냉동기" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:Loc Equip_CoolerRoom}" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.CoolerRoomBypass, Converter={StaticResource Lamp}}"/>
-                            <TextBlock Text="바이패스" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:Loc Equip_Bypass}" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Blower1, Converter={StaticResource Lamp}}"/>
-                            <TextBlock Text="블로워1" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:Loc Equip_Blower1}" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Blower2, Converter={StaticResource Lamp}}"/>
-                            <TextBlock Text="블로워2" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:Loc Equip_Blower2}" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Mcf, Converter={StaticResource Lamp}}"/>
-                            <TextBlock Text="MCF" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:Loc Equip_Mcf}" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.DoorLamp, Converter={StaticResource Lamp}}"/>
-                            <TextBlock Text="도어" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:Loc Equip_Door}" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
                             <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.PairGlass, Converter={StaticResource Lamp}}"/>
-                            <TextBlock Text="페어글라스" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:Loc Equip_PairGlass}" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </UniformGrid>
                 </StackPanel>

@@ -6,6 +6,7 @@
              xmlns:local="clr-namespace:HeatingCameraSystem.Master.Views"
              xmlns:vm="clr-namespace:HeatingCameraSystem.Master.ViewModels"
              xmlns:conv="clr-namespace:HeatingCameraSystem.Master.Converters"
+             xmlns:loc="clr-namespace:HeatingCameraSystem.Master.Localization"
              mc:Ignorable="d"
              d:DesignHeight="900" d:DesignWidth="1600" Background="#0b0f1a" Foreground="#dee2f7">
 
@@ -167,7 +168,7 @@
             </Border.Effect>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <TextBlock Text="&#x26A0;" FontSize="20" Foreground="#ffe1de" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                <TextBlock Text="EMERGENCY STOP ACTIVE  ·  비상정지 동작 중" FontSize="18" FontWeight="Bold" Foreground="#ffe1de" VerticalAlignment="Center"/>
+                <TextBlock Text="{loc:Loc Dash_EmergencyStopMsg}" FontSize="18" FontWeight="Bold" Foreground="#ffe1de" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 
@@ -185,9 +186,9 @@
                         <Border Width="4" Height="22" CornerRadius="2" Background="{StaticResource Primary}" Margin="0,0,12,0">
                             <Border.Effect><DropShadowEffect Color="#47eaed" BlurRadius="12" ShadowDepth="0" Opacity="0.8"/></Border.Effect>
                         </Border>
-                        <TextBlock Text="SYSTEM OVERVIEW" FontSize="20" FontWeight="Bold" Foreground="{StaticResource TextOnSurface}" VerticalAlignment="Center"/>
+                        <TextBlock Text="{loc:Loc Dash_SystemOverview}" FontSize="20" FontWeight="Bold" Foreground="{StaticResource TextOnSurface}" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <TextBlock Text="실시간 통합 모니터링 · 2s REFRESH" FontSize="11" Foreground="{StaticResource Outline}" Margin="16,2,0,0"/>
+                    <TextBlock Text="{loc:Loc Dash_RefreshRate}" FontSize="11" Foreground="{StaticResource Outline}" Margin="16,2,0,0"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
@@ -254,36 +255,42 @@
                     <!-- CHAMBER -->
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
-                            <TextBlock Text="CHAMBER · 챔버 온습도" Style="{StaticResource CardHeader}"/>
+                            <TextBlock Text="{loc:Loc Dash_ChamberTitle}" Style="{StaticResource CardHeader}"/>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <TextBlock Text="온도 TEMP" Style="{StaticResource Lbl}"/>
+                                    <TextBlock Text="{loc:Loc Dash_TempLabel}" Style="{StaticResource Lbl}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding CurrentTemperature, StringFormat={}{0:F1}}" FontSize="34" FontWeight="Bold" Foreground="{StaticResource Error}">
                                             <TextBlock.Effect><DropShadowEffect Color="#ffb4ab" BlurRadius="16" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
                                         </TextBlock>
                                         <TextBlock Text="&#176;C" Style="{StaticResource Unit}"/>
                                     </StackPanel>
-                                    <TextBlock Text="{Binding TargetTemperature, StringFormat=목표 {0:F1}&#176;C}" FontSize="11" Foreground="{StaticResource Outline}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{loc:Loc Dash_TargetTempPrefix}" FontSize="11" Foreground="{StaticResource Outline}" Margin="0,0,2,0"/>
+                                        <TextBlock Text="{Binding TargetTemperature, StringFormat='{}{0:F1}&#176;C'}" FontSize="11" Foreground="{StaticResource Outline}"/>
+                                    </StackPanel>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1">
-                                    <TextBlock Text="습도 HUMIDITY" Style="{StaticResource Lbl}"/>
+                                    <TextBlock Text="{loc:Loc Dash_HumidityLabel}" Style="{StaticResource Lbl}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding CurrentHumidity, StringFormat={}{0:F1}}" FontSize="34" FontWeight="Bold" Foreground="{StaticResource Primary}">
                                             <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="16" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
                                         </TextBlock>
                                         <TextBlock Text="%RH" Style="{StaticResource Unit}"/>
                                     </StackPanel>
-                                    <TextBlock Text="{Binding TargetHumidity, StringFormat=목표 {0:F1}%RH}" FontSize="11" Foreground="{StaticResource Outline}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{loc:Loc Dash_TargetTempPrefix}" FontSize="11" Foreground="{StaticResource Outline}" Margin="0,0,2,0"/>
+                                        <TextBlock Text="{Binding TargetHumidity, StringFormat='{}{0:F1}%RH'}" FontSize="11" Foreground="{StaticResource Outline}"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </Grid>
                             <Border Height="64" Margin="0,12,0,0" Background="#0a1019" BorderBrush="{StaticResource CardEdge}" BorderThickness="1" CornerRadius="6" Padding="6">
                                 <Grid>
-                                    <TextBlock Text="트렌드 수집 중…" Foreground="{StaticResource Outline}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock Text="{loc:Loc Dash_TrendLoading}" Foreground="{StaticResource Outline}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Visibility" Value="Collapsed"/>
@@ -309,17 +316,17 @@
                     <!-- BLACKBODY -->
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
-                            <TextBlock Text="BLACKBODY · 흑체" Style="{StaticResource CardHeader}"/>
+                            <TextBlock Text="{loc:Loc Dash_BlackBodyTitle}" Style="{StaticResource CardHeader}"/>
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="흑체 1 현재 (PV)" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Dash_Bb1Pv}" Style="{StaticResource Lbl}"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding BlackBody1Pv, StringFormat={}{0:F1} &#176;C}" Style="{StaticResource Val}" Foreground="{StaticResource Primary}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="흑체 1 목표 (SV)" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Loc Dash_Bb1Sv}" Style="{StaticResource Lbl}"/>
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding BlackBody1Sv, StringFormat={}{0:F1} &#176;C}" Style="{StaticResource Val}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="흑체 2 현재 (PV)" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="{loc:Loc Dash_Bb2Pv}" Style="{StaticResource Lbl}"/>
                                 <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding BlackBody2Pv, StringFormat={}{0:F1} &#176;C}" Style="{StaticResource Val}" Foreground="{StaticResource Primary}"/>
-                                <TextBlock Grid.Row="3" Grid.Column="0" Text="흑체 2 목표 (SV)" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="{loc:Loc Dash_Bb2Sv}" Style="{StaticResource Lbl}"/>
                                 <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding BlackBody2Sv, StringFormat={}{0:F1} &#176;C}" Style="{StaticResource Val}"/>
                             </Grid>
                         </StackPanel>
@@ -328,7 +335,7 @@
                     <!-- MOTION / SERVO -->
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
-                            <TextBlock Text="MOTION · 서보 직교로봇" Style="{StaticResource CardHeader}"/>
+                            <TextBlock Text="{loc:Loc Dash_MotionTitle}" Style="{StaticResource CardHeader}"/>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -343,7 +350,7 @@
                                     <TextBlock Text="{Binding ServoYPosition}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
                                         <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
                                     </TextBlock>
-                                    <TextBlock Text="{Binding CurrentPoint, StringFormat=현재 포인트 · P{0}}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Secondary}" Margin="0,8,0,0"/>
+                                    <TextBlock Text="{Binding CurrentPoint, StringFormat={loc:Loc Dash_CurrentPoint}}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Secondary}" Margin="0,8,0,0"/>
                                 </StackPanel>
                                 <!-- XY mini-map -->
                                 <Border Grid.Column="1" Width="126" Height="126" VerticalAlignment="Center" Background="#080d15" BorderBrush="{StaticResource CardEdge}" BorderThickness="1" CornerRadius="8">
@@ -365,18 +372,18 @@
                                     <Ellipse Width="10" Height="10" Fill="{Binding ServoYBusy, Converter={StaticResource Lamp}}"/><TextBlock Text=" Y BUSY" Style="{StaticResource Lbl}"/>
                                 </StackPanel>
                                 <StackPanel Style="{StaticResource LampCell}">
-                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoXHomeComplete, Converter={StaticResource Lamp}}"/><TextBlock Text=" X 원점" Style="{StaticResource Lbl}"/>
+                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoXHomeComplete, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_XOrigin}" Style="{StaticResource Lbl}"/>
                                 </StackPanel>
                                 <StackPanel Style="{StaticResource LampCell}">
-                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoYHomeComplete, Converter={StaticResource Lamp}}"/><TextBlock Text=" Y 원점" Style="{StaticResource Lbl}"/>
+                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoYHomeComplete, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_YOrigin}" Style="{StaticResource Lbl}"/>
                                 </StackPanel>
                             </WrapPanel>
                             <Grid Margin="0,4,0,0">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="X 에러코드" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Dash_XErrorCode}" Style="{StaticResource Lbl}"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ServoXErrorCode}" Style="{StaticResource Val}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Y 에러코드" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Loc Dash_YErrorCode}" Style="{StaticResource Lbl}"/>
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ServoYErrorCode}" Style="{StaticResource Val}"/>
                             </Grid>
                         </StackPanel>
@@ -385,18 +392,18 @@
                     <!-- PROGRAM -->
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
-                            <TextBlock Text="PROGRAM · 진행" Style="{StaticResource CardHeader}"/>
+                            <TextBlock Text="{loc:Loc Dash_ProgramTitle}" Style="{StaticResource CardHeader}"/>
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="스텝 STEP" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Dash_StepLabel}" Style="{StaticResource Lbl}"/>
                                 <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                                     <TextBlock Text="{Binding CurrentStep}" Style="{StaticResource Val}" Foreground="{StaticResource Primary}" Margin="0"/>
                                     <TextBlock Text="{Binding TotalSteps, StringFormat= / {0}}" Style="{StaticResource Val}" Margin="0"/>
                                 </StackPanel>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="팬 속도 FAN" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Loc Dash_FanLabel}" Style="{StaticResource Lbl}"/>
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FanSpeedHz, StringFormat={}{0:F2} Hz}" Style="{StaticResource Val}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="GAS 유속" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="{loc:Loc Dash_GasLabel}" Style="{StaticResource Lbl}"/>
                                 <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding GasFlow, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
                             </Grid>
                         </StackPanel>
@@ -405,18 +412,18 @@
                     <!-- EQUIPMENT -->
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
-                            <TextBlock Text="EQUIPMENT · 장비 상태" Style="{StaticResource CardHeader}"/>
+                            <TextBlock Text="{loc:Loc Dash_EquipTitle}" Style="{StaticResource CardHeader}"/>
                             <WrapPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Heater, Converter={StaticResource Lamp}}"/><TextBlock Text=" 히터" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Cooler1st, Converter={StaticResource Lamp}}"/><TextBlock Text=" 1차 냉동" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Cooler2nd, Converter={StaticResource Lamp}}"/><TextBlock Text=" 2차 냉동" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding CoolerRoom, Converter={StaticResource Lamp}}"/><TextBlock Text=" 상온 냉동" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding CoolerRoomBypass, Converter={StaticResource Lamp}}"/><TextBlock Text=" 바이패스" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding DoorLamp, Converter={StaticResource Lamp}}"/><TextBlock Text=" 도어램프" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding PairGlass, Converter={StaticResource Lamp}}"/><TextBlock Text=" 페어글라스" Style="{StaticResource Lbl}"/></StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Heater, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Equip_Heater}" Margin="4,0,8,5" Style="{StaticResource Lbl}"/></StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Cooler1st, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_Cooler1Short}" Style="{StaticResource Lbl}"/></StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Cooler2nd, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_Cooler2Short}" Style="{StaticResource Lbl}"/></StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding CoolerRoom, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_CoolerRoomShort}" Style="{StaticResource Lbl}"/></StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding CoolerRoomBypass, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_BypassShort}" Style="{StaticResource Lbl}"/></StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding DoorLamp, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_DoorLampShort}" Style="{StaticResource Lbl}"/></StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding PairGlass, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_PairGlassShort}" Style="{StaticResource Lbl}"/></StackPanel>
                                 <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Mcf, Converter={StaticResource Lamp}}"/><TextBlock Text=" MCF" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Blower1, Converter={StaticResource Lamp}}"/><TextBlock Text=" 블로워1" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Blower2, Converter={StaticResource Lamp}}"/><TextBlock Text=" 블로워2" Style="{StaticResource Lbl}"/></StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Blower1, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_Blower1Short}" Style="{StaticResource Lbl}"/></StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Blower2, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_Blower2Short}" Style="{StaticResource Lbl}"/></StackPanel>
                             </WrapPanel>
                         </StackPanel>
                     </Border>
@@ -437,8 +444,8 @@
                         </Border.Style>
                         <StackPanel>
                             <Grid Margin="0,0,0,12">
-                                <TextBlock Text="ALARMS · 알람" Style="{StaticResource CardHeader}" Margin="0"/>
-                                <TextBlock Text="{Binding Alarms.Count, StringFormat={}{0}건}" FontSize="11" FontWeight="Bold" Foreground="#ff8f88" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                <TextBlock Text="{loc:Loc Dash_AlarmsTitle}" Style="{StaticResource CardHeader}" Margin="0"/>
+                                <TextBlock Text="{Binding Alarms.Count, StringFormat={loc:Loc Dash_AlarmsCount}}" FontSize="11" FontWeight="Bold" Foreground="#ff8f88" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                             </Grid>
                             <StackPanel Orientation="Horizontal">
                                 <StackPanel.Style>
@@ -450,7 +457,7 @@
                                     </Style>
                                 </StackPanel.Style>
                                 <Ellipse Width="10" Height="10" Fill="{StaticResource Secondary}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock Text="정상 · ALL SYSTEMS NOMINAL" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBlock Text="{loc:Loc Dash_AllNominal}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="12" VerticalAlignment="Center"/>
                             </StackPanel>
                             <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
                                 <ScrollViewer.Style>
@@ -517,11 +524,11 @@
                             <Button Content="Mode 5 (1)" Style="{StaticResource ModeButtonStyle}" Tag="5" Command="{Binding SetViewModeCommand}" CommandParameter="5"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,16,0">
-                            <TextBlock Text="컬러맵" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="{loc:Loc Dash_ColorMap}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox MinWidth="120" SelectedIndex="{Binding ColorMapIndex, Mode=TwoWay}"
                                       Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}">
-                                <ComboBoxItem Content="컬러"/>
-                                <ComboBoxItem Content="그레이스케일"/>
+                                <ComboBoxItem Content="{loc:Loc Dash_Color}"/>
+                                <ComboBoxItem Content="{loc:Loc Dash_Grayscale}"/>
                             </ComboBox>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
@@ -627,7 +634,7 @@
 
                     <StackPanel Grid.Row="0" Margin="16">
                         <Grid Margin="0,0,0,10">
-                            <TextBlock Text="AGENTS · 카메라" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextOnSurface}"/>
+                            <TextBlock Text="{loc:Loc Dash_AgentsTitle}" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextOnSurface}"/>
                             <TextBlock Text="{Binding OnlineAgentCount, StringFormat={}{0} ONLINE}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Secondary}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                         </Grid>
                     </StackPanel>
@@ -728,7 +735,7 @@
                                 <TextBlock Grid.Column="0" Text="RECIPE" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                 <ComboBox Grid.Column="1" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"
                                           ItemsSource="{Binding Recipes}" SelectedItem="{Binding SelectedRecipe}" DisplayMemberPath="Name"/>
-                                <Button Grid.Column="2" Content="&#8635;" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="10,4" Margin="8,0,0,0" Command="{Binding RefreshRecipesCommand}" ToolTip="레시피 목록 새로고침"/>
+                                <Button Grid.Column="2" Content="&#8635;" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="10,4" Margin="8,0,0,0" Command="{Binding RefreshRecipesCommand}" ToolTip="{loc:Loc Dash_RefreshRecipesTooltip}"/>
                             </Grid>
                             <TextBlock Text="{Binding RecipeStatus}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,8"/>
                             <Button Content="START" Background="{StaticResource Secondary}" Foreground="#00210c" FontSize="20" FontWeight="Bold" Padding="0,12" Margin="0,0,0,8" BorderThickness="0" Command="{Binding StartRecipeCommand}">

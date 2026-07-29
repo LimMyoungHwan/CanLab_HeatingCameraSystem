@@ -20,3 +20,247 @@ Title_AgentSettings=Agent 원격 설정
 Title_PlcStatus=PLC 상태
 Title_PlcSettings=PLC 설정
 Title_ManualControl=수동 조작
+
+# Common
+Equip_EStop=비상정지
+Equip_Heater=히터
+Equip_Cooler1=1차 냉동기
+Equip_Cooler2=2차 냉동기
+Equip_CoolerRoom=상온 냉동기
+Equip_Bypass=바이패스
+Equip_Blower1=블로워1
+Equip_Blower2=블로워2
+Equip_Mcf=MCF
+Equip_Door=도어
+Equip_PairGlass=페어글라스
+Equip_Temperature=온도
+Equip_Humidity=습도
+Equip_Servo=서보
+Equip_Chamber=챔버
+Equip_BlackBody=흑체
+Equip_DoorLamp=도어램프
+Common_Save=저장
+Common_Apply=적용
+Common_Stop=중지
+Common_Load=불러오기
+Common_Send=전송
+Common_RefreshInfo=정보 갱신
+Common_Search=조회
+Common_Delete=삭제
+Common_AddCamera=+ 카메라 추가
+Common_Approve=승인
+Common_Reject=거부
+Common_Minute=분
+
+# Dash
+Dash_EmergencyStopMsg=EMERGENCY STOP ACTIVE  ·  비상정지 동작 중
+Dash_SystemOverview=SYSTEM OVERVIEW
+Dash_RefreshRate=실시간 통합 모니터링 · 2s REFRESH
+Dash_ChamberTitle=CHAMBER · 챔버 온습도
+Dash_TempLabel=온도 TEMP
+Dash_TargetTempPrefix=목표 
+Dash_HumidityLabel=습도 HUMIDITY
+Dash_TrendLoading=트렌드 수집 중…
+Dash_BlackBodyTitle=BLACKBODY · 흑체
+Dash_Bb1Pv=흑체 1 현재 (PV)
+Dash_Bb1Sv=흑체 1 목표 (SV)
+Dash_Bb2Pv=흑체 2 현재 (PV)
+Dash_Bb2Sv=흑체 2 목표 (SV)
+Dash_MotionTitle=MOTION · 서보 직교로봇
+Dash_CurrentPoint=현재 포인트 · P{0}
+Dash_XOrigin= X 원점
+Dash_YOrigin= Y 원점
+Dash_XErrorCode=X 에러코드
+Dash_YErrorCode=Y 에러코드
+Dash_ProgramTitle=PROGRAM · 진행
+Dash_StepLabel=스텝 STEP
+Dash_FanLabel=팬 속도 FAN
+Dash_GasLabel=GAS 유속
+Dash_EquipTitle=EQUIPMENT · 장비 상태
+Dash_Cooler1Short= 1차 냉동
+Dash_Cooler2Short= 2차 냉동
+Dash_CoolerRoomShort= 상온 냉동
+Dash_BypassShort= 바이패스
+Dash_DoorLampShort= 도어램프
+Dash_PairGlassShort= 페어글라스
+Dash_Blower1Short= 블로워1
+Dash_Blower2Short= 블로워2
+Dash_AlarmsTitle=ALARMS · 알람
+Dash_AlarmsCount={}{0}건
+Dash_AllNominal=정상 · ALL SYSTEMS NOMINAL
+Dash_ColorMap=컬러맵
+Dash_Color=컬러
+Dash_Grayscale=그레이스케일
+Dash_AgentsTitle=AGENTS · 카메라
+Dash_RefreshRecipesTooltip=레시피 목록 새로고침
+
+# Status
+Status_PlcMonitorTitle=PLC 상태 모니터
+Status_CurrentTemp=현재온도 (℃)
+Status_TargetTemp=목표온도 (℃)
+Status_CurrentHumidity=현재습도 (%RH)
+Status_TargetHumidity=목표습도 (%RH)
+Status_Bb1Current=흑체1 현재 (℃)
+Status_Bb1Target=흑체1 목표 (℃)
+Status_Bb2Current=흑체2 현재 (℃)
+Status_Bb2Target=흑체2 목표 (℃)
+Status_ServoTitle=서보 (직교로봇)
+Status_XPos=X 위치
+Status_YPos=Y 위치
+Status_CurrentPoint=현재 포인트
+Status_ProgressMisc=진행 / 기타
+Status_CurrentStep=현재 스텝
+Status_TotalSteps=전체 스텝
+Status_FanSpeed=팬 속도 (Hz)
+Status_EquipStatus=장비 상태
+Status_ErrorArea=에러 (M4001~)
+Status_InputArea=입력 (P000~)
+Status_OutputArea=출력 (P020~)
+
+# Plc
+Plc_Connection=PLC 연결
+Plc_IpAddress=IP 주소
+Plc_Port=포트
+Plc_Station=국번(Station)
+Plc_ChamberBbTitle=챔버 온습도 / 흑체
+Plc_HumidityControl=습도 제어
+Plc_TempRamp=온도 램프
+Plc_ReachTime=도달시간(분)
+Plc_RampStart=램프 시작
+Plc_MotorFan=모터 / 팬
+Plc_ServoSpeed=서보 속도 (1~100%)
+Plc_AdminSettings=관리자 설정
+Plc_OverheatLimit=과열 상한 (℃)
+Plc_CoolerRoomBoundary=상온냉동기 경계 (℃)
+Plc_Cooler2ndBoundary=2차냉동기 경계 (℃)
+Plc_CoolerDelay=냉동기 딜레이 (분)
+Plc_BypassBoundary=바이패스 경계 (℃)
+Plc_MfcMin=MFC 최소출력 (%RH)
+Plc_MfcMax=MFC 최대출력 (%RH)
+Plc_PairGlassBoundary=페어글라스 경계 (℃)
+Plc_ServoPointsTitle=서보 포인트 좌표 (20)
+Plc_Point=포인트
+
+# Manual
+Manual_TempStart=온도제어 시작
+Manual_TempStop=온도제어 정지
+Manual_EquipOneTouch=장비 원터치
+Manual_Chiller=칠러
+Manual_DoorLock=도어락
+Manual_Lighting=조명
+Manual_ServoOp=서보 조작
+Manual_CurrentPoint=현재 포인트:
+Manual_XJogMinus=X 축 JOG -
+Manual_XJogPlus=X 축 JOG +
+Manual_YJogMinus=Y 축 JOG -
+Manual_YJogPlus=Y 축 JOG +
+Manual_HomeX=X 원점
+Manual_HomeY=Y 원점
+Manual_MoveAbsolute=절대 위치 이동
+Manual_MoveX=X 이동
+Manual_MoveY=Y 이동
+Manual_MoveRelative=상대 위치 이동
+Manual_MovePointTitle=포인트 이동
+Manual_Current=현재:
+Manual_CameraControl=카메라 제어
+Manual_CameraSelect=카메라 선택
+Manual_ShutterOpen=셔터 열기
+Manual_ShutterClose=셔터 닫기
+Manual_Capture=캡처
+Manual_SaveConfig=설정 저장
+
+# Agent
+Agent_RemoteSettings=Agent 원격 설정
+Agent_OnlineAgent=온라인 Agent
+Agent_Instruction=상단에서 Agent를 선택하고 '조회'를 눌러 설정을 불러오세요.
+Agent_SimMode=Simulation mode (가짜 카메라)
+Agent_StoragePath=Storage path (빈 값 = config 폴더 기본값)
+Agent_Heartbeat=Heartbeat (초)
+Agent_CaptureFormat=Capture 이미지 포맷
+Agent_CaptureCount=Capture 장수 (Save 1회당)
+Agent_Cameras=카메라
+Agent_SendConfig=설정 전송
+Agent_DeviceManagement=디바이스 관리
+Agent_TabRemote=에이전트 원격설정
+
+# Recipe
+Recipe_NewRecipe=새 레시피
+Recipe_CopyRecipe=레시피 복사
+Recipe_TempRampTime=온도 램프 도달시간 (분)
+Recipe_CameraMapping=카메라 맵핑
+Recipe_AvailableCameras=사용 가능한 카메라
+Recipe_MappingInstruction=카메라를 선택한 뒤 슬롯을 클릭하세요.
+Recipe_UnmapTooltip=맵핑 해제
+Recipe_OnlineAgentCameras=온라인 Agent 카메라
+
+# Dev
+Dev_ManagementTitle=디바이스 관리 (Devices)
+Dev_Action=액션
+Dev_SaveName=이름 저장
+Dev_GetLogs=로그 가져오기
+Dev_SerialSettingsAuth=시리얼 설정 (승인된 카메라)
+Dev_SendSerial=시리얼 전송
+
+# Hist
+Hist_From=시작
+Hist_To=종료
+Hist_CameraFilter=카메라 필터
+Hist_ExportCsv=CSV 내보내기
+Hist_ColTimestamp=타임스탬프
+Hist_ColCameraId=카메라 ID
+Hist_ColTemp=온도 (°C)
+Hist_ColHumidity=습도 (%RH)
+Hist_ColThumbnail=썸네일
+Hist_ColAction=작업
+Hist_Open=열기 ↗
+Hist_Of=/
+Hist_EmergencyStop=⚠️ 비상정지
+Hist_ModalCameraSource=카메라 소스
+Hist_ModalTemperature=온도
+Hist_ModalHumidity=습도
+
+# Dash Extras
+Dash_Cooler1Short= 1차 냉동
+Dash_Cooler2Short= 2차 냉동
+Dash_CoolerRoomShort= 상온 냉동
+Dash_BypassShort= 바이패스
+Dash_DoorLampShort= 도어램프
+Dash_PairGlassShort= 페어글라스
+Dash_Blower1Short= 블로워1
+Dash_Blower2Short= 블로워2
+
+# Manual Extras
+Manual_XPosCol=X 위치:
+Manual_YPosCol=Y 위치:
+Manual_Bb1Target=흑체1 목표(℃)
+Manual_Bb2Target=흑체2 목표(℃)
+
+# Plc Extras
+Plc_TargetTemp=목표 온도 (℃)
+Plc_TargetHum=목표 습도 (%RH)
+
+# Status Extras
+Status_Cooler1Short= 1차 냉동기
+Status_Cooler2Short= 2차 냉동기
+Status_CoolerRoomShort= 상온 냉동기
+Status_BypassShort= 바이패스
+Status_DoorLampShort= 도어램프
+Status_PairGlassShort= 페어글라스
+Status_Blower1Short= 블로워1
+Status_Blower2Short= 블로워2
+
+# Agent Headers
+Agent_ColAgentId=Agent Id
+Agent_ColOpenCvIdx=OpenCV Idx
+Agent_ColAlias=Alias
+Agent_ColDeviceName=Device Name
+Agent_ColSerialCOM=Serial COM
+
+# Dev Headers
+Dev_ColStatus=Status
+Dev_ColPCId=PCId
+Dev_ColHardwareId=HardwareId
+Dev_ColApproved=Approved
+Dev_ColCvIdx=CV Idx
+Manual_BlackBody=흥체
+Hist_AgentId=에이전트 ID

@@ -20,3 +20,247 @@ Title_AgentSettings=Agent Remote Settings
 Title_PlcStatus=PLC Status
 Title_PlcSettings=PLC Control Settings
 Title_ManualControl=Manual Control
+
+# Common
+Equip_EStop=Emergency Stop
+Equip_Heater=Heater
+Equip_Cooler1=1st Cooler
+Equip_Cooler2=2nd Cooler
+Equip_CoolerRoom=Room Temp Cooler
+Equip_Bypass=Bypass
+Equip_Blower1=Blower 1
+Equip_Blower2=Blower 2
+Equip_Mcf=MCF
+Equip_Door=Door
+Equip_PairGlass=Pair Glass
+Equip_Temperature=Temperature
+Equip_Humidity=Humidity
+Equip_Servo=Servo
+Equip_Chamber=Chamber
+Equip_BlackBody=Black Body
+Equip_DoorLamp=Door Lamp
+Common_Save=Save
+Common_Apply=Apply
+Common_Stop=Stop
+Common_Load=Load
+Common_Send=Send
+Common_RefreshInfo=Refresh Info
+Common_Search=Search
+Common_Delete=Delete
+Common_AddCamera=+ Add Camera
+Common_Approve=Approve
+Common_Reject=Reject
+Common_Minute=min
+
+# Dash
+Dash_EmergencyStopMsg=EMERGENCY STOP ACTIVE
+Dash_SystemOverview=SYSTEM OVERVIEW
+Dash_RefreshRate=Real-time Monitoring · 2s REFRESH
+Dash_ChamberTitle=CHAMBER · Temperature & Humidity
+Dash_TempLabel=Temperature
+Dash_TargetTempPrefix=Target 
+Dash_HumidityLabel=Humidity
+Dash_TrendLoading=Collecting trend data...
+Dash_BlackBodyTitle=BLACKBODY
+Dash_Bb1Pv=Black Body 1 PV
+Dash_Bb1Sv=Black Body 1 SV
+Dash_Bb2Pv=Black Body 2 PV
+Dash_Bb2Sv=Black Body 2 SV
+Dash_MotionTitle=MOTION · Servo Robot
+Dash_CurrentPoint=Current Point · P{0}
+Dash_XOrigin= X Home
+Dash_YOrigin= Y Home
+Dash_XErrorCode=X Error Code
+Dash_YErrorCode=Y Error Code
+Dash_ProgramTitle=PROGRAM · Progress
+Dash_StepLabel=Step
+Dash_FanLabel=Fan Speed
+Dash_GasLabel=GAS Flow
+Dash_EquipTitle=EQUIPMENT · Status
+Dash_Cooler1Short= 1st Cooler
+Dash_Cooler2Short= 2nd Cooler
+Dash_CoolerRoomShort= Room Cooler
+Dash_BypassShort= Bypass
+Dash_DoorLampShort= Door Lamp
+Dash_PairGlassShort= Pair Glass
+Dash_Blower1Short= Blower 1
+Dash_Blower2Short= Blower 2
+Dash_AlarmsTitle=ALARMS
+Dash_AlarmsCount={}{0}
+Dash_AllNominal=ALL SYSTEMS NOMINAL
+Dash_ColorMap=Color Map
+Dash_Color=Color
+Dash_Grayscale=Grayscale
+Dash_AgentsTitle=AGENTS · Cameras
+Dash_RefreshRecipesTooltip=Refresh recipe list
+
+# Status
+Status_PlcMonitorTitle=PLC Status Monitor
+Status_CurrentTemp=Current Temp (℃)
+Status_TargetTemp=Target Temp (℃)
+Status_CurrentHumidity=Current Humidity (%RH)
+Status_TargetHumidity=Target Humidity (%RH)
+Status_Bb1Current=BB1 Current (℃)
+Status_Bb1Target=BB1 Target (℃)
+Status_Bb2Current=BB2 Current (℃)
+Status_Bb2Target=BB2 Target (℃)
+Status_ServoTitle=Servo (Orthogonal Robot)
+Status_XPos=X Position
+Status_YPos=Y Position
+Status_CurrentPoint=Current Point
+Status_ProgressMisc=Progress / Misc
+Status_CurrentStep=Current Step
+Status_TotalSteps=Total Steps
+Status_FanSpeed=Fan Speed (Hz)
+Status_EquipStatus=Equipment Status
+Status_ErrorArea=Errors (M4001~)
+Status_InputArea=Inputs (P000~)
+Status_OutputArea=Outputs (P020~)
+
+# Plc
+Plc_Connection=PLC Connection
+Plc_IpAddress=IP Address
+Plc_Port=Port
+Plc_Station=Station
+Plc_ChamberBbTitle=Chamber Temp/Humidity & BB
+Plc_HumidityControl=Humidity Control
+Plc_TempRamp=Temperature Ramp
+Plc_ReachTime=Reach Time (min)
+Plc_RampStart=Start Ramp
+Plc_MotorFan=Motor / Fan
+Plc_ServoSpeed=Servo Speed (1~100%)
+Plc_AdminSettings=Admin Settings
+Plc_OverheatLimit=Overheat Limit (℃)
+Plc_CoolerRoomBoundary=Room Cooler Boundary (℃)
+Plc_Cooler2ndBoundary=2nd Cooler Boundary (℃)
+Plc_CoolerDelay=Cooler Delay (min)
+Plc_BypassBoundary=Bypass Boundary (℃)
+Plc_MfcMin=MFC Min Output (%RH)
+Plc_MfcMax=MFC Max Output (%RH)
+Plc_PairGlassBoundary=Pair Glass Boundary (℃)
+Plc_ServoPointsTitle=Servo Point Coordinates (20)
+Plc_Point=Point
+
+# Manual
+Manual_TempStart=Start Temp Control
+Manual_TempStop=Stop Temp Control
+Manual_EquipOneTouch=Equipment One-Touch
+Manual_Chiller=Chiller
+Manual_DoorLock=Door Lock
+Manual_Lighting=Lighting
+Manual_ServoOp=Servo Operation
+Manual_CurrentPoint=Current Point:
+Manual_XJogMinus=X Axis JOG -
+Manual_XJogPlus=X Axis JOG +
+Manual_YJogMinus=Y Axis JOG -
+Manual_YJogPlus=Y Axis JOG +
+Manual_HomeX=X Home
+Manual_HomeY=Y Home
+Manual_MoveAbsolute=Absolute Move
+Manual_MoveX=Move X
+Manual_MoveY=Move Y
+Manual_MoveRelative=Relative Move
+Manual_MovePointTitle=Point Move
+Manual_Current=Current:
+Manual_CameraControl=Camera Control
+Manual_CameraSelect=Select Camera
+Manual_ShutterOpen=Open Shutter
+Manual_ShutterClose=Close Shutter
+Manual_Capture=Capture
+Manual_SaveConfig=Save Config
+
+# Agent
+Agent_RemoteSettings=Agent Remote Settings
+Agent_OnlineAgent=Online Agent
+Agent_Instruction=Select an Agent above and click 'Search' to load settings.
+Agent_SimMode=Simulation mode (Fake Camera)
+Agent_StoragePath=Storage path (Empty = Default config folder)
+Agent_Heartbeat=Heartbeat (sec)
+Agent_CaptureFormat=Capture Image Format
+Agent_CaptureCount=Capture Count (Per Save)
+Agent_Cameras=Cameras
+Agent_SendConfig=Send Config
+Agent_DeviceManagement=Device Management
+Agent_TabRemote=Agent Remote Settings
+
+# Recipe
+Recipe_NewRecipe=New Recipe
+Recipe_CopyRecipe=Copy Recipe
+Recipe_TempRampTime=Temp Ramp Time (min)
+Recipe_CameraMapping=Camera Mapping
+Recipe_AvailableCameras=Available Cameras
+Recipe_MappingInstruction=Select a camera and click on a slot.
+Recipe_UnmapTooltip=Unmap
+Recipe_OnlineAgentCameras=Online Agent Cameras
+
+# Dev
+Dev_ManagementTitle=Device Management (Devices)
+Dev_Action=Action
+Dev_SaveName=Save Name
+Dev_GetLogs=Get Logs
+Dev_SerialSettingsAuth=Serial Settings (Approved Cameras)
+Dev_SendSerial=Send Serial
+
+# Hist
+Hist_From=From
+Hist_To=To
+Hist_CameraFilter=Camera Filter
+Hist_ExportCsv=EXPORT CSV
+Hist_ColTimestamp=TIMESTAMP
+Hist_ColCameraId=CAMERA ID
+Hist_ColTemp=TEMP (°C)
+Hist_ColHumidity=HUMIDITY (%RH)
+Hist_ColThumbnail=THUMBNAIL
+Hist_ColAction=ACTION
+Hist_Open=Open ↗
+Hist_Of=of
+Hist_EmergencyStop=⚠️ EMERGENCY STOP
+Hist_ModalCameraSource=CAMERA SOURCE
+Hist_ModalTemperature=TEMPERATURE
+Hist_ModalHumidity=HUMIDITY
+
+# Dash Extras
+Dash_Cooler1Short= 1st Cooler
+Dash_Cooler2Short= 2nd Cooler
+Dash_CoolerRoomShort= Room Cooler
+Dash_BypassShort= Bypass
+Dash_DoorLampShort= Door Lamp
+Dash_PairGlassShort= Pair Glass
+Dash_Blower1Short= Blower 1
+Dash_Blower2Short= Blower 2
+
+# Manual Extras
+Manual_XPosCol=X Position:
+Manual_YPosCol=Y Position:
+Manual_Bb1Target=BB1 Target (℃)
+Manual_Bb2Target=BB2 Target (℃)
+
+# Plc Extras
+Plc_TargetTemp=Target Temp (℃)
+Plc_TargetHum=Target Humidity (%RH)
+
+# Status Extras
+Status_Cooler1Short= 1st Cooler
+Status_Cooler2Short= 2nd Cooler
+Status_CoolerRoomShort= Room Cooler
+Status_BypassShort= Bypass
+Status_DoorLampShort= Door Lamp
+Status_PairGlassShort= Pair Glass
+Status_Blower1Short= Blower 1
+Status_Blower2Short= Blower 2
+
+# Agent Headers
+Agent_ColAgentId=Agent Id
+Agent_ColOpenCvIdx=OpenCV Idx
+Agent_ColAlias=Alias
+Agent_ColDeviceName=Device Name
+Agent_ColSerialCOM=Serial COM
+
+# Dev Headers
+Dev_ColStatus=Status
+Dev_ColPCId=PCId
+Dev_ColHardwareId=HardwareId
+Dev_ColApproved=Approved
+Dev_ColCvIdx=CV Idx
+Manual_BlackBody=Black Body
+Hist_AgentId=Agent Id

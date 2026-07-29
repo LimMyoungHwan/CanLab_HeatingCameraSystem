@@ -273,11 +273,11 @@
                     <DataGrid Grid.Column="0" ItemsSource="{Binding Captures}"
                               SelectedItem="{Binding Selected}" SelectionMode="Single">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Time (UTC)" Width="150"
+                            <DataGridTextColumn Header="{loc:Loc Data_ColTime}" Width="150"
                                                 Binding="{Binding TimestampUtc, StringFormat=yyyy-MM-dd HH:mm:ss}"/>
-                            <DataGridTextColumn Header="Agent" Width="*" Binding="{Binding AgentId}"/>
-                            <DataGridTextColumn Header="Cam" Width="46" Binding="{Binding CameraIndex}"/>
-                            <DataGridTextColumn Header="Size" Width="80">
+                            <DataGridTextColumn Header="{loc:Loc Data_ColAgent}" Width="*" Binding="{Binding AgentId}"/>
+                            <DataGridTextColumn Header="{loc:Loc Data_ColCam}" Width="46" Binding="{Binding CameraIndex}"/>
+                            <DataGridTextColumn Header="{loc:Loc Data_ColSize}" Width="80">
                                 <DataGridTextColumn.Binding>
                                     <MultiBinding StringFormat="{}{0}×{1}">
                                         <Binding Path="Width"/>
@@ -285,8 +285,8 @@
                                     </MultiBinding>
                                 </DataGridTextColumn.Binding>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Min" Width="60" Binding="{Binding Min}"/>
-                            <DataGridTextColumn Header="Max" Width="60" Binding="{Binding Max}"/>
+                            <DataGridTextColumn Header="{loc:Loc Data_ColMin}" Width="60" Binding="{Binding Min}"/>
+                            <DataGridTextColumn Header="{loc:Loc Data_ColMax}" Width="60" Binding="{Binding Max}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                     <StackPanel Grid.Column="1" Margin="8,0,0,0">
@@ -330,11 +330,11 @@
                     </StackPanel>
                     <DataGrid ItemsSource="{Binding Entries}">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Time (UTC)" Width="150"
+                            <DataGridTextColumn Header="{loc:Loc Logs_ColTime}" Width="150"
                                                 Binding="{Binding TimestampUtc, StringFormat=yyyy-MM-dd HH:mm:ss}"/>
-                            <DataGridTextColumn Header="Level" Width="90" Binding="{Binding Level}"/>
-                            <DataGridTextColumn Header="Message" Width="*" Binding="{Binding Message}"/>
-                            <DataGridTextColumn Header="Exception" Width="220" Binding="{Binding Exception}"/>
+                            <DataGridTextColumn Header="{loc:Loc Logs_ColLevel}" Width="90" Binding="{Binding Level}"/>
+                            <DataGridTextColumn Header="{loc:Loc Logs_ColMessage}" Width="*" Binding="{Binding Message}"/>
+                            <DataGridTextColumn Header="{loc:Loc Logs_ColException}" Width="220" Binding="{Binding Exception}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -362,15 +362,15 @@
                         <TextBlock Text="{loc:Loc Set_Cameras}" FontWeight="SemiBold" Margin="0,6,0,4"/>
                         <DataGrid ItemsSource="{Binding Cameras}" IsReadOnly="False" Height="180">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Agent Id" Width="*" Binding="{Binding AgentId}"/>
-                                <DataGridTextColumn Header="OpenCV Index" Width="110" Binding="{Binding OpenCvIndex}"/>
-                                <DataGridTextColumn Header="Alias" Width="*" Binding="{Binding Alias}"/>
-                                <DataGridTextColumn Header="Device Name" Width="*" Binding="{Binding DeviceName}"/>
-                                <DataGridTextColumn Header="Serial COM" Width="100" Binding="{Binding SerialPortName}"/>
+                                <DataGridTextColumn Header="{loc:Loc Set_ColAgentId}" Width="*" Binding="{Binding AgentId}"/>
+                                <DataGridTextColumn Header="{loc:Loc Set_ColOpenCvIndex}" Width="110" Binding="{Binding OpenCvIndex}"/>
+                                <DataGridTextColumn Header="{loc:Loc Set_ColAlias}" Width="*" Binding="{Binding Alias}"/>
+                                <DataGridTextColumn Header="{loc:Loc Set_ColDeviceName}" Width="*" Binding="{Binding DeviceName}"/>
+                                <DataGridTextColumn Header="{loc:Loc Set_ColSerialCom}" Width="100" Binding="{Binding SerialPortName}"/>
                                 <DataGridTemplateColumn Header="" Width="80">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <Button Content="Remove"
+                                            <Button Content="{loc:Loc Set_Remove}"
                                                     Command="{Binding DataContext.RemoveCameraCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                     CommandParameter="{Binding}"/>
                                         </DataTemplate>

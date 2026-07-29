@@ -35,3 +35,25 @@ Set_Cameras=카메라
 Set_AddCamera=카메라 추가
 Set_AutoDetectCom=COM 자동 감지
 Set_Save=저장
+
+# Data 탭 그리드 컬럼
+Data_ColTime=시간(UTC)
+Data_ColAgent=에이전트
+Data_ColCam=카메라
+Data_ColSize=크기
+Data_ColMin=최소
+Data_ColMax=최대
+
+# Logs 탭 그리드 컬럼
+Logs_ColTime=시간(UTC)
+Logs_ColLevel=레벨
+Logs_ColMessage=메시지
+Logs_ColException=예외
+
+# Settings 카메라 그리드 컬럼
+Set_ColAgentId=Agent Id
+Set_ColOpenCvIndex=OpenCV 인덱스
+Set_ColAlias=별칭
+Set_ColDeviceName=장치명
+Set_ColSerialCom=시리얼 COM
+Set_Remove=제거

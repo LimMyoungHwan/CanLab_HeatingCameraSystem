@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:loc="clr-namespace:HeatingCameraSystem.Master.Localization"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d" d:DesignHeight="768" d:DesignWidth="1024"
              Background="#0e1321" Foreground="#dee2f7">
@@ -58,102 +59,102 @@
             <WrapPanel Orientation="Horizontal">
                 <Border Style="{StaticResource Card}" Width="360">
                     <StackPanel>
-                        <TextBlock Text="PLC 연결" Style="{StaticResource Head}"/>
+                        <TextBlock Text="{loc:Loc Plc_Connection}" Style="{StaticResource Head}"/>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="IP 주소" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBlock Text="{loc:Loc Plc_IpAddress}" Style="{StaticResource Lbl}" Width="110"/>
                             <TextBox Text="{Binding PlcIpAddress}" Width="150"/>
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="포트" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBlock Text="{loc:Loc Plc_Port}" Style="{StaticResource Lbl}" Width="110"/>
                             <TextBox Text="{Binding PlcPort}" Width="80"/>
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="국번(Station)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBlock Text="{loc:Loc Plc_Station}" Style="{StaticResource Lbl}" Width="110"/>
                             <TextBox Text="{Binding PlcStationNo}" Width="60"/>
                         </StackPanel>
-                        <Button Content="저장" Style="{StaticResource Apply}" Command="{Binding SavePlcConnectionCommand}" HorizontalAlignment="Left" Margin="0,4,0,0"/>
+                        <Button Content="{loc:Loc Common_Save}" Style="{StaticResource Apply}" Command="{Binding SavePlcConnectionCommand}" HorizontalAlignment="Left" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
 
                 <Border Style="{StaticResource Card}" Width="360">
                     <StackPanel>
-                        <TextBlock Text="챔버 온습도 / 흑체" Style="{StaticResource Head}"/>
+                        <TextBlock Text="{loc:Loc Plc_ChamberBbTitle}" Style="{StaticResource Head}"/>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="목표 온도 (℃)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBlock Text="{loc:Loc Plc_TargetTemp}" Style="{StaticResource Lbl}" Width="110"/>
                             <TextBox Text="{Binding TargetTemperature}"/>
-                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyTemperatureCommand}"/>
+                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyTemperatureCommand}"/>
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="목표 습도 (%RH)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBlock Text="{loc:Loc Plc_TargetHum}" Style="{StaticResource Lbl}" Width="110"/>
                             <TextBox Text="{Binding TargetHumidity}"/>
-                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyHumidityCommand}"/>
+                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyHumidityCommand}"/>
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="습도 제어" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBlock Text="{loc:Loc Plc_HumidityControl}" Style="{StaticResource Lbl}" Width="110"/>
                             <CheckBox IsChecked="{Binding HumidityControl}" Foreground="#dee2f7" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyHumidityControlCommand}"/>
+                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyHumidityControlCommand}"/>
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="흑체1 목표 (℃)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBlock Text="{loc:Loc Status_Bb1Target}" Style="{StaticResource Lbl}" Width="110"/>
                             <TextBox Text="{Binding BlackBody1Target}"/>
-                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyBlackBody1Command}"/>
+                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyBlackBody1Command}"/>
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="흑체2 목표 (℃)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBlock Text="{loc:Loc Status_Bb2Target}" Style="{StaticResource Lbl}" Width="110"/>
                             <TextBox Text="{Binding BlackBody2Target}"/>
-                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyBlackBody2Command}"/>
+                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyBlackBody2Command}"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
                 <Border Style="{StaticResource Card}" Width="360">
                     <StackPanel>
-                        <TextBlock Text="온도 램프" Style="{StaticResource Head}"/>
+                        <TextBlock Text="{loc:Loc Plc_TempRamp}" Style="{StaticResource Head}"/>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="목표 온도 (℃)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBlock Text="{loc:Loc Plc_TargetTemp}" Style="{StaticResource Lbl}" Width="110"/>
                             <TextBox Text="{Binding RampTargetTemperature}"/>
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="도달시간(분)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBlock Text="{loc:Loc Plc_ReachTime}" Style="{StaticResource Lbl}" Width="110"/>
                             <TextBox Text="{Binding RampMinutes}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <Button Content="램프 시작" Style="{StaticResource Apply}" Command="{Binding StartRampCommand}" Margin="0,0,8,0"/>
-                            <Button Content="중지" Style="{StaticResource Apply}" Command="{Binding StopRampCommand}" IsEnabled="{Binding IsRamping}"/>
+                            <Button Content="{loc:Loc Plc_RampStart}" Style="{StaticResource Apply}" Command="{Binding StartRampCommand}" Margin="0,0,8,0"/>
+                            <Button Content="{loc:Loc Common_Stop}" Style="{StaticResource Apply}" Command="{Binding StopRampCommand}" IsEnabled="{Binding IsRamping}"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
                 <Border Style="{StaticResource Card}" Width="360">
                     <StackPanel>
-                        <TextBlock Text="모터 / 팬" Style="{StaticResource Head}"/>
+                        <TextBlock Text="{loc:Loc Plc_MotorFan}" Style="{StaticResource Head}"/>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="서보 속도 (1~100%)" Style="{StaticResource Lbl}" Width="130"/>
+                            <TextBlock Text="{loc:Loc Plc_ServoSpeed}" Style="{StaticResource Lbl}" Width="130"/>
                             <TextBox Text="{Binding ServoSpeedPercent}"/>
-                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyServoSpeedCommand}"/>
+                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyServoSpeedCommand}"/>
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="팬 속도 (Hz)" Style="{StaticResource Lbl}" Width="130"/>
+                            <TextBlock Text="{loc:Loc Status_FanSpeed}" Style="{StaticResource Lbl}" Width="130"/>
                             <TextBox Text="{Binding FanSpeedHz}"/>
-                            <Button Content="적용" Style="{StaticResource Apply}" Command="{Binding ApplyFanSpeedCommand}"/>
+                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyFanSpeedCommand}"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
                 <Border Style="{StaticResource Card}" Width="360">
                     <StackPanel>
-                        <TextBlock Text="관리자 설정" Style="{StaticResource Head}"/>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="과열 상한 (℃)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding OverheatLimit}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="상온냉동기 경계 (℃)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding CoolerRoomBoundary}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="2차냉동기 경계 (℃)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding Cooler2ndBoundary}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="냉동기 딜레이 (분)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding CoolerDelayMinutes}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="바이패스 경계 (℃)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding BypassBoundary}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="MFC 최소출력 (%RH)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding MfcMinOutput}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="MFC 최대출력 (%RH)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding MfcMaxOutput}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="페어글라스 경계 (℃)" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding PairGlassBoundary}"/></StackPanel>
+                        <TextBlock Text="{loc:Loc Plc_AdminSettings}" Style="{StaticResource Head}"/>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_OverheatLimit}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding OverheatLimit}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_CoolerRoomBoundary}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding CoolerRoomBoundary}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_Cooler2ndBoundary}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding Cooler2ndBoundary}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_CoolerDelay}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding CoolerDelayMinutes}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_BypassBoundary}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding BypassBoundary}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_MfcMin}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding MfcMinOutput}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_MfcMax}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding MfcMaxOutput}"/></StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_PairGlassBoundary}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding PairGlassBoundary}"/></StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                            <Button Content="불러오기" Style="{StaticResource Apply}" Command="{Binding LoadAdminCommand}" Margin="0,0,8,0"/>
-                            <Button Content="저장" Style="{StaticResource Apply}" Command="{Binding SaveAdminCommand}"/>
+                            <Button Content="{loc:Loc Common_Load}" Style="{StaticResource Apply}" Command="{Binding LoadAdminCommand}" Margin="0,0,8,0"/>
+                            <Button Content="{loc:Loc Common_Save}" Style="{StaticResource Apply}" Command="{Binding SaveAdminCommand}"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -161,15 +162,15 @@
                 <Border Style="{StaticResource Card}" Width="360">
                     <StackPanel>
                         <Grid Margin="0,0,0,10">
-                            <TextBlock Text="서보 포인트 좌표 (20)" Style="{StaticResource Head}"/>
+                            <TextBlock Text="{loc:Loc Plc_ServoPointsTitle}" Style="{StaticResource Head}"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <Button Content="불러오기" Style="{StaticResource Apply}" Command="{Binding LoadPointsCommand}" Margin="0,0,8,0"/>
-                                <Button Content="저장" Style="{StaticResource Apply}" Command="{Binding SavePointsCommand}"/>
+                                <Button Content="{loc:Loc Common_Load}" Style="{StaticResource Apply}" Command="{Binding LoadPointsCommand}" Margin="0,0,8,0"/>
+                                <Button Content="{loc:Loc Common_Save}" Style="{StaticResource Apply}" Command="{Binding SavePointsCommand}"/>
                             </StackPanel>
                         </Grid>
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="포인트" Style="{StaticResource Lbl}"/>
+                            <TextBlock Grid.Column="0" Text="{loc:Loc Plc_Point}" Style="{StaticResource Lbl}"/>
                             <TextBlock Grid.Column="1" Text="X" Style="{StaticResource Lbl}"/>
                             <TextBlock Grid.Column="2" Text="Y" Style="{StaticResource Lbl}"/>
                         </Grid>
