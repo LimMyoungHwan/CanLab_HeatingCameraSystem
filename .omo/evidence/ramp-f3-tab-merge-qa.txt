@@ -1,0 +1,19 @@
+ramp F3 — Serial Settings + Devices merged into Agent 설정 (tab container)
+
+Result: PASS (agent-operated WPF GUI QA, 2026-07-29)
+
+Build: 12 projects, 0 errors, 0 warnings.
+Tests: 190 passed / 0 failed.
+
+GUI QA (Master launched from bin\Debug\net8.0-windows, SimulationMode, NATS up on 4222):
+- Left nav reduced 9 -> 7 buttons: Dashboard, Recipe Editor, History Logs, Agent 설정,
+  PLC 상태, PLC 설정, 수동 조작. Standalone "Serial Settings" + "Devices" nav buttons removed.
+- Agent 설정 screen renders a dark-themed TabControl with 3 tabs:
+  1. 에이전트 원격설정 — agent remote config (online-agent combo, 조회, config fields,
+     camera DataGrid, empty-state). Renders OK.
+  2. 디바이스 관리 — AgentManager device grid (Status/PCId/Alias/AgentId/HardwareId/
+     Approved/CV Idx) + 승인/거부/이름저장/로그가져오기 + serial-for-approved section. Renders OK.
+  3. 시리얼 설정 — per-camera serial settings (+ 카메라 추가, camera list, master-detail). Renders OK.
+- Tab switching works; child VMs (DevicesVm / SerialVm) resolve via existing DataTemplates;
+  no XAML runtime errors; window responsive throughout.
+- Master process stopped after QA (teardown verified).

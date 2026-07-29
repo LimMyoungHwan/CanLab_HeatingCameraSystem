@@ -41,20 +41,6 @@ namespace HeatingCameraSystem.Master.ViewModels
         }
 
         [RelayCommand]
-        private void NavigateToSettings()
-        {
-            CurrentViewTitle = "시리얼 설정 (Serial Settings)";
-            CurrentViewModel = new SettingsViewModel();
-        }
-
-        [RelayCommand]
-        private void NavigateToDevices()
-        {
-            CurrentViewTitle = "디바이스 관리 (Devices)";
-            CurrentViewModel = new DevicesViewModel();
-        }
-
-        [RelayCommand]
         private void NavigateToAgentSettings()
         {
             CurrentViewTitle = "Agent 원격 설정 (Agent Settings)";
