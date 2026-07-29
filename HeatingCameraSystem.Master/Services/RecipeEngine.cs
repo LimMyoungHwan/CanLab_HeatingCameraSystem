@@ -143,11 +143,13 @@ namespace HeatingCameraSystem.Master.Services
                     }
                     else
                     {
+                        AlarmSink.Raise(AlarmSeverity.Error, "레시피", $"스텝 {step.StepId} 캡처 실패");
                         Console.WriteLine($"[RecipeEngine] Step {step.StepId}: capture failed.");
                     }
                 }
                 else
                 {
+                    AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 캡처 타임아웃");
                     Console.WriteLine($"[RecipeEngine] Step {step.StepId}: capture timeout ({_captureTimeout.TotalSeconds:0}s).");
                 }
 

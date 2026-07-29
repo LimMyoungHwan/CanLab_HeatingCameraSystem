@@ -216,6 +216,25 @@
                             <TextBlock Text="{Binding CurrentPoint}" FontSize="13" FontWeight="Bold" Foreground="{StaticResource Primary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
+                    <!-- Alarms -->
+                    <Border Style="{StaticResource Chip}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="&#x26A0;" FontSize="12" Foreground="#ffcf6b" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="ALARMS" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Alarms.Count}" FontSize="13" FontWeight="Bold" VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="#ff5b52"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Alarms.Count}" Value="0">
+                                                <Setter Property="Foreground" Value="{StaticResource Secondary}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Grid>
         </Border>
@@ -417,39 +436,59 @@
                             </Style>
                         </Border.Style>
                         <StackPanel>
-                            <TextBlock Text="ALARMS · 알람" Style="{StaticResource CardHeader}"/>
+                            <Grid Margin="0,0,0,12">
+                                <TextBlock Text="ALARMS · 알람" Style="{StaticResource CardHeader}" Margin="0"/>
+                                <TextBlock Text="{Binding Alarms.Count, StringFormat={}{0}건}" FontSize="11" FontWeight="Bold" Foreground="#ff8f88" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
                             <StackPanel Orientation="Horizontal">
                                 <StackPanel.Style>
                                     <Style TargetType="StackPanel">
-                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Setter Property="Visibility" Value="Collapsed"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding HasActiveErrors}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                            <DataTrigger Binding="{Binding Alarms.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </StackPanel.Style>
                                 <Ellipse Width="10" Height="10" Fill="{StaticResource Secondary}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                 <TextBlock Text="정상 · ALL SYSTEMS NOMINAL" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="12" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <ItemsControl ItemsSource="{Binding ActiveErrors}">
-                                <ItemsControl.Style>
-                                    <Style TargetType="ItemsControl">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
+                            <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                                <ScrollViewer.Style>
+                                    <Style TargetType="ScrollViewer">
+                                        <Setter Property="Visibility" Value="Visible"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding HasActiveErrors}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                            <DataTrigger Binding="{Binding Alarms.Count}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </ItemsControl.Style>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" Margin="0,3">
-                                            <Ellipse Width="10" Height="10" Fill="#ff5b52" VerticalAlignment="Center" Margin="0,0,10,0">
-                                                <Ellipse.Effect><DropShadowEffect Color="#ff5b52" BlurRadius="8" ShadowDepth="0" Opacity="0.8"/></Ellipse.Effect>
-                                            </Ellipse>
-                                            <TextBlock Text="{Binding}" Foreground="#ffd7d3" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                </ScrollViewer.Style>
+                                <ItemsControl ItemsSource="{Binding Alarms}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding TimeText}" FontSize="10" Foreground="{StaticResource Outline}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                <Border Grid.Column="1" CornerRadius="3" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="#243040"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Severity}" Value="Error"><Setter Property="Background" Value="#5a1512"/></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Severity}" Value="Warning"><Setter Property="Background" Value="#4a3512"/></DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding Source}" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextOnSurface}"/>
+                                                </Border>
+                                                <TextBlock Grid.Column="2" Text="{Binding Message}" FontSize="11" Foreground="{StaticResource TextOnSurface}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
                         </StackPanel>
                     </Border>
 

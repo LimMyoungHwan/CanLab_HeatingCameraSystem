@@ -144,6 +144,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         public ObservableCollection<AgentNode> Agents { get; } = new ObservableCollection<AgentNode>();
         public ObservableCollection<Recipe> Recipes { get; } = new ObservableCollection<Recipe>();
         public ObservableCollection<string> ActiveErrors { get; } = new ObservableCollection<string>();
+        public ObservableCollection<AlarmEntry> Alarms => AlarmSink.Entries;
 
         [ObservableProperty]
         private Recipe? _selectedRecipe;
@@ -165,6 +166,8 @@ namespace HeatingCameraSystem.Master.ViewModels
         private CancellationTokenSource? _recipeCts;
         private System.Windows.Threading.DispatcherTimer? _plcPollTimer;
         private System.Windows.Threading.DispatcherTimer? _offlineCheckTimer;
+        private bool[]? _prevErrorBits;
+        private bool _wasPlcConnected = true;
 
         public DashboardViewModel()
             : this(
@@ -360,6 +363,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 if (agent.LastHeartbeat < threshold && agent.IsOnline)
                 {
                     agent.IsOnline = false;
+                    AlarmSink.Raise(AlarmSeverity.Warning, "Agent", $"{agent.Name} 오프라인");
                     foreach (var cam in agent.Cameras)
                         cam.CameraStatus = CameraStatus.Offline;
                 }
@@ -430,9 +434,12 @@ namespace HeatingCameraSystem.Master.ViewModels
                 Blower1 = s.Blower1;
                 Blower2 = s.Blower2;
 
+                RaisePlcErrorEdges(s.ErrorBits);
                 UpdateActiveErrors(s.ErrorBits);
                 IsEmergencyStop = s.ErrorBits.Length > 0 && s.ErrorBits[0];
 
+                if (!_wasPlcConnected) AlarmSink.Raise(AlarmSeverity.Info, "PLC", "연결 복구");
+                _wasPlcConnected = true;
                 IsPlcConnected = true;
                 PlcStatusMessage = $"갱신 {DateTime.Now:HH:mm:ss}";
 
@@ -440,10 +447,24 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
             catch (Exception ex)
             {
+                if (_wasPlcConnected) AlarmSink.Raise(AlarmSeverity.Error, "PLC", $"연결 끊김: {ex.Message}");
+                _wasPlcConnected = false;
                 IsPlcConnected = false;
                 PlcStatusMessage = $"읽기 실패: {ex.Message}";
                 System.Diagnostics.Debug.WriteLine($"[Dashboard] PLC poll failed: {ex.Message}");
             }
+        }
+
+        private void RaisePlcErrorEdges(bool[] bits)
+        {
+            var names = PlcDeviceCatalog.ErrorNames;
+            for (int i = 0; i < bits.Length && i < names.Length; i++)
+            {
+                bool was = _prevErrorBits != null && i < _prevErrorBits.Length && _prevErrorBits[i];
+                if (bits[i] && !was && !string.IsNullOrEmpty(names[i]))
+                    AlarmSink.Raise(AlarmSeverity.Error, "PLC", names[i]);
+            }
+            _prevErrorBits = (bool[])bits.Clone();
         }
 
         private void UpdateActiveErrors(bool[] bits)

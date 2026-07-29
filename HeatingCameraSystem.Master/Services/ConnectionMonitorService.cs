@@ -58,6 +58,7 @@ namespace HeatingCameraSystem.Master.Services
                     try
                     {
                         await _plc.ConnectAsync(_settings.Plc.IpAddress, _settings.Plc.Port);
+                        if (_plcFails > 0) AlarmSink.Raise(AlarmSeverity.Info, "PLC", "재연결 성공");
                         _plcFails = 0;
                         _plcNextAttemptUtc = DateTime.MinValue;
                         System.Diagnostics.Debug.WriteLine("[ConnMon] PLC reconnected.");
@@ -65,6 +66,7 @@ namespace HeatingCameraSystem.Master.Services
                     catch (Exception ex)
                     {
                         _plcFails++;
+                        if (_plcFails == 1) AlarmSink.Raise(AlarmSeverity.Warning, "PLC", $"재연결 실패: {ex.Message}");
                         var wait = ComputeBackoff(_plcFails);
                         _plcNextAttemptUtc = now + wait;
                         System.Diagnostics.Debug.WriteLine(
@@ -77,6 +79,7 @@ namespace HeatingCameraSystem.Master.Services
                     try
                     {
                         await _shutter.ConnectAsync();
+                        if (_shutterFails > 0) AlarmSink.Raise(AlarmSeverity.Info, "시리얼", "재연결 성공");
                         _shutterFails = 0;
                         _shutterNextAttemptUtc = DateTime.MinValue;
                         System.Diagnostics.Debug.WriteLine("[ConnMon] Serial reconnected.");
@@ -84,6 +87,7 @@ namespace HeatingCameraSystem.Master.Services
                     catch (Exception ex)
                     {
                         _shutterFails++;
+                        if (_shutterFails == 1) AlarmSink.Raise(AlarmSeverity.Warning, "시리얼", $"재연결 실패: {ex.Message}");
                         var wait = ComputeBackoff(_shutterFails);
                         _shutterNextAttemptUtc = now + wait;
                         System.Diagnostics.Debug.WriteLine(

@@ -109,6 +109,7 @@ namespace HeatingCameraSystem.Master.Services
             }
             catch (Exception ex)
             {
+                AlarmSink.Raise(AlarmSeverity.Warning, "NATS", $"연결 실패: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"[AppServices] NATS connect failed: {ex.Message}");
             }
 
@@ -119,6 +120,7 @@ namespace HeatingCameraSystem.Master.Services
             }
             catch (Exception ex)
             {
+                AlarmSink.Raise(AlarmSeverity.Warning, "PLC", $"연결 실패: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"[AppServices] PLC connect failed: {ex.Message}");
             }
 
@@ -129,6 +131,7 @@ namespace HeatingCameraSystem.Master.Services
             }
             catch (Exception ex)
             {
+                AlarmSink.Raise(AlarmSeverity.Warning, "흑체", $"연결 실패: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"[AppServices] BlackBody connect failed: {ex.Message}");
             }
 
