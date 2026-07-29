@@ -160,6 +160,32 @@ namespace HeatingCameraSystem.Protocols
             return Task.CompletedTask;
         }
 
+        public async Task PublishCameraControlAsync(CameraControlMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"master.cmd.camera.{message.AgentId}", message);
+        }
+
+        public Task SubscribeCameraControlAsync(string agentId, Action<CameraControlMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop($"master.cmd.camera.{agentId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
+        public async Task PublishCameraControlAckAsync(CameraControlAckMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"agent.ack.camera.{message.AgentId}", message);
+        }
+
+        public Task SubscribeCameraControlAckAsync(string agentId, Action<CameraControlAckMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop($"agent.ack.camera.{agentId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
         private void RunSubscriptionLoop<T>(string subject, Action<T> onMessageReceived)
         {
             _ = Task.Run(async () =>

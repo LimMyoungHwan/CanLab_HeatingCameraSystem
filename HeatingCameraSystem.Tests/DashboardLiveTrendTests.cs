@@ -181,6 +181,10 @@ public class DashboardLiveTrendTests
         public Task SubscribeLogDumpRequestAsync(string pcId, Action<LogDumpRequestMessage> onMessageReceived) => Task.CompletedTask;
         public Task PublishLogDumpAsync(LogDumpMessage message) => Task.CompletedTask;
         public Task SubscribeLogDumpAsync(string pcId, Action<LogDumpMessage> onMessageReceived) => Task.CompletedTask;
+        public Task PublishCameraControlAsync(CameraControlMessage message) => Task.CompletedTask;
+        public Task SubscribeCameraControlAsync(string agentId, Action<CameraControlMessage> onMessageReceived) => Task.CompletedTask;
+        public Task PublishCameraControlAckAsync(CameraControlAckMessage message) => Task.CompletedTask;
+        public Task SubscribeCameraControlAckAsync(string agentId, Action<CameraControlAckMessage> onMessageReceived) => Task.CompletedTask;
     }
 
     private sealed class FakePlc : IPlcController

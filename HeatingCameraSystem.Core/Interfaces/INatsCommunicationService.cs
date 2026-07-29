@@ -67,5 +67,13 @@ namespace HeatingCameraSystem.Core.Interfaces
         // Manager -> Server (Log Dump): agent-mgr.log.dump.{PCId}
         Task PublishLogDumpAsync(LogDumpMessage message);
         Task SubscribeLogDumpAsync(string pcId, Action<LogDumpMessage> onMessageReceived);
+
+        // Master -> Agent (Camera Control): master.cmd.camera.{AgentId}
+        Task PublishCameraControlAsync(CameraControlMessage message);
+        Task SubscribeCameraControlAsync(string agentId, Action<CameraControlMessage> onMessageReceived);
+
+        // Agent -> Master (Camera Control ACK): agent.ack.camera.{AgentId}
+        Task PublishCameraControlAckAsync(CameraControlAckMessage message);
+        Task SubscribeCameraControlAckAsync(string agentId, Action<CameraControlAckMessage> onMessageReceived);
     }
 }
