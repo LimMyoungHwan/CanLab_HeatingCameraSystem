@@ -4,6 +4,144 @@
              xmlns:local="clr-namespace:HeatingCameraSystem.Master"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+
+        <!-- ============================================================
+             Global dark-theme input styles.
+             Fixes white-on-white: the WPF default ComboBox template forces
+             a light chrome that ignores Background, so the inherited light
+             Foreground (#dee2f7 set at each View) became invisible.
+             ============================================================ -->
+
+        <SolidColorBrush x:Key="InputBg"          Color="#1a1f2e"/>
+        <SolidColorBrush x:Key="InputFg"          Color="#dee2f7"/>
+        <SolidColorBrush x:Key="InputBorder"      Color="#3b4949"/>
+        <SolidColorBrush x:Key="InputBorderFocus" Color="#47eaed"/>
+        <SolidColorBrush x:Key="InputItemHover"   Color="#2f3444"/>
+
+        <!-- TextBox: dark background + light text (covers any un-backgrounded TextBox).
+             Inline Background/BorderThickness on individual TextBoxes still override this. -->
+        <Style TargetType="TextBox">
+            <Setter Property="Background"      Value="{StaticResource InputBg}"/>
+            <Setter Property="Foreground"      Value="{StaticResource InputFg}"/>
+            <Setter Property="CaretBrush"      Value="{StaticResource InputFg}"/>
+            <Setter Property="BorderBrush"     Value="{StaticResource InputBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="6,4"/>
+        </Style>
+
+        <!-- PasswordBox: same treatment -->
+        <Style TargetType="PasswordBox">
+            <Setter Property="Background"      Value="{StaticResource InputBg}"/>
+            <Setter Property="Foreground"      Value="{StaticResource InputFg}"/>
+            <Setter Property="CaretBrush"      Value="{StaticResource InputFg}"/>
+            <Setter Property="BorderBrush"     Value="{StaticResource InputBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="6,4"/>
+        </Style>
+
+        <!-- ComboBoxItem: dark popup rows + light text + hover/selected highlight -->
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource InputFg}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding"    Value="8,5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource InputItemHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource InputItemHover}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ComboBox: full dark control template (non-editable) that respects Background -->
+        <Style TargetType="ComboBox">
+            <Setter Property="Background"               Value="{StaticResource InputBg}"/>
+            <Setter Property="Foreground"               Value="{StaticResource InputFg}"/>
+            <Setter Property="BorderBrush"              Value="{StaticResource InputBorder}"/>
+            <Setter Property="BorderThickness"          Value="1"/>
+            <Setter Property="Padding"                  Value="8,4"/>
+            <Setter Property="MinHeight"                Value="28"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment"   Value="Center"/>
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="22"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Border x:Name="MainBorder" Grid.ColumnSpan="2"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4"/>
+
+                            <ToggleButton Grid.ColumnSpan="2" Focusable="False"
+                                          Background="Transparent" BorderThickness="0"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          ClickMode="Press">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="{TemplateBinding Background}"/>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <ContentPresenter x:Name="ContentSite" Grid.Column="0"
+                                              IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"
+                                              Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center" HorizontalAlignment="Left"/>
+
+                            <Path x:Name="Arrow" Grid.Column="1" IsHitTestVisible="False"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Data="M0,0 L4,4 L8,0 Z" Fill="{StaticResource InputFg}"/>
+
+                            <Popup x:Name="Popup" Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
+                                <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Background="{StaticResource InputBg}"
+                                        BorderBrush="{StaticResource InputBorder}"
+                                        BorderThickness="1" CornerRadius="4" Margin="0,2,0,0">
+                                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{StaticResource InputBorderFocus}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Application.Resources>
 </Application>

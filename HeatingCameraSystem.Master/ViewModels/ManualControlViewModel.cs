@@ -39,6 +39,8 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public ObservableCollection<CameraTileModel> Cameras { get; } = new();
 
+        [ObservableProperty] private CameraTileModel? _selectedCamera;
+
         [ObservableProperty] private string _statusMessage = "대기";
         [ObservableProperty] private int _servoXPosition;
         [ObservableProperty] private int _servoYPosition;
@@ -46,6 +48,11 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private bool _servoXBusy;
         [ObservableProperty] private bool _servoYBusy;
         [ObservableProperty] private float _fanSpeedHz;
+
+        [ObservableProperty] private int _absoluteTargetX;
+        [ObservableProperty] private int _absoluteTargetY;
+        [ObservableProperty] private int _relativeStepX;
+        [ObservableProperty] private int _relativeStepY;
 
         [ObservableProperty] private bool _cooler1st;
         [ObservableProperty] private bool _cooler2nd;
@@ -95,28 +102,31 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void OnAgentStatus(AgentStatusMessage msg)
         {
             if (string.IsNullOrEmpty(msg.AgentId)) return;
-            
-            Application.Current?.Dispatcher.Invoke(() =>
+            Application.Current?.Dispatcher.Invoke(() => EnsureTile(msg.AgentId, msg.CameraIndex));
+        }
+
+        private CameraTileModel EnsureTile(string agentId, int cameraIndex)
+        {
+            var tile = Cameras.FirstOrDefault(c => c.AgentId == agentId && c.CameraIndex == cameraIndex);
+            if (tile == null)
             {
-                var existing = Cameras.FirstOrDefault(c => c.AgentId == msg.AgentId && c.CameraIndex == msg.CameraIndex);
-                if (existing == null)
+                tile = new CameraTileModel(agentId, cameraIndex, $"{agentId} (cam {cameraIndex})");
+                Cameras.Add(tile);
+                SelectedCamera ??= tile;
+
+                if (_subscribedAgentIds.Add(agentId))
                 {
-                    var newTile = new CameraTileModel(msg.AgentId, msg.CameraIndex, $"{msg.AgentId} (cam {msg.CameraIndex})");
-                    Cameras.Add(newTile);
-                    
-                    if (_subscribedAgentIds.Add(msg.AgentId))
+                    try
                     {
-                        try
-                        {
-                            AppServices.NatsService?.SubscribeCameraControlAckAsync(msg.AgentId, OnCameraAck);
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[ManualControl] Ack subscribe failed for {msg.AgentId}: {ex.Message}");
-                        }
+                        AppServices.NatsService?.SubscribeCameraControlAckAsync(agentId, OnCameraAck);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[ManualControl] Ack subscribe failed for {agentId}: {ex.Message}");
                     }
                 }
-            });
+            }
+            return tile;
         }
 
         private void OnCameraAck(CameraControlAckMessage ack)
@@ -140,25 +150,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             Application.Current?.Dispatcher.Invoke(() =>
             {
-                var tile = Cameras.FirstOrDefault(c => c.AgentId == msg.AgentId && c.CameraIndex == msg.CameraIndex);
-                if (tile == null)
-                {
-                    tile = new CameraTileModel(msg.AgentId, msg.CameraIndex, $"{msg.AgentId} (cam {msg.CameraIndex})");
-                    Cameras.Add(tile);
-                    
-                    if (_subscribedAgentIds.Add(msg.AgentId))
-                    {
-                        try
-                        {
-                            AppServices.NatsService?.SubscribeCameraControlAckAsync(msg.AgentId, OnCameraAck);
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[ManualControl] Ack subscribe failed for {msg.AgentId}: {ex.Message}");
-                        }
-                    }
-                }
-
+                var tile = EnsureTile(msg.AgentId, msg.CameraIndex);
                 tile.LiveImage = bmp;
             });
         }
@@ -213,6 +205,26 @@ namespace HeatingCameraSystem.Master.ViewModels
         private Task MoveToPoint(int index) => RunAsync(p => p.MoveServoToPositionAsync(index), $"{index}포인트 이동");
 
         [RelayCommand]
+        private Task MoveAbsolute(string axis) => axis == "Y"
+            ? RunAsync(p => p.MoveToCoordinateAsync(ServoXPosition, AbsoluteTargetY), "Y 절대이동")
+            : RunAsync(p => p.MoveToCoordinateAsync(AbsoluteTargetX, ServoYPosition), "X 절대이동");
+
+        [RelayCommand]
+        private Task MoveRelative(string dir)
+        {
+            int x = ServoXPosition, y = ServoYPosition;
+            switch (dir)
+            {
+                case "X+": x += RelativeStepX; break;
+                case "X-": x -= RelativeStepX; break;
+                case "Y+": y += RelativeStepY; break;
+                case "Y-": y -= RelativeStepY; break;
+                default: return Task.CompletedTask;
+            }
+            return RunAsync(p => p.MoveToCoordinateAsync(x, y), $"상대이동 {dir}");
+        }
+
+        [RelayCommand]
         private Task ApplyBlackBody1() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(0, BlackBody1Target), "흑체1 온도");
 
         [RelayCommand]
@@ -263,21 +275,15 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private async Task PollAsync()
         {
-            var plc = AppServices.PlcController;
-            if (plc == null) return;
-            try
+            var s = AppServices.PlcStatus?.Snapshot;
+            if (s != null)
             {
-                var s = await plc.ReadStatusAsync();
                 ServoXPosition = s.ServoXPosition;
                 ServoYPosition = s.ServoYPosition;
                 CurrentPoint = s.CurrentPoint;
                 ServoXBusy = s.ServoXBusy;
                 ServoYBusy = s.ServoYBusy;
                 FanSpeedHz = s.FanSpeedHz;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[ManualControl] {ex.Message}");
             }
 
             await PollBlackBodyAsync();

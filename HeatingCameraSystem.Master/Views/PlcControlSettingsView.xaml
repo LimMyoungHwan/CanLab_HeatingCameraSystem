@@ -58,6 +58,25 @@
             <WrapPanel Orientation="Horizontal">
                 <Border Style="{StaticResource Card}" Width="360">
                     <StackPanel>
+                        <TextBlock Text="PLC 연결" Style="{StaticResource Head}"/>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="IP 주소" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBox Text="{Binding PlcIpAddress}" Width="150"/>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="포트" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBox Text="{Binding PlcPort}" Width="80"/>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="국번(Station)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBox Text="{Binding PlcStationNo}" Width="60"/>
+                        </StackPanel>
+                        <Button Content="저장" Style="{StaticResource Apply}" Command="{Binding SavePlcConnectionCommand}" HorizontalAlignment="Left" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="360">
+                    <StackPanel>
                         <TextBlock Text="챔버 온습도 / 흑체" Style="{StaticResource Head}"/>
                         <StackPanel Style="{StaticResource FieldRow}">
                             <TextBlock Text="목표 온도 (℃)" Style="{StaticResource Lbl}" Width="110"/>

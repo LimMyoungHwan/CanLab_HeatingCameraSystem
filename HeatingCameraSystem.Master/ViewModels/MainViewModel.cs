@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
@@ -12,6 +13,8 @@ namespace HeatingCameraSystem.Master.ViewModels
         private object? _currentViewModel;
 
         private readonly DashboardViewModel _dashboardViewModel = new();
+
+        public PlcStatusService? PlcStatus => AppServices.PlcStatus;
 
         public MainViewModel()
         {

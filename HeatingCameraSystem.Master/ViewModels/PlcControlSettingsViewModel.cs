@@ -36,6 +36,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private int _servoSpeedPercent = 100;
         [ObservableProperty] private float _fanSpeedHz;
 
+        [ObservableProperty] private string _plcIpAddress = "192.168.1.2";
+        [ObservableProperty] private int _plcPort = 2004;
+        [ObservableProperty] private int _plcStationNo;
+
         [ObservableProperty] private float _overheatLimit;
         [ObservableProperty] private float _coolerRoomBoundary;
         [ObservableProperty] private float _cooler2ndBoundary;
@@ -53,6 +57,22 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             for (int i = 1; i <= 20; i++)
                 Points.Add(new PointCoordRow { Index = i });
+
+            var plc = AppServices.Settings.Plc;
+            _plcIpAddress = plc.IpAddress;
+            _plcPort = plc.Port;
+            _plcStationNo = plc.StationNo;
+        }
+
+        [RelayCommand]
+        private void SavePlcConnection()
+        {
+            var plc = AppServices.Settings.Plc;
+            plc.IpAddress = (PlcIpAddress ?? string.Empty).Trim();
+            plc.Port = PlcPort;
+            plc.StationNo = PlcStationNo;
+            AppServices.SaveHardwareSettings();
+            StatusMessage = $"PLC 연결 저장됨 ({plc.IpAddress}:{plc.Port}) — 재시작 후 적용";
         }
 
         [RelayCommand]

@@ -120,6 +120,32 @@
                             <Button Content="X 원점" Style="{StaticResource Btn}" Command="{Binding HomeXCommand}"/>
                             <Button Content="Y 원점" Style="{StaticResource Btn}" Command="{Binding HomeYCommand}"/>
                         </WrapPanel>
+
+                        <TextBlock Text="절대 위치 이동" Style="{StaticResource Head}" Margin="0,12,0,6"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="X" Style="{StaticResource Lbl}"/>
+                            <TextBox Text="{Binding AbsoluteTargetX, UpdateSourceTrigger=PropertyChanged}" Width="70" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="8,6" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <Button Content="X 이동" Style="{StaticResource Btn}" Command="{Binding MoveAbsoluteCommand}" CommandParameter="X"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="Y" Style="{StaticResource Lbl}"/>
+                            <TextBox Text="{Binding AbsoluteTargetY, UpdateSourceTrigger=PropertyChanged}" Width="70" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="8,6" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <Button Content="Y 이동" Style="{StaticResource Btn}" Command="{Binding MoveAbsoluteCommand}" CommandParameter="Y"/>
+                        </StackPanel>
+
+                        <TextBlock Text="상대 위치 이동" Style="{StaticResource Head}" Margin="0,12,0,6"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="X" Style="{StaticResource Lbl}"/>
+                            <TextBox Text="{Binding RelativeStepX, UpdateSourceTrigger=PropertyChanged}" Width="70" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="8,6" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <Button Content="-" Style="{StaticResource Btn}" MinWidth="46" Command="{Binding MoveRelativeCommand}" CommandParameter="X-"/>
+                            <Button Content="+" Style="{StaticResource Btn}" MinWidth="46" Command="{Binding MoveRelativeCommand}" CommandParameter="X+"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Y" Style="{StaticResource Lbl}"/>
+                            <TextBox Text="{Binding RelativeStepY, UpdateSourceTrigger=PropertyChanged}" Width="70" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="8,6" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <Button Content="-" Style="{StaticResource Btn}" MinWidth="46" Command="{Binding MoveRelativeCommand}" CommandParameter="Y-"/>
+                            <Button Content="+" Style="{StaticResource Btn}" MinWidth="46" Command="{Binding MoveRelativeCommand}" CommandParameter="Y+"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
@@ -166,33 +192,41 @@
                 <Border Style="{StaticResource Card}" Width="732">
                     <StackPanel>
                         <TextBlock Text="카메라 제어" Style="{StaticResource Head}"/>
-                        <ItemsControl ItemsSource="{Binding Cameras}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border BorderBrush="#3b4949" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8" Background="#1a1f2e">
-                                        <DockPanel>
-                                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-                                                <TextBlock Text="{Binding Title}" Foreground="#47eaed" FontWeight="Bold" Margin="0,0,10,0"/>
-                                                <TextBlock Text="{Binding LastAckStatus}" Style="{StaticResource Lbl}"/>
-                                            </StackPanel>
-                                            
-                                            <Image DockPanel.Dock="Left" Source="{Binding LiveImage}" Width="120" Height="90" Stretch="Uniform" Margin="0,0,12,0"/>
-                                            
-                                            <WrapPanel>
-                                                <Button Content="RUN" Style="{StaticResource Btn}" Command="{Binding DataContext.SendRunCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
-                                                <Button Content="STOP" Style="{StaticResource Btn}" Command="{Binding DataContext.SendStopCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
-                                                <Button Content="셔터 열기" Style="{StaticResource Btn}" Command="{Binding DataContext.SendShutterOpenCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
-                                                <Button Content="셔터 닫기" Style="{StaticResource Btn}" Command="{Binding DataContext.SendShutterCloseCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
-                                                <Button Content="캡처" Style="{StaticResource Btn}" Command="{Binding DataContext.SendCaptureCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
-                                                <Button Content="NUC" Style="{StaticResource Btn}" Command="{Binding DataContext.SendNucCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
-                                                <Button Content="설정 저장" Style="{StaticResource Btn}" Command="{Binding DataContext.SendSaveConfigCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
-                                                <Button Content="정보 갱신" Style="{StaticResource Btn}" Command="{Binding DataContext.SendRefreshInfoCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
-                                            </WrapPanel>
-                                        </DockPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="카메라 선택" Style="{StaticResource Lbl}"/>
+                            <ComboBox ItemsSource="{Binding Cameras}" SelectedItem="{Binding SelectedCamera}"
+                                      DisplayMemberPath="Title" MinWidth="240"/>
+                        </StackPanel>
+                        <Border BorderBrush="#3b4949" BorderThickness="1" CornerRadius="4" Padding="10" Background="#1a1f2e">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedCamera}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel DataContext="{Binding SelectedCamera}">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="{Binding Title}" Foreground="#47eaed" FontWeight="Bold" Margin="0,0,10,0"/>
+                                    <TextBlock Text="{Binding LastAckStatus}" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                                <DockPanel>
+                                    <Image DockPanel.Dock="Left" Source="{Binding LiveImage}" Width="240" Height="180" Stretch="Uniform" Margin="0,0,12,0"/>
+                                    <WrapPanel>
+                                        <Button Content="RUN" Style="{StaticResource Btn}" Command="{Binding DataContext.SendRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                        <Button Content="STOP" Style="{StaticResource Btn}" Command="{Binding DataContext.SendStopCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                        <Button Content="셔터 열기" Style="{StaticResource Btn}" Command="{Binding DataContext.SendShutterOpenCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                        <Button Content="셔터 닫기" Style="{StaticResource Btn}" Command="{Binding DataContext.SendShutterCloseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                        <Button Content="캡처" Style="{StaticResource Btn}" Command="{Binding DataContext.SendCaptureCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                        <Button Content="NUC" Style="{StaticResource Btn}" Command="{Binding DataContext.SendNucCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                        <Button Content="설정 저장" Style="{StaticResource Btn}" Command="{Binding DataContext.SendSaveConfigCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                        <Button Content="정보 갱신" Style="{StaticResource Btn}" Command="{Binding DataContext.SendRefreshInfoCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                    </WrapPanel>
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
             </WrapPanel>

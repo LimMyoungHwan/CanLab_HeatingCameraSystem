@@ -6,6 +6,7 @@
         xmlns:local="clr-namespace:HeatingCameraSystem.Master"
         xmlns:vm="clr-namespace:HeatingCameraSystem.Master.ViewModels"
         xmlns:views="clr-namespace:HeatingCameraSystem.Master.Views"
+        xmlns:conv="clr-namespace:HeatingCameraSystem.Master.Converters"
         mc:Ignorable="d"
         Title="Heating Camera Master System" Height="768" Width="1024" Background="#F5F6FA">
     
@@ -39,6 +40,7 @@
             <views:ManualControlView />
         </DataTemplate>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:BoolToBrushConverter x:Key="Lamp" OnBrush="#4ae183" OffBrush="#33404a"/>
     </Window.Resources>
 
     <Grid>
@@ -49,7 +51,8 @@
 
         <!-- Left Navigation Panel -->
         <Border Grid.Column="0" Background="#2F3542" Padding="20">
-            <StackPanel>
+            <DockPanel LastChildFill="False">
+                <StackPanel DockPanel.Dock="Top">
                 <TextBlock Text="Master Control" Foreground="White" FontSize="24" FontWeight="Bold" Margin="0,0,0,30"/>
                 
                 <Button Content="Dashboard" Command="{Binding NavigateToDashboardCommand}" 
@@ -72,7 +75,77 @@
 
                 <Button Content="수동 조작" Command="{Binding NavigateToManualControlCommand}" 
                         Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
-            </StackPanel>
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Bottom" DataContext="{Binding PlcStatus}">
+                    <Border BorderBrush="#3b4949" BorderThickness="0,1,0,0" Margin="0,0,0,12"/>
+                    <TextBlock Text="장비 상태" Foreground="#9fb0c0" FontWeight="Bold" FontSize="13" Margin="0,0,0,10"/>
+
+                    <Border Background="#7a2020" CornerRadius="3" Padding="8,3" Margin="0,0,0,10" HorizontalAlignment="Left"
+                            Visibility="{Binding IsEmergencyStop, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="비상정지" Foreground="#ffd9d6" FontWeight="Bold" FontSize="12"/>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding IsConnected, Converter={StaticResource Lamp}}"/>
+                        <TextBlock Text="PLC" Foreground="White" FontWeight="Bold" FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding StatusMessage}" Foreground="#8fa0b0" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <TextBlock Text="{Binding Snapshot.CurrentTemperature, StringFormat='온도 {0:0.0}℃'}" Foreground="#47eaed" FontSize="13" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding Snapshot.CurrentHumidity, StringFormat='습도 {0:0.0}%'}" Foreground="#47eaed" FontSize="13" FontWeight="Bold" Margin="12,0,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <TextBlock Text="{Binding Snapshot.ServoXPosition, StringFormat='서보  X {0}'}" Foreground="#bac9c9" FontSize="12"/>
+                        <TextBlock Text="{Binding Snapshot.ServoYPosition, StringFormat='Y {0}'}" Foreground="#bac9c9" FontSize="12" Margin="10,0,0,0"/>
+                    </StackPanel>
+
+                    <UniformGrid Columns="2">
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Heater, Converter={StaticResource Lamp}}"/>
+                            <TextBlock Text="히터" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Cooler1st, Converter={StaticResource Lamp}}"/>
+                            <TextBlock Text="1차 냉동기" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Cooler2nd, Converter={StaticResource Lamp}}"/>
+                            <TextBlock Text="2차 냉동기" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.CoolerRoom, Converter={StaticResource Lamp}}"/>
+                            <TextBlock Text="상온 냉동기" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.CoolerRoomBypass, Converter={StaticResource Lamp}}"/>
+                            <TextBlock Text="바이패스" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Blower1, Converter={StaticResource Lamp}}"/>
+                            <TextBlock Text="블로워1" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Blower2, Converter={StaticResource Lamp}}"/>
+                            <TextBlock Text="블로워2" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.Mcf, Converter={StaticResource Lamp}}"/>
+                            <TextBlock Text="MCF" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.DoorLamp, Converter={StaticResource Lamp}}"/>
+                            <TextBlock Text="도어" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Snapshot.PairGlass, Converter={StaticResource Lamp}}"/>
+                            <TextBlock Text="페어글라스" Foreground="#bac9c9" FontSize="11" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </UniformGrid>
+                </StackPanel>
+            </DockPanel>
         </Border>
 
         <!-- Main Content Area -->

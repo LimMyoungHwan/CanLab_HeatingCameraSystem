@@ -54,6 +54,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty]
         private DateTime _lastHeartbeat = DateTime.MinValue;
 
+        [ObservableProperty]
+        private string _hostName = string.Empty;
+
         public ObservableCollection<CameraNode> Cameras { get; } = new ObservableCollection<CameraNode>();
     }
 
@@ -164,10 +167,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private bool _recipeRunning;
         private int _activeRecipeStepIndex = -1;
         private CancellationTokenSource? _recipeCts;
-        private System.Windows.Threading.DispatcherTimer? _plcPollTimer;
         private System.Windows.Threading.DispatcherTimer? _offlineCheckTimer;
-        private bool[]? _prevErrorBits;
-        private bool _wasPlcConnected = true;
 
         public DashboardViewModel()
             : this(
@@ -198,19 +198,26 @@ namespace HeatingCameraSystem.Master.ViewModels
             for (int i = 0; i < 2; i++) _mode4Assignments.Add(null);
             for (int i = 0; i < 1; i++) _mode5Assignments.Add(null);
 
+            var agentsView = System.Windows.Data.CollectionViewSource.GetDefaultView(Agents);
+            agentsView.GroupDescriptions.Add(new System.Windows.Data.PropertyGroupDescription(nameof(AgentNode.HostName)));
+            if (agentsView is System.ComponentModel.ICollectionViewLiveShaping live)
+            {
+                live.IsLiveGrouping = true;
+                live.LiveGroupingProperties.Add(nameof(AgentNode.HostName));
+            }
+
             LoadCameraFeeds();
             LoadRecipes();
             _ = LoadPersistedLayoutsAsync();
 
             if (startTimers)
             {
-                _plcPollTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-                _plcPollTimer.Tick += async (_, _) => await PollPlcAsync();
-                _plcPollTimer.Start();
-
                 _offlineCheckTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
                 _offlineCheckTimer.Tick += (_, _) => CheckOfflineAgents();
                 _offlineCheckTimer.Start();
+
+                if (AppServices.PlcStatus != null)
+                    AppServices.PlcStatus.Updated += OnSharedPlcStatus;
             }
 
             _ = SubscribeAgentStatusAsync();
@@ -236,15 +243,17 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 RunOnUi(() =>
                 {
+                    string hostName = string.IsNullOrWhiteSpace(msg.HostName) ? "(미확인 PC)" : msg.HostName;
                     if (!_agentMap.TryGetValue(msg.AgentId, out var agent))
                     {
-                        agent = new AgentNode { Name = msg.AgentId, IsExpanded = true };
+                        agent = new AgentNode { Name = msg.AgentId, IsExpanded = true, HostName = hostName };
                         _agentMap[msg.AgentId] = agent;
                         Agents.Add(agent);
                     }
 
                     agent.IsOnline      = true;
                     agent.LastHeartbeat  = msg.Timestamp;
+                    agent.HostName       = hostName;
 
                     string camId = $"CAM-{msg.CameraIndex:D2}";
                     var cam = agent.Cameras.FirstOrDefault(c => c.Id == camId);
@@ -386,85 +395,96 @@ namespace HeatingCameraSystem.Master.ViewModels
             try
             {
                 var s = await _plcController.ReadStatusAsync();
-
-                CurrentTemperature = s.CurrentTemperature;
-                TargetTemperature = s.TargetTemperature;
-                CurrentHumidity = s.CurrentHumidity;
-                TargetHumidity = s.TargetHumidity;
-
-                var bb = AppServices.BlackBodyController;
-                if (bb != null)
-                {
-                    BlackBody1Pv = await bb.GetCurrentTemperatureAsync(0);
-                    BlackBody1Sv = await bb.GetTargetTemperatureAsync(0);
-                    BlackBody2Pv = await bb.GetCurrentTemperatureAsync(1);
-                    BlackBody2Sv = await bb.GetTargetTemperatureAsync(1);
-                }
-                else
-                {
-                    BlackBody1Pv = s.BlackBody1Pv;
-                    BlackBody1Sv = s.BlackBody1Sv;
-                    BlackBody2Pv = s.BlackBody2Pv;
-                    BlackBody2Sv = s.BlackBody2Sv;
-                }
-
-                ServoXPosition = s.ServoXPosition;
-                ServoYPosition = s.ServoYPosition;
-                ServoXBusy = s.ServoXBusy;
-                ServoYBusy = s.ServoYBusy;
-                ServoXHomeComplete = s.ServoXHomeComplete;
-                ServoYHomeComplete = s.ServoYHomeComplete;
-                ServoXErrorCode = s.ServoXErrorCode;
-                ServoYErrorCode = s.ServoYErrorCode;
-                CurrentPoint = s.CurrentPoint;
-
-                CurrentStep = s.CurrentStep;
-                TotalSteps = s.TotalSteps;
-                FanSpeedHz = s.FanSpeedHz;
-                GasFlow = s.GasFlow;
-
-                Heater = s.Heater;
-                Cooler1st = s.Cooler1st;
-                Cooler2nd = s.Cooler2nd;
-                CoolerRoom = s.CoolerRoom;
-                CoolerRoomBypass = s.CoolerRoomBypass;
-                DoorLamp = s.DoorLamp;
-                PairGlass = s.PairGlass;
-                Mcf = s.Mcf;
-                Blower1 = s.Blower1;
-                Blower2 = s.Blower2;
-
-                RaisePlcErrorEdges(s.ErrorBits);
-                UpdateActiveErrors(s.ErrorBits);
-                IsEmergencyStop = s.ErrorBits.Length > 0 && s.ErrorBits[0];
-
-                if (!_wasPlcConnected) AlarmSink.Raise(AlarmSeverity.Info, "PLC", "연결 복구");
-                _wasPlcConnected = true;
                 IsPlcConnected = true;
                 PlcStatusMessage = $"갱신 {DateTime.Now:HH:mm:ss}";
-
-                AddTrendSample(CurrentTemperature, CurrentHumidity);
+                ApplyStatus(s);
+                await RefreshBlackBodyAsync(s);
             }
             catch (Exception ex)
             {
-                if (_wasPlcConnected) AlarmSink.Raise(AlarmSeverity.Error, "PLC", $"연결 끊김: {ex.Message}");
-                _wasPlcConnected = false;
                 IsPlcConnected = false;
                 PlcStatusMessage = $"읽기 실패: {ex.Message}";
                 System.Diagnostics.Debug.WriteLine($"[Dashboard] PLC poll failed: {ex.Message}");
             }
         }
 
-        private void RaisePlcErrorEdges(bool[] bits)
+        private async void OnSharedPlcStatus(object? sender, PlcStatusSnapshot s)
         {
-            var names = PlcDeviceCatalog.ErrorNames;
-            for (int i = 0; i < bits.Length && i < names.Length; i++)
+            try
             {
-                bool was = _prevErrorBits != null && i < _prevErrorBits.Length && _prevErrorBits[i];
-                if (bits[i] && !was && !string.IsNullOrEmpty(names[i]))
-                    AlarmSink.Raise(AlarmSeverity.Error, "PLC", names[i]);
+                var st = AppServices.PlcStatus;
+                IsPlcConnected = st?.IsConnected ?? false;
+                PlcStatusMessage = st?.StatusMessage ?? PlcStatusMessage;
+                if (st == null || !st.IsConnected) return;
+                ApplyStatus(s);
+                await RefreshBlackBodyAsync(s);
             }
-            _prevErrorBits = (bool[])bits.Clone();
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Dashboard] shared PLC status failed: {ex.Message}");
+            }
+        }
+
+        private void ApplyStatus(PlcStatusSnapshot s)
+        {
+            CurrentTemperature = s.CurrentTemperature;
+            TargetTemperature = s.TargetTemperature;
+            CurrentHumidity = s.CurrentHumidity;
+            TargetHumidity = s.TargetHumidity;
+
+            ServoXPosition = s.ServoXPosition;
+            ServoYPosition = s.ServoYPosition;
+            ServoXBusy = s.ServoXBusy;
+            ServoYBusy = s.ServoYBusy;
+            ServoXHomeComplete = s.ServoXHomeComplete;
+            ServoYHomeComplete = s.ServoYHomeComplete;
+            ServoXErrorCode = s.ServoXErrorCode;
+            ServoYErrorCode = s.ServoYErrorCode;
+            CurrentPoint = s.CurrentPoint;
+
+            CurrentStep = s.CurrentStep;
+            TotalSteps = s.TotalSteps;
+            FanSpeedHz = s.FanSpeedHz;
+            GasFlow = s.GasFlow;
+
+            Heater = s.Heater;
+            Cooler1st = s.Cooler1st;
+            Cooler2nd = s.Cooler2nd;
+            CoolerRoom = s.CoolerRoom;
+            CoolerRoomBypass = s.CoolerRoomBypass;
+            DoorLamp = s.DoorLamp;
+            PairGlass = s.PairGlass;
+            Mcf = s.Mcf;
+            Blower1 = s.Blower1;
+            Blower2 = s.Blower2;
+
+            UpdateActiveErrors(s.ErrorBits);
+            IsEmergencyStop = s.ErrorBits.Length > 0 && s.ErrorBits[0];
+            AddTrendSample(CurrentTemperature, CurrentHumidity);
+        }
+
+        private async Task RefreshBlackBodyAsync(PlcStatusSnapshot s)
+        {
+            var bb = AppServices.BlackBodyController;
+            if (bb == null)
+            {
+                BlackBody1Pv = s.BlackBody1Pv;
+                BlackBody1Sv = s.BlackBody1Sv;
+                BlackBody2Pv = s.BlackBody2Pv;
+                BlackBody2Sv = s.BlackBody2Sv;
+                return;
+            }
+            try
+            {
+                BlackBody1Pv = await bb.GetCurrentTemperatureAsync(0);
+                BlackBody1Sv = await bb.GetTargetTemperatureAsync(0);
+                BlackBody2Pv = await bb.GetCurrentTemperatureAsync(1);
+                BlackBody2Sv = await bb.GetTargetTemperatureAsync(1);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Dashboard] blackbody read failed: {ex.Message}");
+            }
         }
 
         private void UpdateActiveErrors(bool[] bits)

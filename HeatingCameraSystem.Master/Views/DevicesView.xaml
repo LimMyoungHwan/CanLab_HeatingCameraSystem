@@ -85,7 +85,7 @@
             <Setter Property="FontSize"         Value="13"/>
         </Style>
 
-        <Style x:Key="FieldCombo" TargetType="ComboBox">
+        <Style x:Key="FieldCombo" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
             <Setter Property="Background"       Value="#252a39"/>
             <Setter Property="Foreground"       Value="#dee2f7"/>
             <Setter Property="BorderBrush"      Value="#3b4949"/>

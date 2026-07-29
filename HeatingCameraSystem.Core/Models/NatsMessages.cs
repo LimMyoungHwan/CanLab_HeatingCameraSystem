@@ -27,6 +27,7 @@ namespace HeatingCameraSystem.Core.Models
     public class AgentStatusMessage
     {
         public string AgentId { get; set; } = string.Empty;
+        public string HostName { get; set; } = string.Empty;
         public int CameraIndex { get; set; }
         public CameraStatus CameraStatus { get; set; }
         public DateTime Timestamp { get; set; }

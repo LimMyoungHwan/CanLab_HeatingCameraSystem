@@ -34,6 +34,7 @@ namespace HeatingCameraSystem.Master.Services
         public static ISerialShutterController? ShutterController { get; private set; }
         public static RecipeEngine? RecipeEngine { get; private set; }
         public static ConnectionMonitorService? ConnectionMonitor { get; private set; }
+        public static PlcStatusService? PlcStatus { get; private set; }
         public static ILiveThermalCamera? LiveThermalCamera { get; private set; }
         public static ICameraComPairingService? CameraPairingService { get; private set; }
         public static Func<string, ICameraSerialClient>? CameraSerialClientFactory { get; private set; }
@@ -91,6 +92,9 @@ namespace HeatingCameraSystem.Master.Services
             RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController);
             ConnectionMonitor = new ConnectionMonitorService(PlcController, ShutterController, Settings);
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
+
+            PlcStatus = new PlcStatusService(PlcController);
+            PlcStatus.Start();
         }
 
         public static IBlackBodyController CreateBlackBodyController(HardwareSettings settings, IPlcController plc)
@@ -181,6 +185,7 @@ namespace HeatingCameraSystem.Master.Services
 
         public static async Task DisposeAsync()
         {
+            PlcStatus?.Stop();
             ConnectionMonitor?.Dispose();
             ShutterController?.Dispose();
             BlackBodyController?.Dispose();
