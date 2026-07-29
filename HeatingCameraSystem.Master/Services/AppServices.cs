@@ -25,6 +25,7 @@ namespace HeatingCameraSystem.Master.Services
         public static LiteDatabase Db { get; private set; } = null!;
         public static IRecipeRepository RecipeRepo { get; private set; } = null!;
         public static ICameraMappingRepository MappingRepo { get; private set; } = null!;
+        public static IDashboardLayoutRepository DashboardLayoutRepo { get; private set; } = null!;
         public static ICaptureHistoryRepository HistoryRepo { get; private set; } = null!;
         public static ICameraSerialSettingsRepository CameraSerialSettingsRepo { get; private set; } = null!;
         public static ICameraDeviceRepository CameraDeviceRepo { get; private set; } = null!;
@@ -55,6 +56,7 @@ namespace HeatingCameraSystem.Master.Services
             Db = new LiteDatabase(Path.Combine(dir, "data.db"));
             RecipeRepo = new LiteDbRecipeRepository(Db);
             MappingRepo = new LiteDbCameraMappingRepository(Db);
+            DashboardLayoutRepo = new LiteDbDashboardLayoutRepository(Db);
             HistoryRepo = new LiteDbCaptureHistoryRepository(Db);
             CameraSerialSettingsRepo = new LiteDbCameraSerialSettingsRepository(Db);
             CameraDeviceRepo = new LiteDbCameraDeviceRepository(Db);

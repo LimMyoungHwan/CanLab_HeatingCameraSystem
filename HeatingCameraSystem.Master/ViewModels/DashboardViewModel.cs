@@ -156,10 +156,12 @@ namespace HeatingCameraSystem.Master.ViewModels
         private readonly Dictionary<string, AgentNode> _agentMap = new();
         private readonly IPlcController? _plcController;
         private readonly INatsCommunicationService? _natsService;
+        private readonly IDashboardLayoutRepository? _dashboardLayoutRepo;
         private readonly Func<IEnumerable<Recipe>> _loadRecipes;
+        private readonly Dictionary<int, List<DashboardLayoutSlot>> _persistedLayout = new();
         private readonly Queue<(float Temperature, float Humidity)> _samples = new();
-        private System.Windows.Threading.DispatcherTimer? _autoCycleTimer;
-        private int _currentPageIndex = 0;
+        private bool _recipeRunning;
+        private int _activeRecipeStepIndex = -1;
         private CancellationTokenSource? _recipeCts;
         private System.Windows.Threading.DispatcherTimer? _plcPollTimer;
         private System.Windows.Threading.DispatcherTimer? _offlineCheckTimer;
@@ -169,7 +171,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                 AppServices.PlcController,
                 AppServices.NatsService,
                 () => AppServices.RecipeRepo?.GetAllAsync().GetAwaiter().GetResult() ?? Array.Empty<Recipe>(),
-                true)
+                true,
+                AppServices.DashboardLayoutRepo)
         {
         }
 
@@ -177,10 +180,12 @@ namespace HeatingCameraSystem.Master.ViewModels
             IPlcController? plcController,
             INatsCommunicationService? natsService,
             Func<IEnumerable<Recipe>>? loadRecipes,
-            bool startTimers)
+            bool startTimers,
+            IDashboardLayoutRepository? dashboardLayoutRepo = null)
         {
             _plcController = plcController;
             _natsService = natsService;
+            _dashboardLayoutRepo = dashboardLayoutRepo;
             _loadRecipes = loadRecipes ?? (() => Array.Empty<Recipe>());
             CurrentTemperature = 0f;
             CurrentHumidity = 0f;
@@ -192,6 +197,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             LoadCameraFeeds();
             LoadRecipes();
+            _ = LoadPersistedLayoutsAsync();
 
             if (startTimers)
             {
@@ -246,9 +252,64 @@ namespace HeatingCameraSystem.Master.ViewModels
                     }
                     cam.CameraStatus = msg.CameraStatus;
                     UpdateOnlineAgentCount();
-                    LoadCameraFeeds();
+                    bool currentLayoutChanged = RebindPersistedLayouts();
+                    if (CurrentViewMode == 1 || currentLayoutChanged)
+                        LoadCameraFeeds();
                 });
             });
+        }
+
+        private async Task LoadPersistedLayoutsAsync()
+        {
+            if (_dashboardLayoutRepo == null) return;
+
+            try
+            {
+                var loaded = new Dictionary<int, List<DashboardLayoutSlot>>();
+                for (int mode = 2; mode <= 5; mode++)
+                    loaded[mode] = (await _dashboardLayoutRepo.GetForModeAsync(mode)).ToList();
+
+                RunOnUi(() =>
+                {
+                    foreach (var pair in loaded)
+                        _persistedLayout[pair.Key] = pair.Value;
+
+                    if (RebindPersistedLayouts())
+                        LoadCameraFeeds();
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Dashboard] layout load failed: {ex.Message}");
+            }
+        }
+
+        private bool RebindPersistedLayouts()
+        {
+            bool currentModeChanged = false;
+            foreach (var pair in _persistedLayout)
+            {
+                var assignments = GetAssignmentsForMode(pair.Key);
+                foreach (var slot in pair.Value)
+                {
+                    if (slot.Index < 0 || slot.Index >= assignments.Count || assignments[slot.Index] != null)
+                        continue;
+                    if (string.IsNullOrEmpty(slot.AgentId) || slot.CameraIndex == null)
+                        continue;
+                    if (!_agentMap.TryGetValue(slot.AgentId, out var agent))
+                        continue;
+
+                    string cameraId = $"CAM-{slot.CameraIndex.Value:D2}";
+                    var camera = agent.Cameras.FirstOrDefault(c => c.Id == cameraId);
+                    if (camera == null) continue;
+
+                    assignments[slot.Index] = camera;
+                    if (pair.Key == CurrentViewMode)
+                        currentModeChanged = true;
+                }
+            }
+
+            return currentModeChanged;
         }
 
         private async Task SubscribeLiveFramesAsync()
@@ -457,39 +518,22 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             if (CurrentViewMode == 1)
             {
-                // Mode 1: Auto cycling
-                if (_autoCycleTimer == null)
-                {
-                    _autoCycleTimer = new System.Windows.Threading.DispatcherTimer();
-                    _autoCycleTimer.Interval = TimeSpan.FromSeconds(1);
-                    _autoCycleTimer.Tick += AutoCycleTimer_Tick;
-                }
-                
-                _currentPageIndex = 0;
-                var allCameras = Agents.SelectMany(a => a.Cameras).ToList();
-                int pageSize = 8;
-                int totalPages = (int)Math.Ceiling((double)allCameras.Count / pageSize);
-                if (totalPages == 0) totalPages = 1;
-                
-                UpdateAutoCyclePage(allCameras, totalPages);
-                
-                if (totalPages > 1)
-                {
-                    _autoCycleTimer.Start();
-                }
-                else
-                {
-                    _autoCycleTimer.Stop();
-                }
+                CameraFeeds.Clear();
+                CurrentPageInfo = _recipeRunning ? "Mode 1 — 활성 카메라" : "Mode 1 — 대기";
+                if (!_recipeRunning || SelectedRecipe == null)
+                    return;
+                if (_activeRecipeStepIndex < 0 || _activeRecipeStepIndex >= SelectedRecipe.Steps.Count)
+                    return;
+
+                int cameraIndex = SelectedRecipe.Steps[_activeRecipeStepIndex].CameraIndex;
+                string cameraId = $"CAM-{cameraIndex:D2}";
+                var camera = Agents.SelectMany(a => a.Cameras).FirstOrDefault(c => c.Id == cameraId);
+                if (camera != null)
+                    CameraFeeds.Add(new DashboardSlot { Index = 0, Camera = camera });
             }
             else
             {
                 // Modes 2~5
-                if (_autoCycleTimer != null)
-                {
-                    _autoCycleTimer.Stop();
-                }
-                
                 CurrentPageInfo = "Page 1/1";
                 
                 CameraFeeds.Clear();
@@ -511,38 +555,6 @@ namespace HeatingCameraSystem.Master.ViewModels
                         Camera = currentAssignments[i]
                     });
                 }
-            }
-        }
-
-        private void AutoCycleTimer_Tick(object? sender, EventArgs e)
-        {
-            if (CurrentViewMode != 1) return;
-            
-            var allCameras = Agents.SelectMany(a => a.Cameras).ToList();
-            if (allCameras.Count == 0) return;
-
-            int pageSize = 8;
-            int totalPages = (int)Math.Ceiling((double)allCameras.Count / pageSize);
-
-            _currentPageIndex = (_currentPageIndex + 1) % totalPages;
-            UpdateAutoCyclePage(allCameras, totalPages);
-        }
-
-        private void UpdateAutoCyclePage(List<CameraNode> allCameras, int totalPages)
-        {
-            int pageSize = 8;
-            CurrentPageInfo = $"Page {_currentPageIndex + 1}/{totalPages}";
-
-            var pageCameras = allCameras.Skip(_currentPageIndex * pageSize).Take(pageSize).ToList();
-            
-            CameraFeeds.Clear();
-            for (int i = 0; i < pageCameras.Count; i++)
-            {
-                CameraFeeds.Add(new DashboardSlot
-                {
-                    Index = i,
-                    Camera = pageCameras[i]
-                });
             }
         }
 
@@ -576,6 +588,10 @@ namespace HeatingCameraSystem.Master.ViewModels
             RecipeStatus = $"실행 중: {SelectedRecipe.Name}";
             RecipeProgressValue = 0;
             RecipePhaseText = string.Empty;
+            _recipeRunning = true;
+            _activeRecipeStepIndex = 0;
+            if (CurrentViewMode == 1)
+                RunOnUi(LoadCameraFeeds);
 
             var progress = new Progress<RecipeProgress>(p =>
             {
@@ -583,6 +599,9 @@ namespace HeatingCameraSystem.Master.ViewModels
                     ? (double)p.CurrentStep / p.TotalSteps * 100
                     : 0;
                 RecipePhaseText = p.CurrentPhase;
+                _activeRecipeStepIndex = p.CurrentStep;
+                if (CurrentViewMode == 1)
+                    RunOnUi(LoadCameraFeeds);
             });
 
             try
@@ -597,6 +616,13 @@ namespace HeatingCameraSystem.Master.ViewModels
             catch (Exception ex)
             {
                 RecipeStatus = $"오류: {ex.Message}";
+            }
+            finally
+            {
+                _recipeRunning = false;
+                _activeRecipeStepIndex = -1;
+                if (CurrentViewMode == 1)
+                    RunOnUi(LoadCameraFeeds);
             }
         }
 
@@ -620,6 +646,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             if (slot.Index >= 0 && slot.Index < currentAssignments.Count)
             {
                 currentAssignments[slot.Index] = camera;
+                PersistLayout(CurrentViewMode);
             }
         }
 
@@ -634,7 +661,54 @@ namespace HeatingCameraSystem.Master.ViewModels
             if (slot.Index >= 0 && slot.Index < currentAssignments.Count)
             {
                 currentAssignments[slot.Index] = null;
+                PersistLayout(CurrentViewMode);
             }
+        }
+
+        private void PersistLayout(int mode)
+        {
+            if (_dashboardLayoutRepo == null) return;
+
+            var slots = GetAssignmentsForMode(mode)
+                .Select((camera, index) =>
+                {
+                    var agent = camera == null
+                        ? null
+                        : Agents.FirstOrDefault(a => a.Cameras.Contains(camera));
+                    return new DashboardLayoutSlot
+                    {
+                        Mode = mode,
+                        Index = index,
+                        AgentId = agent?.Name,
+                        CameraIndex = ParseCameraIndex(camera)
+                    };
+                })
+                .ToList();
+
+            _persistedLayout[mode] = slots;
+            _ = SaveLayoutAsync(mode, slots);
+        }
+
+        private async Task SaveLayoutAsync(int mode, IReadOnlyList<DashboardLayoutSlot> slots)
+        {
+            var repo = _dashboardLayoutRepo;
+            if (repo == null) return;
+
+            try
+            {
+                await repo.SaveForModeAsync(mode, slots);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Dashboard] layout save failed: {ex.Message}");
+            }
+        }
+
+        private static int? ParseCameraIndex(CameraNode? camera)
+        {
+            if (camera == null || !camera.Id.StartsWith("CAM-", StringComparison.Ordinal))
+                return null;
+            return int.TryParse(camera.Id.Substring(4), out int index) ? index : null;
         }
     }
 }

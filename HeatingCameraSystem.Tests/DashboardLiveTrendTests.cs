@@ -36,9 +36,12 @@ public class DashboardLiveTrendTests
         });
 
         CameraNode camera = await WaitForCameraAsync(vm, c => c.LiveImage != null);
+        vm.SetViewModeCommand.Execute("2");
+        vm.AssignCameraToDashboardSlotCommand.Execute(Tuple.Create(camera, vm.CameraFeeds[0]));
 
         Assert.Equal(1, vm.OnlineAgentCount);
-        Assert.Single(vm.CameraFeeds);
+        Assert.Equal(8, vm.CameraFeeds.Count);
+        Assert.Single(vm.CameraFeeds.Where(slot => slot.Camera != null));
         Assert.Same(camera, vm.CameraFeeds[0].Camera);
         Assert.True(camera.HasFreshLiveFrame);
         Assert.Equal(timestamp, camera.LastLiveFrameUtc);
