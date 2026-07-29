@@ -90,7 +90,7 @@ namespace HeatingCameraSystem.Master.Services
 
             BlackBodyController = CreateBlackBodyController(Settings, PlcController);
 
-            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController, MappingRepo);
+            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController);
             ConnectionMonitor = new ConnectionMonitorService(PlcController, ShutterController, Settings);
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
         }

@@ -17,6 +17,7 @@ namespace HeatingCameraSystem.Core.Models
 
         // 순차적으로 실행될 스텝 목록
         public List<RecipeStep> Steps { get; set; } = new();
+        public List<CameraMappingConfig> Mappings { get; set; } = new();
     }
 
     public class RecipeStep

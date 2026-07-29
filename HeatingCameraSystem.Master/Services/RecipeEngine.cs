@@ -20,7 +20,6 @@ namespace HeatingCameraSystem.Master.Services
         private readonly string? _imageCacheDir;
         private readonly ICameraDeviceRepository? _deviceRepo;
         private readonly IBlackBodyController _blackBody;
-        private readonly ICameraMappingRepository? _mappingRepo;
 
         public RecipeEngine(
             IPlcController plcController,
@@ -29,8 +28,7 @@ namespace HeatingCameraSystem.Master.Services
             RecipeEngineSettings? settings = null,
             string? imageCacheDir = null,
             ICameraDeviceRepository? deviceRepo = null,
-            IBlackBodyController? blackBody = null,
-            ICameraMappingRepository? mappingRepo = null)
+            IBlackBodyController? blackBody = null)
         {
             _plcController = plcController;
             _natsService = natsService;
@@ -42,7 +40,6 @@ namespace HeatingCameraSystem.Master.Services
             _imageCacheDir  = imageCacheDir;
             _deviceRepo     = deviceRepo;
             _blackBody      = blackBody ?? new HeatingCameraSystem.Protocols.PlcBlackBodyAdapter(plcController);
-            _mappingRepo    = mappingRepo;
         }
 
         public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null)
@@ -73,7 +70,7 @@ namespace HeatingCameraSystem.Master.Services
 
             Console.WriteLine("[RecipeEngine] Chamber ready. Executing steps...");
 
-            var positionAgentMap = await LoadPositionAgentMapAsync();
+            var positionAgentMap = await LoadPositionAgentMapAsync(recipe);
 
             for (int i = 0; i < recipe.Steps.Count; i++)
             {
@@ -205,23 +202,11 @@ namespace HeatingCameraSystem.Master.Services
         }
 
         // Position(1~64) → AgentId from the saved mapping. CameraId = device Alias (preferred) or AgentId.
-        private async Task<IReadOnlyDictionary<int, string>> LoadPositionAgentMapAsync()
+        private async Task<IReadOnlyDictionary<int, string>> LoadPositionAgentMapAsync(Recipe recipe)
         {
             var map = new Dictionary<int, string>();
-            if (_mappingRepo == null) return map;
 
-            IEnumerable<CameraMappingConfig> mappings;
-            try
-            {
-                mappings = await _mappingRepo.GetAllAsync();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[RecipeEngine] mapping load failed: {ex.Message}");
-                return map;
-            }
-
-            foreach (var m in mappings)
+            foreach (var m in recipe.Mappings)
             {
                 if (string.IsNullOrEmpty(m.CameraId)) continue;
                 if (!TryParseSlotIndex(m.SlotId, out int pos)) continue;
