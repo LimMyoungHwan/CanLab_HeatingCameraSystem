@@ -102,9 +102,9 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         
-                        <Button Grid.Column="0" Content="NEW" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Primary}" BorderThickness="0" Margin="0,0,4,0" Padding="0,8"/>
-                        <Button Grid.Column="1" Content="COPY" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Secondary}" BorderThickness="0" Margin="4,0,4,0" Padding="0,8"/>
-                        <Button Grid.Column="2" Content="DEL" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Error}" BorderThickness="0" Margin="4,0,0,0" Padding="0,8"/>
+                        <Button Grid.Column="0" Content="새 레시피" Command="{Binding AddRecipeCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Primary}" BorderThickness="0" Margin="0,0,4,0" Padding="0,8"/>
+                        <Button Grid.Column="1" Content="레시피 복사" Command="{Binding CopyRecipeCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Secondary}" BorderThickness="0" Margin="4,0,4,0" Padding="0,8"/>
+                        <Button Grid.Column="2" Content="삭제" Command="{Binding DeleteRecipeCommand}" CommandParameter="{Binding SelectedRecipe}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Error}" BorderThickness="0" Margin="4,0,0,0" Padding="0,8"/>
                     </Grid>
                 </Border>
             </Grid>
@@ -265,6 +265,63 @@
                                 <TextBlock Text="ADD NEW RECIPE STEP" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
+
+                        <Expander Header="카메라 맵핑" IsExpanded="False" Foreground="{StaticResource TextOnSurface}" Margin="0,16,0,0">
+                            <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,8,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                        <TextBlock Text="사용 가능한 카메라" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,6"/>
+                                        <ListBox ItemsSource="{Binding DataContext.AvailableMappingCameras, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                 SelectedItem="{Binding DataContext.SelectedMappingCamera, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                 Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" Foreground="{StaticResource TextOnSurface}"
+                                                 MaxHeight="330" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="4,2">
+                                                        <TextBlock Text="{Binding Id}" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding Source}" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="카메라를 선택한 뒤 슬롯을 클릭하세요." FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,6"/>
+                                        <ItemsControl ItemsSource="{Binding DataContext.MappingSlots, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <UniformGrid Columns="8" Rows="8"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="2">
+                                                        <Button Command="{Binding DataContext.AssignCameraToSlotCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" Height="48" Padding="2" Background="{StaticResource BgSurface}"
+                                                                BorderBrush="{StaticResource OutlineVariant}" Foreground="{StaticResource TextOnSurface}" Cursor="Hand">
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding SlotId}" FontSize="10" Foreground="{StaticResource Primary}" HorizontalAlignment="Center"/>
+                                                                <TextBlock Text="{Binding CameraId, TargetNullValue=—}" FontSize="10" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Button>
+                                                        <Button Content="×" Command="{Binding DataContext.UnassignSlotCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" Visibility="{Binding HasCamera, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                                Width="16" Height="16" Padding="0" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                                Background="Transparent" BorderThickness="0" Foreground="{StaticResource Error}" ToolTip="맵핑 해제"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Expander>
                     </StackPanel>
                 </ScrollViewer>
 
