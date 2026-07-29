@@ -24,6 +24,7 @@ public sealed class SimulatorHost : IAsyncDisposable
     private readonly Func<SimulatorSettings, SimulatorState, ICameraAgentEndpoint> _cameraFactory;
     private readonly TextReader _input;
     private readonly TextWriter _output;
+    private readonly bool _startCameras;
     private IPlcSimulatorEndpoint? _plc;
     private ICameraAgentEndpoint? _cameras;
 
@@ -33,7 +34,8 @@ public sealed class SimulatorHost : IAsyncDisposable
         TextReader? input = null,
         TextWriter? output = null,
         Func<SimulatorSettings, SimulatorState, IPlcSimulatorEndpoint>? plcFactory = null,
-        Func<SimulatorSettings, SimulatorState, ICameraAgentEndpoint>? cameraFactory = null)
+        Func<SimulatorSettings, SimulatorState, ICameraAgentEndpoint>? cameraFactory = null,
+        bool startCameras = true)
     {
         _settings = settings;
         _state = state ?? new SimulatorState(settings.Cameras.Select(c => c.AgentId));
@@ -41,6 +43,7 @@ public sealed class SimulatorHost : IAsyncDisposable
         _output = output ?? Console.Out;
         _plcFactory = plcFactory ?? ((s, state) => new FEnetPlcSimulator(s, state: state));
         _cameraFactory = cameraFactory ?? ((s, state) => new NatsCameraAgentSimulator(s, state));
+        _startCameras = startCameras;
     }
 
     public async Task StartAsync()
@@ -48,9 +51,14 @@ public sealed class SimulatorHost : IAsyncDisposable
         _plc = _plcFactory(_settings, _state);
         _plc.Start();
         _state.SetPlcOnline(true);
-        _cameras = _cameraFactory(_settings, _state);
-        await _cameras.StartAsync().ConfigureAwait(false);
-        await _output.WriteLineAsync($"SIMULATOR READY plc={_settings.Endpoint.ListenAddress}:{_settings.Endpoint.ListenPort} cameras={_settings.Cameras.Count} nats={_settings.Endpoint.NatsUrl}").ConfigureAwait(false);
+        int cameraCount = 0;
+        if (_startCameras)
+        {
+            _cameras = _cameraFactory(_settings, _state);
+            await _cameras.StartAsync().ConfigureAwait(false);
+            cameraCount = _settings.Cameras.Count;
+        }
+        await _output.WriteLineAsync($"SIMULATOR READY plc={_settings.Endpoint.ListenAddress}:{_settings.Endpoint.ListenPort} cameras={cameraCount} nats={_settings.Endpoint.NatsUrl}").ConfigureAwait(false);
     }
 
     public async Task RunConsoleAsync(CancellationToken token)

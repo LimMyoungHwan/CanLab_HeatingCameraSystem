@@ -27,6 +27,22 @@ public class SimulatorHostTests
     }
 
     [Fact]
+    public async Task PlcOnly_StartsPlc_ButNotCameras()
+    {
+        var output = new StringWriter();
+        var plc = new FakePlcEndpoint();
+        var cameras = new FakeCameraEndpoint();
+        await using var host = new SimulatorHost(Settings(), output: output,
+            plcFactory: (_, _) => plc, cameraFactory: (_, _) => cameras, startCameras: false);
+
+        await host.StartAsync();
+
+        Assert.True(plc.Started);
+        Assert.False(cameras.Started);
+        Assert.Contains("cameras=0", output.ToString());
+    }
+
+    [Fact]
     public async Task Commands_UpdateState_AndInvalidCommandPrintsUsage()
     {
         var output = new StringWriter();

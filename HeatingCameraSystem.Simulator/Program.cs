@@ -6,7 +6,9 @@ return await MainAsync(args);
 
 static async Task<int> MainAsync(string[] args)
 {
-    string path = args.Length > 0 ? args[0] : Path.Combine(AppContext.BaseDirectory, "simulator.json");
+    string? pathArg = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
+    string path = pathArg ?? Path.Combine(AppContext.BaseDirectory, "simulator.json");
+    bool plcOnly = args.Any(a => a.Equals("--plc-only", StringComparison.OrdinalIgnoreCase));
     SimulatorSettings settings;
     try
     {
@@ -18,7 +20,7 @@ static async Task<int> MainAsync(string[] args)
         return 2;
     }
 
-    await using var host = new SimulatorHost(settings);
+    await using var host = new SimulatorHost(settings, startCameras: !plcOnly);
     try
     {
         await host.StartAsync();
