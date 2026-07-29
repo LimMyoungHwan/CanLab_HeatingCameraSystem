@@ -128,6 +128,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="1.5*"/>
                             </Grid.ColumnDefinitions>
                             
@@ -142,6 +143,16 @@
                             </StackPanel>
                             
                             <StackPanel Grid.Column="1" Margin="0,0,16,0">
+                                <TextBlock Text="온도 램프 도달시간 (분)" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                <Border Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBox Text="{Binding RampMinutes}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="18" FontWeight="Bold" Width="60"/>
+                                        <TextBlock Text="분" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2" Margin="0,0,16,0">
                                 <TextBlock Text="TARGET CHAMBER HUMIDITY" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
                                 <Border Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8">
                                     <StackPanel Orientation="Horizontal">
@@ -151,7 +162,7 @@
                                 </Border>
                             </StackPanel>
 
-                            <StackPanel Grid.Column="2">
+                            <StackPanel Grid.Column="3">
                                 <TextBlock Text="CAPTURE MODE" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
                                 <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="2">
                                     <Grid>

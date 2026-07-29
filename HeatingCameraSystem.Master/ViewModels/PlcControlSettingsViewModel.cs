@@ -19,7 +19,16 @@ namespace HeatingCameraSystem.Master.ViewModels
 
     public partial class PlcControlSettingsViewModel : ObservableObject
     {
+        // AppServices does not expose RecipeEngineSettings; use the required local fallback.
+        private const int RampStepIntervalSeconds = 30;
+
         [ObservableProperty] private float _targetTemperature = 25f;
+        [ObservableProperty] private float _rampTargetTemperature = 25f;
+        [ObservableProperty] private int _rampMinutes = 10;
+        [ObservableProperty]
+        [NotifyCanExecuteChangedFor(nameof(StartRampCommand))]
+        private bool _isRamping;
+        private CancellationTokenSource? _rampCts;
         [ObservableProperty] private float _targetHumidity = 50f;
         [ObservableProperty] private bool _humidityControl;
         [ObservableProperty] private float _blackBody1Target = 25f;
@@ -48,6 +57,46 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         [RelayCommand]
         private Task ApplyTemperature() => RunAsync(p => p.SetTargetTemperatureAsync(TargetTemperature), "타겟 온도");
+
+        private bool CanStartRamp() => !IsRamping;
+
+        [RelayCommand(CanExecute = nameof(CanStartRamp))]
+        private async Task StartRampAsync()
+        {
+            var plc = AppServices.PlcController;
+            if (plc == null) { StatusMessage = "PLC 미초기화"; return; }
+
+            _rampCts?.Dispose();
+            _rampCts = new CancellationTokenSource();
+            IsRamping = true;
+            try
+            {
+                float start = await plc.GetCurrentTemperatureAsync();
+                _rampCts.Token.ThrowIfCancellationRequested();
+                var controller = new TemperatureRampController(plc, RampStepIntervalSeconds);
+                var rampProgress = new Progress<string>(message => StatusMessage = message);
+                await controller.RampAsync(start, RampTargetTemperature, RampMinutes, rampProgress, _rampCts.Token);
+                StatusMessage = "온도 램프 완료됨";
+            }
+            catch (OperationCanceledException)
+            {
+                StatusMessage = "램프 중지됨";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"온도 램프 오류: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"[PlcSettings] {ex.Message}");
+            }
+            finally
+            {
+                IsRamping = false;
+                _rampCts?.Dispose();
+                _rampCts = null;
+            }
+        }
+
+        [RelayCommand]
+        private void StopRamp() => _rampCts?.Cancel();
 
         [RelayCommand]
         private Task ApplyHumidity() => RunAsync(p => p.SetTargetHumidityAsync(TargetHumidity), "타겟 습도");

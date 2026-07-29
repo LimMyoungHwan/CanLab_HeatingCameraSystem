@@ -16,7 +16,7 @@ namespace HeatingCameraSystem.Master.Services
         private readonly ICaptureHistoryRepository _historyRepo;
         private readonly float _tempTolerance;
         private readonly TimeSpan _captureTimeout;
-        private readonly int _rampStepIntervalSeconds;
+        private readonly TemperatureRampController _temperatureRampController;
         private readonly string? _imageCacheDir;
         private readonly ICameraDeviceRepository? _deviceRepo;
         private readonly IBlackBodyController _blackBody;
@@ -38,7 +38,7 @@ namespace HeatingCameraSystem.Master.Services
             var s = settings ?? new RecipeEngineSettings();
             _tempTolerance  = s.TemperatureTolerance;
             _captureTimeout = TimeSpan.FromSeconds(s.CaptureResultTimeoutSeconds);
-            _rampStepIntervalSeconds = s.RampStepIntervalSeconds;
+            _temperatureRampController = new TemperatureRampController(plcController, s.RampStepIntervalSeconds);
             _imageCacheDir  = imageCacheDir;
             _deviceRepo     = deviceRepo;
             _blackBody      = blackBody ?? new HeatingCameraSystem.Protocols.PlcBlackBodyAdapter(plcController);
@@ -165,33 +165,25 @@ namespace HeatingCameraSystem.Master.Services
         private async Task RampTemperatureAsync(Recipe recipe, int totalSteps, IProgress<RecipeProgress>? progress, CancellationToken ct)
         {
             float target = recipe.GlobalTargetTemperature;
-            if (recipe.TemperatureRampMinutes <= 0)
-            {
-                await _plcController.SetTargetTemperatureAsync(target);
-                return;
-            }
-
-            float start = await _plcController.GetCurrentTemperatureAsync();
-            double durationSeconds = recipe.TemperatureRampMinutes * 60.0;
-            var stepDelay = TimeSpan.FromSeconds(Math.Max(1, _rampStepIntervalSeconds));
-            var startedAt = DateTime.UtcNow;
-
-            while (!ct.IsCancellationRequested)
-            {
-                double frac = Math.Min((DateTime.UtcNow - startedAt).TotalSeconds / durationSeconds, 1.0);
-                float sv = start + (float)((target - start) * frac);
-                await _plcController.SetTargetTemperatureAsync(sv);
-                progress?.Report(new RecipeProgress
+            float start = recipe.TemperatureRampMinutes > 0
+                ? await _plcController.GetCurrentTemperatureAsync()
+                : target;
+            var recipeProgress = progress;
+            IProgress<string>? rampProgress = recipeProgress == null
+                ? null
+                : new Progress<string>(phase => recipeProgress.Report(new RecipeProgress
                 {
                     CurrentStep = 0,
                     TotalSteps = totalSteps,
-                    CurrentPhase = $"온도 램프 {sv:F1}℃ / {target:F1}℃"
-                });
-                if (frac >= 1.0) break;
-                await Task.Delay(stepDelay, ct);
-            }
+                    CurrentPhase = phase
+                }));
 
-            await _plcController.SetTargetTemperatureAsync(target);
+            await _temperatureRampController.RampAsync(
+                start,
+                target,
+                recipe.TemperatureRampMinutes,
+                rampProgress,
+                ct);
         }
 
         private async Task<string> ResolveAgentIdAsync(RecipeStep step, IReadOnlyDictionary<int, string> positionAgentMap)

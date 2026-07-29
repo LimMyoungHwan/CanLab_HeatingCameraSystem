@@ -34,6 +34,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private bool _isSelected;
         [ObservableProperty] private string _lastModified = string.Empty;
         [ObservableProperty] private float _targetChamberTemp;
+        [ObservableProperty] private int _rampMinutes;
         [ObservableProperty] private float _targetChamberHumidity;
         [ObservableProperty] private bool _isSequentialMode = true;
 
@@ -67,7 +68,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand]
         private void AddRecipe()
         {
-            var vm = new RecipeModel { Name = "New Recipe", LastModified = DateTime.Now.ToString("g"), TargetChamberTemp = 25.0f, TargetChamberHumidity = 50.0f };
+            var vm = new RecipeModel { Name = "New Recipe", LastModified = DateTime.Now.ToString("g"), TargetChamberTemp = 25.0f, RampMinutes = 0, TargetChamberHumidity = 50.0f };
             Recipes.Add(vm);
             AppServices.RecipeRepo.SaveAsync(ToDomain(vm)).GetAwaiter().GetResult();
             SelectRecipe(vm);
@@ -183,7 +184,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private static Recipe ToDomain(RecipeModel vm)
         {
-            var r = new Recipe { Id = vm.Id, Name = vm.Name, GlobalTargetTemperature = vm.TargetChamberTemp, GlobalTargetHumidity = vm.TargetChamberHumidity };
+            var r = new Recipe { Id = vm.Id, Name = vm.Name, GlobalTargetTemperature = vm.TargetChamberTemp, TemperatureRampMinutes = vm.RampMinutes, GlobalTargetHumidity = vm.TargetChamberHumidity };
             foreach (var s in vm.Steps)
                 r.Steps.Add(new RecipeStep
                 {
@@ -200,7 +201,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private static RecipeModel FromDomain(Recipe r)
         {
-            var vm = new RecipeModel { Id = r.Id, Name = r.Name, TargetChamberTemp = r.GlobalTargetTemperature, TargetChamberHumidity = r.GlobalTargetHumidity, LastModified = DateTime.Now.ToString("g") };
+            var vm = new RecipeModel { Id = r.Id, Name = r.Name, TargetChamberTemp = r.GlobalTargetTemperature, RampMinutes = r.TemperatureRampMinutes, TargetChamberHumidity = r.GlobalTargetHumidity, LastModified = DateTime.Now.ToString("g") };
             int n = 1;
             foreach (var s in r.Steps)
                 vm.Steps.Add(new RecipeStepModel

@@ -89,6 +89,24 @@
 
                 <Border Style="{StaticResource Card}" Width="360">
                     <StackPanel>
+                        <TextBlock Text="온도 램프" Style="{StaticResource Head}"/>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="목표 온도 (℃)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBox Text="{Binding RampTargetTemperature}"/>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock Text="도달시간(분)" Style="{StaticResource Lbl}" Width="110"/>
+                            <TextBox Text="{Binding RampMinutes}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="램프 시작" Style="{StaticResource Apply}" Command="{Binding StartRampCommand}" Margin="0,0,8,0"/>
+                            <Button Content="중지" Style="{StaticResource Apply}" Command="{Binding StopRampCommand}" IsEnabled="{Binding IsRamping}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Width="360">
+                    <StackPanel>
                         <TextBlock Text="모터 / 팬" Style="{StaticResource Head}"/>
                         <StackPanel Style="{StaticResource FieldRow}">
                             <TextBlock Text="서보 속도 (1~100%)" Style="{StaticResource Lbl}" Width="130"/>
