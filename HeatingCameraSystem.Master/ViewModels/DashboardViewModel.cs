@@ -222,7 +222,18 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             _ = SubscribeAgentStatusAsync();
             _ = SubscribeLiveFramesAsync();
+
+            LivePreviewColorMode.Changed += OnColorModeChanged;
         }
+
+        // 0=컬러(iron), 1=그레이스케일 — XAML 콤보 아이템 순서와 일치.
+        [ObservableProperty]
+        private int _colorMapIndex = LivePreviewColorMode.Grayscale ? 1 : 0;
+
+        partial void OnColorMapIndexChanged(int value) => LivePreviewColorMode.SetGrayscale(value == 1);
+
+        private void OnColorModeChanged() =>
+            RunOnUi(() => ColorMapIndex = LivePreviewColorMode.Grayscale ? 1 : 0);
 
         private void LoadRecipes()
         {
@@ -335,6 +346,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     if (msg.ImageBytes is null || msg.ImageBytes.Length == 0) return;
                     BitmapSource? image = Decode(msg.ImageBytes);
                     if (image is null) return;
+                    image = LivePreviewColorMode.Apply(image);
 
                     RunOnUi(() => ApplyLiveFrame(msg, image));
                 });

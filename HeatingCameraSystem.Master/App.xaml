@@ -5,6 +5,9 @@
              StartupUri="MainWindow.xaml">
     <Application.Resources>
 
+        <SolidColorBrush x:Key="BrandBlue" Color="#29ABE2"/>
+        <SolidColorBrush x:Key="BrandGray" Color="#6D6E71"/>
+
         <!-- ============================================================
              Global dark-theme input styles.
              Fixes white-on-white: the WPF default ComboBox template forces

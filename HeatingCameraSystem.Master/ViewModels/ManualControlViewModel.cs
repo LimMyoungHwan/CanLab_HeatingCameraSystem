@@ -41,6 +41,9 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         [ObservableProperty] private CameraTileModel? _selectedCamera;
 
+        // 0=컬러(iron), 1=그레이스케일 — XAML 콤보 아이템 순서와 일치.
+        [ObservableProperty] private int _colorMapIndex = LivePreviewColorMode.Grayscale ? 1 : 0;
+
         [ObservableProperty] private string _statusMessage = "대기";
         [ObservableProperty] private int _servoXPosition;
         [ObservableProperty] private int _servoYPosition;
@@ -81,7 +84,14 @@ namespace HeatingCameraSystem.Master.ViewModels
             _timer.Start();
 
             SubscribeCameraServices();
+
+            LivePreviewColorMode.Changed += OnColorModeChanged;
         }
+
+        partial void OnColorMapIndexChanged(int value) => LivePreviewColorMode.SetGrayscale(value == 1);
+
+        private void OnColorModeChanged() =>
+            Application.Current?.Dispatcher.Invoke(() => ColorMapIndex = LivePreviewColorMode.Grayscale ? 1 : 0);
 
         private void SubscribeCameraServices()
         {
@@ -147,6 +157,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             BitmapSource? bmp = Decode(msg.ImageBytes);
             if (bmp is null) return;
+            bmp = LivePreviewColorMode.Apply(bmp);
 
             Application.Current?.Dispatcher.Invoke(() =>
             {

@@ -1,0 +1,22 @@
+# canlab HeatingCameraSystem — English (en)
+# format: key=value · lines starting with '#' are comments
+# To add a language: copy this file to <code>.txt and translate the values after '='.
+Lang_Name=English
+Window_Title=Heating Camera Master System
+Nav_Subtitle=Master Control System
+Nav_Language=Language
+Nav_EquipmentStatus=Equipment Status
+Nav_Dashboard=Dashboard
+Nav_RecipeEditor=Recipe Editor
+Nav_History=History Logs
+Nav_AgentSettings=Agent Settings
+Nav_PlcStatus=PLC Status
+Nav_PlcSettings=PLC Settings
+Nav_ManualControl=Manual Control
+Title_Dashboard=Dashboard
+Title_RecipeEditor=Recipe Editor
+Title_History=History Logs
+Title_AgentSettings=Agent Remote Settings
+Title_PlcStatus=PLC Status
+Title_PlcSettings=PLC Control Settings
+Title_ManualControl=Manual Control

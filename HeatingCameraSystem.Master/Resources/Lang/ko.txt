@@ -1,0 +1,22 @@
+# canlab HeatingCameraSystem — 한국어 (ko)
+# 형식: 키=값 · '#'로 시작하는 줄은 주석
+# 새 언어 추가: 이 파일을 <언어코드>.txt 로 복사한 뒤 = 오른쪽 값만 번역하세요.
+Lang_Name=한국어
+Window_Title=열화상 카메라 마스터 시스템
+Nav_Subtitle=마스터 컨트롤 시스템
+Nav_Language=언어
+Nav_EquipmentStatus=장비 상태
+Nav_Dashboard=대시보드
+Nav_RecipeEditor=레시피 편집기
+Nav_History=이력 조회
+Nav_AgentSettings=Agent 설정
+Nav_PlcStatus=PLC 상태
+Nav_PlcSettings=PLC 설정
+Nav_ManualControl=수동 조작
+Title_Dashboard=대시보드
+Title_RecipeEditor=레시피 편집기
+Title_History=이력 조회
+Title_AgentSettings=Agent 원격 설정
+Title_PlcStatus=PLC 상태
+Title_PlcSettings=PLC 설정
+Title_ManualControl=수동 조작

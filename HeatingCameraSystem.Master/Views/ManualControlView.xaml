@@ -196,6 +196,11 @@
                             <TextBlock Text="카메라 선택" Style="{StaticResource Lbl}"/>
                             <ComboBox ItemsSource="{Binding Cameras}" SelectedItem="{Binding SelectedCamera}"
                                       DisplayMemberPath="Title" MinWidth="240"/>
+                            <TextBlock Text="컬러맵" Style="{StaticResource Lbl}" Margin="16,0,0,0"/>
+                            <ComboBox MinWidth="140" SelectedIndex="{Binding ColorMapIndex, Mode=TwoWay}">
+                                <ComboBoxItem Content="컬러"/>
+                                <ComboBoxItem Content="그레이스케일"/>
+                            </ComboBox>
                         </StackPanel>
                         <Border BorderBrush="#3b4949" BorderThickness="1" CornerRadius="4" Padding="10" Background="#1a1f2e">
                             <Border.Style>

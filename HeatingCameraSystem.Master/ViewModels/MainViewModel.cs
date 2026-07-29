@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HeatingCameraSystem.Master.Localization;
 using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
@@ -7,68 +8,78 @@ namespace HeatingCameraSystem.Master.ViewModels
     public partial class MainViewModel : ObservableObject
     {
         [ObservableProperty]
-        private string _currentViewTitle = "대시보드 (Dashboard)";
+        private string _currentViewTitle = string.Empty;
 
         [ObservableProperty]
         private object? _currentViewModel;
 
         private readonly DashboardViewModel _dashboardViewModel = new();
+        private string _currentTitleKey = "Title_Dashboard";
 
         public PlcStatusService? PlcStatus => AppServices.PlcStatus;
 
         public MainViewModel()
         {
-            // Default View
+            LocalizationManager.Instance.PropertyChanged += (_, _) => UpdateTitle();
             NavigateToDashboard();
         }
+
+        private void UpdateTitle() => CurrentViewTitle = LocalizationManager.Instance[_currentTitleKey];
 
         [RelayCommand]
         private void NavigateToDashboard()
         {
-            CurrentViewTitle = "대시보드 (Dashboard)";
+            _currentTitleKey = "Title_Dashboard";
             CurrentViewModel = _dashboardViewModel;
+            UpdateTitle();
         }
 
         [RelayCommand]
         private void NavigateToRecipeEditor()
         {
-            CurrentViewTitle = "레시피 편집기 (Recipe Editor)";
+            _currentTitleKey = "Title_RecipeEditor";
             CurrentViewModel = new RecipeEditorViewModel();
+            UpdateTitle();
         }
 
         [RelayCommand]
         private void NavigateToHistory()
         {
-            CurrentViewTitle = "이력 조회 (History Logs)";
+            _currentTitleKey = "Title_History";
             CurrentViewModel = new HistoryViewModel();
+            UpdateTitle();
         }
 
         [RelayCommand]
         private void NavigateToAgentSettings()
         {
-            CurrentViewTitle = "Agent 원격 설정 (Agent Settings)";
+            _currentTitleKey = "Title_AgentSettings";
             CurrentViewModel = new AgentSettingsViewModel();
+            UpdateTitle();
         }
 
         [RelayCommand]
         private void NavigateToStatusMonitor()
         {
-            CurrentViewTitle = "PLC 상태 (Status)";
+            _currentTitleKey = "Title_PlcStatus";
             CurrentViewModel = new StatusMonitorViewModel();
+            UpdateTitle();
         }
 
         [RelayCommand]
         private void NavigateToPlcControlSettings()
         {
-            CurrentViewTitle = "PLC 설정 (Control Settings)";
+            _currentTitleKey = "Title_PlcSettings";
             CurrentViewModel = new PlcControlSettingsViewModel();
+            UpdateTitle();
         }
 
         [RelayCommand]
         private void NavigateToManualControl()
         {
-            CurrentViewTitle = "수동 조작 (Manual Control)";
+            _currentTitleKey = "Title_ManualControl";
             CurrentViewModel = new ManualControlViewModel();
+            UpdateTitle();
         }
     }
 }

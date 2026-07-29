@@ -438,6 +438,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             var bmp = Decode(msg.ImageBytes);
             if (bmp is null) return;
+            bmp = HeatingCameraSystem.Master.Services.LivePreviewColorMode.Apply(bmp);
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => CurrentPreview = bmp));
         }
 

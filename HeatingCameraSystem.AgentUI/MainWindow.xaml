@@ -1,7 +1,9 @@
 <Window x:Class="HeatingCameraSystem.AgentUI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="HeatingCameraSystem Agent" Height="680" Width="1040"
+        xmlns:loc="clr-namespace:HeatingCameraSystem.AgentUI.Localization"
+        xmlns:materialIcons="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
+        Title="{loc:Loc Window_Title}" Icon="/Assets/canlab.ico" Height="680" Width="1040"
         Background="#1E1E1E">
     <Window.Resources>
         <SolidColorBrush x:Key="BorderBrush" Color="#3C3C3C"/>
@@ -159,14 +161,25 @@
         </Style>
     </Window.Resources>
 
-    <DockPanel>
-        <TextBlock DockPanel.Dock="Top"
-                   Text="{Binding HeaderText}"
-                   Foreground="#E0E0E0" FontSize="16" FontWeight="SemiBold"
-                   Margin="12,10"/>
+        <DockPanel>
+        <DockPanel DockPanel.Dock="Top" LastChildFill="True" Margin="12,10,12,4">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{loc:Loc Nav_Language}" VerticalAlignment="Center" Foreground="#B0B0B0" Margin="0,0,6,0"/>
+                <ComboBox Width="130"
+                          ItemsSource="{Binding AvailableLanguages, Source={x:Static loc:LocalizationManager.Instance}}"
+                          DisplayMemberPath="DisplayName" SelectedValuePath="Code"
+                          SelectedValue="{Binding CurrentLanguage, Source={x:Static loc:LocalizationManager.Instance}, Mode=TwoWay}"/>
+            </StackPanel>
+            <TextBlock Text="{Binding HeaderText}"
+                       Foreground="#E0E0E0" FontSize="16" FontWeight="SemiBold"
+                       VerticalAlignment="Center"/>
+        </DockPanel>
         <TabControl Background="#1E1E1E" BorderBrush="#3C3C3C" Margin="6">
 
-            <TabItem Header="Live">
+            <TabItem>
+                <TabItem.Header>
+                    <materialIcons:MaterialIconText Kind="Video" Text="{loc:Loc Tab_Live}" Spacing="6"/>
+                </TabItem.Header>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl ItemsSource="{Binding Cameras}" Margin="6">
                         <ItemsControl.ItemsPanel>
@@ -185,18 +198,21 @@
                                             <Image Source="{Binding LiveImage}" Stretch="Uniform"/>
                                         </Border>
                                         <TextBlock Margin="2,6,0,0" Foreground="#B0B0B0">
-                                            <Run Text="Status: "/>
-                                            <Run Text="{Binding Status}"/>
+                                            <Run Text="{loc:Loc Cam_Status}"/><Run Text=" "/><Run Text="{Binding Status}"/>
                                         </TextBlock>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="2,8,0,0">
-                                            <Button Content="Restart" Command="{Binding RestartCommand}" Padding="12,3"/>
-                                            <Button Content="캡처 저장" Command="{Binding CaptureSaveCommand}" Padding="12,3" Margin="6,0,0,0"/>
+                                            <Button Command="{Binding RestartCommand}" Padding="12,3">
+                                                <materialIcons:MaterialIconText Kind="Restart" Text="{loc:Loc Cam_Restart}" Spacing="6"/>
+                                            </Button>
+                                            <Button Command="{Binding CaptureSaveCommand}" Padding="12,3" Margin="6,0,0,0">
+                                                <materialIcons:MaterialIconText Kind="ContentSave" Text="{loc:Loc Cam_CaptureSave}" Spacing="6"/>
+                                            </Button>
                                         </StackPanel>
                                         <TextBlock Text="{Binding CaptureStatus}" Foreground="#B0B0B0" Margin="2,4,0,0" TextWrapping="Wrap"/>
                                         <Border Margin="2,10,0,0" Padding="0,8,0,0" BorderBrush="#3C3C3C" BorderThickness="0,1,0,0"
                                                 Visibility="{Binding HasSerialControl, Converter={StaticResource BoolToVis}}">
                                             <StackPanel>
-                                                <TextBlock Text="카메라 시리얼 제어" Foreground="#B0B0B0" FontWeight="SemiBold" Margin="2,0,0,4"/>
+                                                <TextBlock Text="{loc:Loc Cam_SerialControl}" Foreground="#B0B0B0" FontWeight="SemiBold" Margin="2,0,0,4"/>
                                                 <Grid Margin="2,0,0,4">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>
@@ -212,13 +228,27 @@
                                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FpaTemperature}"/>
                                                 </Grid>
                                                 <WrapPanel Margin="2,2,0,0">
-                                                    <Button Content="셔터 열기" Command="{Binding OpenShutterCommand}" Margin="0,0,4,4" Padding="8,3"/>
-                                                    <Button Content="셔터 닫기" Command="{Binding CloseShutterCommand}" Margin="0,0,4,4" Padding="8,3"/>
-                                                    <Button Content="RUN" Command="{Binding RunCameraCommand}" Margin="0,0,4,4" Padding="8,3"/>
-                                                    <Button Content="STOP" Command="{Binding StopCameraCommand}" Margin="0,0,4,4" Padding="8,3"/>
-                                                    <Button Content="정보 읽기" Command="{Binding RefreshInfoCommand}" Margin="0,0,4,4" Padding="8,3"/>
-                                                    <Button Content="설정 저장" Command="{Binding SaveConfigCommand}" Margin="0,0,4,4" Padding="8,3"/>
-                                                    <Button Content="NUC" Command="{Binding RunNucCommand}" Margin="0,0,4,4" Padding="8,3"/>
+                                                    <Button Command="{Binding OpenShutterCommand}" Margin="0,0,4,4" Padding="8,3">
+                                                        <materialIcons:MaterialIconText Kind="Eye" Text="{loc:Loc Cam_ShutterOpen}" Spacing="6"/>
+                                                    </Button>
+                                                    <Button Command="{Binding CloseShutterCommand}" Margin="0,0,4,4" Padding="8,3">
+                                                        <materialIcons:MaterialIconText Kind="EyeOff" Text="{loc:Loc Cam_ShutterClose}" Spacing="6"/>
+                                                    </Button>
+                                                    <Button Command="{Binding RunCameraCommand}" Margin="0,0,4,4" Padding="8,3">
+                                                        <materialIcons:MaterialIconText Kind="Play" Text="{loc:Loc Cam_Run}" Spacing="6"/>
+                                                    </Button>
+                                                    <Button Command="{Binding StopCameraCommand}" Margin="0,0,4,4" Padding="8,3">
+                                                        <materialIcons:MaterialIconText Kind="Stop" Text="{loc:Loc Cam_Stop}" Spacing="6"/>
+                                                    </Button>
+                                                    <Button Command="{Binding RefreshInfoCommand}" Margin="0,0,4,4" Padding="8,3">
+                                                        <materialIcons:MaterialIconText Kind="Information" Text="{loc:Loc Cam_ReadInfo}" Spacing="6"/>
+                                                    </Button>
+                                                    <Button Command="{Binding SaveConfigCommand}" Margin="0,0,4,4" Padding="8,3">
+                                                        <materialIcons:MaterialIconText Kind="ContentSaveOutline" Text="{loc:Loc Cam_SaveConfig}" Spacing="6"/>
+                                                    </Button>
+                                                    <Button Command="{Binding RunNucCommand}" Margin="0,0,4,4" Padding="8,3">
+                                                        <materialIcons:MaterialIconText Kind="Tune" Text="{loc:Loc Cam_Nuc}" Spacing="6"/>
+                                                    </Button>
                                                 </WrapPanel>
                                                 <TextBlock Text="{Binding SerialStatus}" Foreground="#B0B0B0" Margin="2,2,0,0" TextWrapping="Wrap"/>
                                             </StackPanel>
@@ -231,7 +261,10 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Data">
+            <TabItem>
+                <TabItem.Header>
+                    <materialIcons:MaterialIconText Kind="Database" Text="{loc:Loc Tab_Data}" Spacing="6"/>
+                </TabItem.Header>
                 <Grid Margin="6" DataContext="{Binding DataBrowser}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -261,13 +294,19 @@
                             <Image Source="{Binding Preview}" Stretch="Uniform"/>
                         </Border>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <Button Content="Refresh" Command="{Binding RefreshCommand}"/>
-                            <Button Content="Delete selected" Command="{Binding DeleteSelectedCommand}"/>
+                            <Button Command="{Binding RefreshCommand}">
+                                <materialIcons:MaterialIconText Kind="Refresh" Text="{loc:Loc Data_Refresh}" Spacing="6"/>
+                            </Button>
+                            <Button Command="{Binding DeleteSelectedCommand}" Margin="6,0,0,0">
+                                <materialIcons:MaterialIconText Kind="Delete" Text="{loc:Loc Data_DeleteSelected}" Spacing="6"/>
+                            </Button>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <TextBlock Text="Retention (days):" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="{loc:Loc Data_Retention}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBox Text="{Binding RetentionDays}" Width="50"/>
-                            <Button Content="Purge old" Command="{Binding PurgeCommand}" Margin="6,0,0,0"/>
+                            <Button Command="{Binding PurgeCommand}" Margin="6,0,0,0">
+                                <materialIcons:MaterialIconText Kind="DeleteSweep" Text="{loc:Loc Data_PurgeOld}" Spacing="6"/>
+                            </Button>
                         </StackPanel>
                         <TextBlock Text="{Binding StatusText}" Foreground="#B0B0B0"
                                    Margin="0,8,0,0" TextWrapping="Wrap"/>
@@ -275,12 +314,17 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Logs">
+            <TabItem>
+                <TabItem.Header>
+                    <materialIcons:MaterialIconText Kind="FormatListBulleted" Text="{loc:Loc Tab_Logs}" Spacing="6"/>
+                </TabItem.Header>
                 <DockPanel Margin="6" DataContext="{Binding Logs}">
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
-                        <TextBlock Text="Min level:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="{loc:Loc Logs_MinLevel}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <ComboBox ItemsSource="{Binding Levels}" SelectedItem="{Binding MinLevel}" Width="130"/>
-                        <Button Content="Refresh" Command="{Binding RefreshCommand}" Margin="8,0,0,0"/>
+                        <Button Command="{Binding RefreshCommand}" Margin="8,0,0,0">
+                            <materialIcons:MaterialIconText Kind="Refresh" Text="{loc:Loc Logs_Refresh}" Spacing="6"/>
+                        </Button>
                         <TextBlock Text="{Binding StatusText}" Foreground="#B0B0B0"
                                    VerticalAlignment="Center" Margin="12,0,0,0"/>
                     </StackPanel>
@@ -296,23 +340,26 @@
                 </DockPanel>
             </TabItem>
 
-            <TabItem Header="Settings">
+            <TabItem>
+                <TabItem.Header>
+                    <materialIcons:MaterialIconText Kind="Cog" Text="{loc:Loc Tab_Settings}" Spacing="6"/>
+                </TabItem.Header>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="10" DataContext="{Binding Settings}">
-                        <CheckBox Content="Simulation mode (fake cameras)"
+                        <CheckBox Content="{loc:Loc Set_SimulationMode}"
                                   IsChecked="{Binding SimulationMode}" Margin="0,0,0,10"/>
-                        <TextBlock Text="NATS URL"/>
+                        <TextBlock Text="{loc:Loc Set_NatsUrl}"/>
                         <TextBox Text="{Binding NatsUrl}" Width="360" HorizontalAlignment="Left" Margin="0,2,0,8"/>
-                        <TextBlock Text="Storage path (blank = default under config dir)"/>
+                        <TextBlock Text="{loc:Loc Set_StoragePath}"/>
                         <TextBox Text="{Binding StoragePath}" Width="360" HorizontalAlignment="Left" Margin="0,2,0,8"/>
-                        <TextBlock Text="Heartbeat (seconds)"/>
+                        <TextBlock Text="{loc:Loc Set_Heartbeat}"/>
                         <TextBox Text="{Binding HeartbeatSeconds}" Width="80" HorizontalAlignment="Left" Margin="0,2,0,8"/>
-                        <TextBlock Text="Capture image format"/>
+                        <TextBlock Text="{loc:Loc Set_ImageFormat}"/>
                         <ComboBox ItemsSource="{Binding ImageFormats}" SelectedItem="{Binding CaptureImageFormat}"
                                   Width="160" HorizontalAlignment="Left" Margin="0,2,0,8"/>
-                        <TextBlock Text="Capture 장수 (Save 1회당 프레임 수)"/>
+                        <TextBlock Text="{loc:Loc Set_CaptureBurst}"/>
                         <TextBox Text="{Binding CaptureBurstCount}" Width="80" HorizontalAlignment="Left" Margin="0,2,0,8"/>
-                        <TextBlock Text="Cameras" FontWeight="SemiBold" Margin="0,6,0,4"/>
+                        <TextBlock Text="{loc:Loc Set_Cameras}" FontWeight="SemiBold" Margin="0,6,0,4"/>
                         <DataGrid ItemsSource="{Binding Cameras}" IsReadOnly="False" Height="180">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Agent Id" Width="*" Binding="{Binding AgentId}"/>
@@ -332,9 +379,15 @@
                             </DataGrid.Columns>
                         </DataGrid>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <Button Content="Add camera" Command="{Binding AddCameraCommand}"/>
-                            <Button Content="COM 자동 감지" Command="{Binding AutoDetectSerialCommand}"/>
-                            <Button Content="Save" Command="{Binding SaveCommand}"/>
+                            <Button Command="{Binding AddCameraCommand}">
+                                <materialIcons:MaterialIconText Kind="Plus" Text="{loc:Loc Set_AddCamera}" Spacing="6"/>
+                            </Button>
+                            <Button Command="{Binding AutoDetectSerialCommand}" Margin="6,0,0,0">
+                                <materialIcons:MaterialIconText Kind="Magnify" Text="{loc:Loc Set_AutoDetectCom}" Spacing="6"/>
+                            </Button>
+                            <Button Command="{Binding SaveCommand}" Margin="6,0,0,0">
+                                <materialIcons:MaterialIconText Kind="ContentSave" Text="{loc:Loc Set_Save}" Spacing="6"/>
+                            </Button>
                         </StackPanel>
                         <TextBlock Text="{Binding StatusText}" Foreground="#B0B0B0" Margin="0,8,0,0"/>
                     </StackPanel>

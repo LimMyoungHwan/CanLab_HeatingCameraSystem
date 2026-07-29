@@ -7,8 +7,10 @@
         xmlns:vm="clr-namespace:HeatingCameraSystem.Master.ViewModels"
         xmlns:views="clr-namespace:HeatingCameraSystem.Master.Views"
         xmlns:conv="clr-namespace:HeatingCameraSystem.Master.Converters"
+        xmlns:loc="clr-namespace:HeatingCameraSystem.Master.Localization"
+        xmlns:materialIcons="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
         mc:Ignorable="d"
-        Title="Heating Camera Master System" Height="768" Width="1024" Background="#F5F6FA">
+        Title="{loc:Loc Window_Title}" Icon="/Assets/canlab.ico" Height="768" Width="1024" Background="#F5F6FA">
     
     <Window.DataContext>
         <vm:MainViewModel />
@@ -53,33 +55,75 @@
         <Border Grid.Column="0" Background="#2F3542" Padding="20">
             <DockPanel LastChildFill="False">
                 <StackPanel DockPanel.Dock="Top">
-                <TextBlock Text="Master Control" Foreground="White" FontSize="24" FontWeight="Bold" Margin="0,0,0,30"/>
-                
-                <Button Content="Dashboard" Command="{Binding NavigateToDashboardCommand}" 
-                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+                    <StackPanel.Resources>
+                        <Style x:Key="NavBtn" TargetType="Button">
+                            <Setter Property="Height" Value="40"/>
+                            <Setter Property="Margin" Value="0,0,0,10"/>
+                            <Setter Property="Background" Value="#57606f"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                            <Setter Property="Padding" Value="12,0"/>
+                        </Style>
+                    </StackPanel.Resources>
+                    <Border Background="White" CornerRadius="8" Padding="14,12" Margin="0,0,0,14">
+                        <Image Source="/Assets/canlab-logo.png" Stretch="Uniform"/>
+                    </Border>
+                    <TextBlock Text="{loc:Loc Nav_Subtitle}" Foreground="{StaticResource BrandBlue}" FontSize="15" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,14"/>
 
-                <Button Content="Recipe Editor" Command="{Binding NavigateToRecipeEditorCommand}" 
-                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
-                
-                <Button Content="History Logs" Command="{Binding NavigateToHistoryCommand}" 
-                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+                    <TextBlock Text="{loc:Loc Nav_Language}" Foreground="#9fb0c0" FontSize="12" Margin="2,0,0,4"/>
+                    <ComboBox Margin="0,0,0,16"
+                              ItemsSource="{Binding AvailableLanguages, Source={x:Static loc:LocalizationManager.Instance}}"
+                              DisplayMemberPath="DisplayName" SelectedValuePath="Code"
+                              SelectedValue="{Binding CurrentLanguage, Source={x:Static loc:LocalizationManager.Instance}, Mode=TwoWay}"/>
 
-                <Button Content="Agent 설정" Command="{Binding NavigateToAgentSettingsCommand}" 
-                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
-
-                <Button Content="PLC 상태" Command="{Binding NavigateToStatusMonitorCommand}" 
-                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
-
-                <Button Content="PLC 설정" Command="{Binding NavigateToPlcControlSettingsCommand}" 
-                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
-
-                <Button Content="수동 조작" Command="{Binding NavigateToManualControlCommand}" 
-                        Height="40" Margin="0,0,0,10" Background="#57606f" Foreground="White" FontSize="16" BorderThickness="0"/>
+                    <Button Style="{StaticResource NavBtn}" Command="{Binding NavigateToDashboardCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialIcons:MaterialIcon Kind="ViewDashboard" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{loc:Loc Nav_Dashboard}" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavBtn}" Command="{Binding NavigateToRecipeEditorCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialIcons:MaterialIcon Kind="FileDocumentEditOutline" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{loc:Loc Nav_RecipeEditor}" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavBtn}" Command="{Binding NavigateToHistoryCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialIcons:MaterialIcon Kind="History" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{loc:Loc Nav_History}" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavBtn}" Command="{Binding NavigateToAgentSettingsCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialIcons:MaterialIcon Kind="Cctv" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{loc:Loc Nav_AgentSettings}" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavBtn}" Command="{Binding NavigateToStatusMonitorCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialIcons:MaterialIcon Kind="Gauge" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{loc:Loc Nav_PlcStatus}" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavBtn}" Command="{Binding NavigateToPlcControlSettingsCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialIcons:MaterialIcon Kind="Cog" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{loc:Loc Nav_PlcSettings}" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavBtn}" Command="{Binding NavigateToManualControlCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialIcons:MaterialIcon Kind="Gesture" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{loc:Loc Nav_ManualControl}" FontSize="16" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Bottom" DataContext="{Binding PlcStatus}">
                     <Border BorderBrush="#3b4949" BorderThickness="0,1,0,0" Margin="0,0,0,12"/>
-                    <TextBlock Text="장비 상태" Foreground="#9fb0c0" FontWeight="Bold" FontSize="13" Margin="0,0,0,10"/>
+                    <TextBlock Text="{loc:Loc Nav_EquipmentStatus}" Foreground="#9fb0c0" FontWeight="Bold" FontSize="13" Margin="0,0,0,10"/>
 
                     <Border Background="#7a2020" CornerRadius="3" Padding="8,3" Margin="0,0,0,10" HorizontalAlignment="Left"
                             Visibility="{Binding IsEmergencyStop, Converter={StaticResource BoolToVis}}">

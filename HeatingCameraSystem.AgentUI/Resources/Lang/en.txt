@@ -1,0 +1,37 @@
+# canlab HeatingCameraSystem AgentUI — English (en)
+# format: key=value · lines starting with '#' are comments
+# To add a language: copy this file to <code>.txt and translate the values after '='.
+Lang_Name=English
+Window_Title=Heating Camera Agent
+Nav_Language=Language
+Tab_Live=Live
+Tab_Data=Data
+Tab_Logs=Logs
+Tab_Settings=Settings
+Cam_Restart=Restart
+Cam_CaptureSave=Capture & Save
+Cam_ShutterOpen=Open Shutter
+Cam_ShutterClose=Close Shutter
+Cam_Run=RUN
+Cam_Stop=STOP
+Cam_ReadInfo=Read Info
+Cam_SaveConfig=Save Config
+Cam_Nuc=NUC
+Cam_SerialControl=Camera Serial Control
+Cam_Status=Status:
+Data_Refresh=Refresh
+Data_DeleteSelected=Delete Selected
+Data_PurgeOld=Purge Old
+Data_Retention=Retention (days):
+Logs_MinLevel=Min level:
+Logs_Refresh=Refresh
+Set_SimulationMode=Simulation mode (fake cameras)
+Set_NatsUrl=NATS URL
+Set_StoragePath=Storage path (blank = default under config dir)
+Set_Heartbeat=Heartbeat (seconds)
+Set_ImageFormat=Capture image format
+Set_CaptureBurst=Capture count (frames per Save)
+Set_Cameras=Cameras
+Set_AddCamera=Add camera
+Set_AutoDetectCom=Auto-detect COM
+Set_Save=Save
