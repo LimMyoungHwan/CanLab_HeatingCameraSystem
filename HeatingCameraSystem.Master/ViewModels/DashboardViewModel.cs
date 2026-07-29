@@ -198,20 +198,21 @@ namespace HeatingCameraSystem.Master.ViewModels
             for (int i = 0; i < 2; i++) _mode4Assignments.Add(null);
             for (int i = 0; i < 1; i++) _mode5Assignments.Add(null);
 
-            var agentsView = System.Windows.Data.CollectionViewSource.GetDefaultView(Agents);
-            agentsView.GroupDescriptions.Add(new System.Windows.Data.PropertyGroupDescription(nameof(AgentNode.HostName)));
-            if (agentsView is System.ComponentModel.ICollectionViewLiveShaping live)
-            {
-                live.IsLiveGrouping = true;
-                live.LiveGroupingProperties.Add(nameof(AgentNode.HostName));
-            }
-
             LoadCameraFeeds();
             LoadRecipes();
             _ = LoadPersistedLayoutsAsync();
 
             if (startTimers)
             {
+                // Agent PC-name grouping builds a thread-affine ICollectionView; only valid with a real UI dispatcher (skipped in headless tests, matching the DispatcherTimer below).
+                var agentsView = System.Windows.Data.CollectionViewSource.GetDefaultView(Agents);
+                agentsView.GroupDescriptions.Add(new System.Windows.Data.PropertyGroupDescription(nameof(AgentNode.HostName)));
+                if (agentsView is System.ComponentModel.ICollectionViewLiveShaping live)
+                {
+                    live.IsLiveGrouping = true;
+                    live.LiveGroupingProperties.Add(nameof(AgentNode.HostName));
+                }
+
                 _offlineCheckTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
                 _offlineCheckTimer.Tick += (_, _) => CheckOfflineAgents();
                 _offlineCheckTimer.Start();
