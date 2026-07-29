@@ -11,8 +11,8 @@ Master 실행 후 좌측 사이드바에 5개 탭:
 | 탭 | View | 무엇을 보고/하는가 |
 |---|---|---|
 | **Dashboard** | `DashboardView.xaml` | 챔버 온/습도 실시간, 카메라 피드 그리드, Agent 패널, Recipe 시작/정지 |
-| **Recipe Editor** | `RecipeEditorView.xaml` | Recipe CRUD, Step 추가/삭제, JSON Import/Export |
-| **Camera Mapping** | `CameraMappingView.xaml` | Dashboard 슬롯 ↔ 카메라 ID 매핑 (Mode 2~5) |
+| **Recipe Editor** | `RecipeEditorView.xaml` | Recipe CRUD, Step 추가/삭제, 카메라 매핑, JSON Import/Export |
+| **수동 조작** | `ManualControlView.xaml` | 카메라 라이브/원격 제어, PLC·서보·흑체 수동 조작 |
 | **History** | `HistoryView.xaml` | 캡처 이력 조회, 이미지 미리보기 |
 | **Settings** | `SettingsView.xaml` | 카메라별 시리얼 포트 설정을 Agent 로 원격 전송 + ACK 대기 |
 

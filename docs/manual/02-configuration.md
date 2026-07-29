@@ -215,12 +215,11 @@ _closeBuffer = { 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 `%LOCALAPPDATA%\HeatingCameraSystem\data.db` — LiteDB 단일 파일.
 
-저장되는 컬렉션 (Master 내 Repository 4종):
+저장되는 컬렉션 (주요 Repository):
 
 | 컬렉션 | 모델 | 용도 |
 |---|---|---|
-| Recipe | `Recipe` + `RecipeStep[]` | Recipe Editor 작업물 |
-| CameraMapping | `CameraMappingConfig` | Dashboard 슬롯 ↔ 카메라 매핑 |
+| Recipe | `Recipe` + `RecipeStep[]` | Recipe Editor 작업물 (카메라 매핑 `Mappings` 포함) |
 | CaptureHistory | `CaptureHistoryRecord` | 캡처 이력 (단계별 이미지 경로 + 온도/습도) |
 | CameraSerialSettings | `CameraSerialSettings` | 카메라별 시리얼 포트 설정 |
 

@@ -12,7 +12,7 @@
 │                         │                    │   USB-C Camera #1   │
 │  Dashboard              │  capture cmd ►     │   OpenCV + Serial   │
 │  Recipe Editor          │  ◄ capture result  ├─────────────────────┤
-│  Camera Mapping         │  ◄ heartbeat       │   Agent PC #2       │
+│  Manual Control         │  ◄ heartbeat       │   Agent PC #2       │
 │  Serial Settings        │  config ►          │   USB-C Camera #2   │
 │  History Logs           │  ◄ config ACK      └─────────────────────┘
 │                         │
