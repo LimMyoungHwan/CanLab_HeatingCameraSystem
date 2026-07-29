@@ -41,13 +41,13 @@
 - **실 AgentUI 프로세스 QA**(2026-07-28 후속, 임시 테스트로 실행 후 제거): 실제 `HeatingCameraSystem.AgentUI.exe`(sim, Agent_1/Agent_2) 기동 → NATS heartbeat 수신(프로세스 생존+연결 증명) → Master측 실 `NatsCommunicationService`로 `get`→snapshot(실 agentui.json 반영 확인: SimMode·Tiff16·COM7/COM8) → `set`(CaptureBurstCount=7·HeartbeatSeconds=11·StoragePath 마커)→ack → **agentui.json 디스크 실제 갱신 확인**. inline 람다 아니라 **실 App.xaml.cs `getConfigSnapshot`/`applyConfigSnapshot`+`config.Save()` 영속화**까지 증명.
 - **결론**: `CameraDescriptor` record 왕복 정상 → **plain-DTO 불필요**. Phase 2는 **직렬화 · 실 브로커 · 실 AgentUI 프로세스 · 디스크 영속화 4중 증명 완료**.
 
-### ⚠️ Phase 2 잔여 — 다음 세션 (디스플레이 필요)
-- **남은 것은 Master WPF 시각 클릭 하나뿐**: Master "Agent 설정" 화면에서 온라인 드롭다운→조회→카메라그리드 로드→필드 편집→전송→ack 표시를 **육안 확인**. 밑단(전송/직렬화/토픽/영속화)은 위로 전부 증명됨 = 남은 건 사소한 MVVM 커맨드 바인딩 확인.
-- **이번 세션 환경은 headless** → Windows `State-Tool: screen grab failed`. WPF 프로세스는 정상 기동·로직 실행되나 **스크린샷 자동화 불가**. ⇒ **디스플레이 가능한 머신에서** 아래 절차로 진행:
-  1. `agentui.json` 백업 → sim + Agent_1/Agent_2로 임시 설정.
-  2. `AgentUI.exe`(NATS heartbeat/config 구독) + `Master.exe` 동시 실행.
-  3. Master "Agent 설정" → 온라인 표시 → 조회(카메라그리드 로드=CameraDescriptor 라운드트립 육안) → 필드 편집 → 전송 → ack "저장됨. 재시작 필요" → `agentui.json` 반영 확인.
-  4. `agentui.json` 복원.
+### ✅ Phase 2 잔여 — 완료됨 (2026-07-28 세션5, 디스플레이 머신)
+Master WPF 시각 클릭 QA 완료. `agentui.json` 백업(sim=false 실카메라) → sim=true Agent_1/Agent_2 임시 config → 실 `AgentUI.exe`(sim) + 실 `Master.exe`(Debug bin) 동시 기동 → windows-mcp UIA 자동화로 육안 QA:
+- **S1 조회 왕복**: "Agent 설정" → 온라인 드롭다운 Agent_1 자동선택(하트비트) → **조회** → DataGrid 2행 로드(`Agent_1|1|QA Cam One|QA-DEV-1|COM7`, `Agent_2|2|QA Cam Two|QA-DEV-2|COM8`) + 필드(sim✔/Tiff16/hb5/burst1) = **CameraDescriptor NATS 왕복 Master UI 육안 확인**(플래그 리스크 최종 종결). 스크린샷 확보.
+- **S2 편집→전송→ack→영속**: Heartbeat 5→59, CaptureBurstCount 1→15 편집 → **설정 전송** → StatusMessage `✔ 저장됨. AgentUI 재시작 후 적용됩니다.`(AgentConfigAck 왕복 UI 표시) → `agentui.json` 디스크에 `HeartbeatSeconds:59`·`CaptureBurstCount:15` 반영 + AgentUI `config.Save()` 재직렬화(WriteIndented + 계산 프로퍼티 `EffectiveStorageDir` 출력)로 실 저장경로 증명. 스크린샷 + 디스크 덤프 확보.
+- **S3 복원**: 두 앱 종료 + `agentui.json` 원본(sim=false 실카메라) SHA256 일치 복원.
+- **결론**: Phase 2 = **직렬화 · 실브로커 · 실AgentUI프로세스 · 디스크영속화 · Master WPF 시각클릭 5중 증명 완료, 열린 항목 없음**.
+- **툴 주의**: windows-mcp `Type-Tool` `clear=true`가 WPF TextBox에서 no-op(append) → 편집값이 5→59, 1→15로 append됨(QA 유효성 무관, distinct 값). Master 창은 **최대화 필수**(Normal 시 하단 "설정 전송" 버튼이 작업표시줄 y≈1752 아래로 내려가 클릭이 taskbar에 적중).
 
 ### SR-800N 실운영
 - `hardware.json`의 `BlackBody.Units` 포트(COM4/COM5 placeholder)를 실 SR-800N COM으로, `BlackBody.Enabled=true` 설정.

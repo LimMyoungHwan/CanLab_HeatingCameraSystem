@@ -101,9 +101,49 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty]
         private PointCollection _humidityTrendPoints = new();
 
+        [ObservableProperty] private float _targetTemperature;
+        [ObservableProperty] private float _targetHumidity;
+
+        [ObservableProperty] private float _blackBody1Pv;
+        [ObservableProperty] private float _blackBody1Sv;
+        [ObservableProperty] private float _blackBody2Pv;
+        [ObservableProperty] private float _blackBody2Sv;
+
+        [ObservableProperty] private int _servoXPosition;
+        [ObservableProperty] private int _servoYPosition;
+        [ObservableProperty] private bool _servoXBusy;
+        [ObservableProperty] private bool _servoYBusy;
+        [ObservableProperty] private bool _servoXHomeComplete;
+        [ObservableProperty] private bool _servoYHomeComplete;
+        [ObservableProperty] private int _servoXErrorCode;
+        [ObservableProperty] private int _servoYErrorCode;
+        [ObservableProperty] private int _currentPoint;
+
+        [ObservableProperty] private int _currentStep;
+        [ObservableProperty] private int _totalSteps;
+        [ObservableProperty] private float _fanSpeedHz;
+        [ObservableProperty] private float _gasFlow;
+
+        [ObservableProperty] private bool _heater;
+        [ObservableProperty] private bool _cooler1st;
+        [ObservableProperty] private bool _cooler2nd;
+        [ObservableProperty] private bool _coolerRoom;
+        [ObservableProperty] private bool _coolerRoomBypass;
+        [ObservableProperty] private bool _doorLamp;
+        [ObservableProperty] private bool _pairGlass;
+        [ObservableProperty] private bool _mcf;
+        [ObservableProperty] private bool _blower1;
+        [ObservableProperty] private bool _blower2;
+
+        [ObservableProperty] private bool _isPlcConnected;
+        [ObservableProperty] private string _plcStatusMessage = "PLC 대기 중";
+        [ObservableProperty] private bool _isEmergencyStop;
+        [ObservableProperty] private bool _hasActiveErrors;
+
         public ObservableCollection<DashboardSlot> CameraFeeds { get; } = new ObservableCollection<DashboardSlot>();
         public ObservableCollection<AgentNode> Agents { get; } = new ObservableCollection<AgentNode>();
         public ObservableCollection<Recipe> Recipes { get; } = new ObservableCollection<Recipe>();
+        public ObservableCollection<string> ActiveErrors { get; } = new ObservableCollection<string>();
 
         [ObservableProperty]
         private Recipe? _selectedRecipe;
@@ -280,14 +320,79 @@ namespace HeatingCameraSystem.Master.ViewModels
             if (_plcController == null) return;
             try
             {
-                CurrentTemperature = await _plcController.GetCurrentTemperatureAsync();
-                CurrentHumidity = await _plcController.GetCurrentHumidityAsync();
+                var s = await _plcController.ReadStatusAsync();
+
+                CurrentTemperature = s.CurrentTemperature;
+                TargetTemperature = s.TargetTemperature;
+                CurrentHumidity = s.CurrentHumidity;
+                TargetHumidity = s.TargetHumidity;
+
+                var bb = AppServices.BlackBodyController;
+                if (bb != null)
+                {
+                    BlackBody1Pv = await bb.GetCurrentTemperatureAsync(0);
+                    BlackBody1Sv = await bb.GetTargetTemperatureAsync(0);
+                    BlackBody2Pv = await bb.GetCurrentTemperatureAsync(1);
+                    BlackBody2Sv = await bb.GetTargetTemperatureAsync(1);
+                }
+                else
+                {
+                    BlackBody1Pv = s.BlackBody1Pv;
+                    BlackBody1Sv = s.BlackBody1Sv;
+                    BlackBody2Pv = s.BlackBody2Pv;
+                    BlackBody2Sv = s.BlackBody2Sv;
+                }
+
+                ServoXPosition = s.ServoXPosition;
+                ServoYPosition = s.ServoYPosition;
+                ServoXBusy = s.ServoXBusy;
+                ServoYBusy = s.ServoYBusy;
+                ServoXHomeComplete = s.ServoXHomeComplete;
+                ServoYHomeComplete = s.ServoYHomeComplete;
+                ServoXErrorCode = s.ServoXErrorCode;
+                ServoYErrorCode = s.ServoYErrorCode;
+                CurrentPoint = s.CurrentPoint;
+
+                CurrentStep = s.CurrentStep;
+                TotalSteps = s.TotalSteps;
+                FanSpeedHz = s.FanSpeedHz;
+                GasFlow = s.GasFlow;
+
+                Heater = s.Heater;
+                Cooler1st = s.Cooler1st;
+                Cooler2nd = s.Cooler2nd;
+                CoolerRoom = s.CoolerRoom;
+                CoolerRoomBypass = s.CoolerRoomBypass;
+                DoorLamp = s.DoorLamp;
+                PairGlass = s.PairGlass;
+                Mcf = s.Mcf;
+                Blower1 = s.Blower1;
+                Blower2 = s.Blower2;
+
+                UpdateActiveErrors(s.ErrorBits);
+                IsEmergencyStop = s.ErrorBits.Length > 0 && s.ErrorBits[0];
+
+                IsPlcConnected = true;
+                PlcStatusMessage = $"갱신 {DateTime.Now:HH:mm:ss}";
+
                 AddTrendSample(CurrentTemperature, CurrentHumidity);
             }
             catch (Exception ex)
             {
+                IsPlcConnected = false;
+                PlcStatusMessage = $"읽기 실패: {ex.Message}";
                 System.Diagnostics.Debug.WriteLine($"[Dashboard] PLC poll failed: {ex.Message}");
             }
+        }
+
+        private void UpdateActiveErrors(bool[] bits)
+        {
+            ActiveErrors.Clear();
+            var names = PlcDeviceCatalog.ErrorNames;
+            for (int i = 0; i < bits.Length && i < names.Length; i++)
+                if (bits[i] && !string.IsNullOrEmpty(names[i]))
+                    ActiveErrors.Add(names[i]);
+            HasActiveErrors = ActiveErrors.Count > 0;
         }
 
         private void AddTrendSample(float temperature, float humidity)
