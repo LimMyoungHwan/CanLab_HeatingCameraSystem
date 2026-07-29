@@ -8,7 +8,7 @@
 
     <UserControl.Resources>
         <Style x:Key="FieldLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#859493"/>
+            <Setter Property="Foreground" Value="#bac9c9"/>
             <Setter Property="FontSize"   Value="11"/>
             <Setter Property="Margin"     Value="0,0,0,4"/>
         </Style>
@@ -129,7 +129,7 @@
 
             <!-- Empty state -->
             <TextBlock Text="상단에서 Agent를 선택하고 '조회'를 눌러 설정을 불러오세요."
-                       Foreground="#859493" FontSize="14"
+                       Foreground="#bac9c9" FontSize="14"
                        HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
@@ -245,8 +245,5 @@
         <ContentControl Content="{Binding DevicesVm}"/>
     </TabItem>
 
-    <TabItem Header="시리얼 설정" Style="{StaticResource DarkTabItem}">
-        <ContentControl Content="{Binding SerialVm}"/>
-    </TabItem>
     </TabControl>
 </UserControl>

@@ -42,7 +42,6 @@ namespace HeatingCameraSystem.Master.ViewModels
         public ObservableCollection<string> OnlineAgents { get; } = new();
 
         public DevicesViewModel DevicesVm { get; } = new();
-        public SettingsViewModel SerialVm { get; } = new();
 
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(LoadCommand))]

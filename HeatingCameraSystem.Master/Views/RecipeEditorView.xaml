@@ -249,7 +249,7 @@
                                                 </StackPanel>
                                                 <StackPanel Margin="0,0,16,0">
                                                     <TextBlock Text="CAMERA" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                                                    <ComboBox ItemsSource="{Binding DataContext.CameraPairs, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Camera.OpenCvIndex" SelectedValue="{Binding CameraIndex}" DisplayMemberPath="Camera.FriendlyName" Width="120" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
+                                                    <ComboBox ItemsSource="{Binding DataContext.OnlineAgentCameras, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="CameraIndex" SelectedValue="{Binding CameraIndex}" DisplayMemberPath="Label" Width="120" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
                                                 </StackPanel>
                                             </StackPanel>
                                         </Grid>
@@ -358,28 +358,8 @@
                 <TextBlock Grid.Row="0" Text="LIVE PREVIEW &amp; MOTION" FontSize="20" FontWeight="SemiBold" Foreground="{StaticResource TextOnSurface}" Margin="0,0,0,16"/>
 
                 <StackPanel Grid.Row="1" Margin="0,0,0,16">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <ComboBox Grid.Column="0" ItemsSource="{Binding CameraPairs}" SelectedItem="{Binding SelectedCameraPair}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}" Margin="0,0,8,0">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding Camera.FriendlyName}"/>
-                                        <TextBlock Text=" — "/>
-                                        <TextBlock Text="{Binding Status}"/>
-                                        <TextBlock Text=" — "/>
-                                        <TextBlock Text="{Binding SerialPort.PortName}"/>
-                                        <TextBlock Text=" — "/>
-                                        <TextBlock Text="{Binding CameraSerialNumber}"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        <Button Grid.Column="1" Content="REFRESH PAIRING" Command="{Binding RefreshPairingsCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4"/>
-                    </Grid>
+                    <TextBlock Text="온라인 Agent 카메라" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                    <ComboBox ItemsSource="{Binding OnlineAgentCameras}" SelectedItem="{Binding SelectedPreviewCamera}" DisplayMemberPath="Label" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
                 </StackPanel>
 
                 <Border Grid.Row="2" Background="Black" Width="380" Height="285" Margin="0,0,0,16" HorizontalAlignment="Center">
@@ -387,7 +367,6 @@
                 </Border>
 
                 <StackPanel Grid.Row="3" Margin="0,0,0,16">
-                    <TextBlock Text="{Binding FpaTemperature, StringFormat='FPA: {0:F1} °C'}" FontSize="14" FontWeight="Bold" Foreground="{StaticResource Primary}"/>
                     <TextBlock FontSize="14" FontWeight="Bold" Foreground="{StaticResource Secondary}">
                         <Run Text="X: "/>
                         <Run Text="{Binding CurrentServoX}"/>
@@ -412,7 +391,7 @@
                             <Button Content="HOME" Command="{Binding HomeServoCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4"/>
                         </StackPanel>
                         
-                        <TextBlock Text="SERIAL SHUTTER &amp; CAMERA" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                        <TextBlock Text="SHUTTER &amp; CAMERA" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                             <Button Content="SHUTTER OPEN" Command="{Binding OpenShutterCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="0,0,8,0"/>
                             <Button Content="SHUTTER CLOSE" Command="{Binding CloseShutterCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="0,0,8,0"/>

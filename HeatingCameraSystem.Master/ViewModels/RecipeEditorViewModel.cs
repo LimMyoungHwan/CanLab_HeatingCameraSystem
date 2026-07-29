@@ -44,6 +44,13 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private bool _isAssigned;
     }
 
+    public sealed class AgentCameraOption
+    {
+        public string AgentId { get; init; } = string.Empty;
+        public int CameraIndex { get; init; }
+        public string Label => $"{AgentId} (CAM-{CameraIndex:D2})";
+    }
+
     public partial class RecipeModel : ObservableObject
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
@@ -74,7 +81,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public RecipeEditorViewModel()
         {
-            LoadAvailableMappingCameras();
+            SubscribeCameraServices();
 
             foreach (var r in AppServices.RecipeRepo.GetAllAsync().GetAwaiter().GetResult())
                 Recipes.Add(FromDomain(r));
@@ -277,21 +284,6 @@ namespace HeatingCameraSystem.Master.ViewModels
             SyncRecipeMappings();
         }
 
-        private void LoadAvailableMappingCameras()
-        {
-            if (AppServices.CameraDeviceRepo == null) return;
-
-            foreach (var device in AppServices.CameraDeviceRepo.GetAllAsync().GetAwaiter().GetResult()
-                         .OrderBy(d => d.PCId).ThenBy(d => d.OpenCvIndex))
-            {
-                AvailableMappingCameras.Add(new MappingCameraModel
-                {
-                    Id = string.IsNullOrEmpty(device.Alias) ? device.AgentId : device.Alias,
-                    Source = string.IsNullOrEmpty(device.PCId) ? "Unknown PC" : device.PCId
-                });
-            }
-        }
-
         private void RebuildMappingSlots(RecipeModel? recipe)
         {
             MappingSlots.Clear();
@@ -398,74 +390,77 @@ namespace HeatingCameraSystem.Master.ViewModels
             try { var p = s.Replace("Position ", "").Split(new[] { " ->" }, StringSplitOptions.None); if (p.Length > 0 && int.TryParse(p[0].Trim(), out int v)) return v; } catch { }
             return 1;
         }
-            [ObservableProperty] private RecipeStepModel? _selectedStep;
-        [ObservableProperty] private CameraComPair? _selectedCameraPair;
+        [ObservableProperty] private RecipeStepModel? _selectedStep;
         [ObservableProperty] private System.Windows.Media.Imaging.BitmapSource? _currentPreview;
-        [ObservableProperty] private double _fpaTemperature;
         [ObservableProperty] private int _currentServoX;
         [ObservableProperty] private int _currentServoY;
 
-        public ObservableCollection<CameraComPair> CameraPairs { get; } = new();
+        [ObservableProperty] private AgentCameraOption? _selectedPreviewCamera;
 
-        private ICameraSerialClient? _serialClient;
-        private EventHandler<ThermalFrame>? _frameHandler;
-        private System.Windows.Threading.DispatcherTimer? _pollTimer;
+        public ObservableCollection<AgentCameraOption> OnlineAgentCameras { get; } = new();
 
-        partial void OnSelectedCameraPairChanged(CameraComPair? value)
+        private void SubscribeCameraServices()
         {
-            if (_frameHandler != null && AppServices.LiveThermalCamera != null)
+            var nats = AppServices.NatsService;
+            if (nats == null) return;
+            try
             {
-                AppServices.LiveThermalCamera.FrameReady -= _frameHandler;
-                _ = AppServices.LiveThermalCamera.StopAsync();
-                _frameHandler = null;
+                nats.SubscribeAgentStatusAsync(OnAgentStatus);
+                nats.SubscribeLiveFrameAsync(OnLiveFrame);
             }
-
-            _serialClient?.Dispose();
-            _serialClient = null;
-
-            CurrentPreview = null;
-
-            if (value?.Camera != null && AppServices.LiveThermalCamera != null)
+            catch (Exception ex)
             {
-                _frameHandler = (s, frame) =>
-                {
-                    var bmp = ThermalFrameBitmapSourceConverter.ToBitmapSource(frame);
-                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => CurrentPreview = bmp));
-                };
-                AppServices.LiveThermalCamera.FrameReady += _frameHandler;
-                _ = AppServices.LiveThermalCamera.StartAsync(value.Camera.OpenCvIndex);
-
-                if (value.SerialPort != null && AppServices.CameraSerialClientFactory != null)
-                {
-                    _serialClient = AppServices.CameraSerialClientFactory(value.SerialPort.PortName);
-                    _ = _serialClient.InitializeAsync();
-                }
+                System.Diagnostics.Debug.WriteLine($"[RecipeEditor] NATS subscribe failed: {ex.Message}");
             }
         }
 
-        [RelayCommand]
-        private async System.Threading.Tasks.Task RefreshPairingsAsync()
+        private void OnAgentStatus(AgentStatusMessage msg)
         {
-            if (_frameHandler != null && AppServices.LiveThermalCamera != null)
+            if (string.IsNullOrEmpty(msg.AgentId)) return;
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
-                AppServices.LiveThermalCamera.FrameReady -= _frameHandler;
-                _ = AppServices.LiveThermalCamera.StopAsync();
-                _frameHandler = null;
-            }
+                if (!OnlineAgentCameras.Any(a => a.AgentId == msg.AgentId && a.CameraIndex == msg.CameraIndex))
+                    OnlineAgentCameras.Add(new AgentCameraOption { AgentId = msg.AgentId, CameraIndex = msg.CameraIndex });
 
-            _serialClient?.Dispose();
-            _serialClient = null;
-            SelectedCameraPair = null;
-
-            CameraPairs.Clear();
-            if (AppServices.CameraPairingService != null)
-            {
-                foreach (var p in await AppServices.CameraPairingService.GetPairsAsync())
+                if (!AvailableMappingCameras.Any(m => m.Id == msg.AgentId))
                 {
-                    CameraPairs.Add(p);
+                    AvailableMappingCameras.Add(new MappingCameraModel { Id = msg.AgentId, Source = $"CAM-{msg.CameraIndex:D2}" });
+                    UpdateMappingCameraAssignments();
                 }
+            });
+        }
+
+        private void OnLiveFrame(LiveFrameMessage msg)
+        {
+            if (msg.ImageBytes is null || msg.ImageBytes.Length == 0) return;
+            var sel = SelectedPreviewCamera;
+            if (sel == null || msg.AgentId != sel.AgentId || msg.CameraIndex != sel.CameraIndex) return;
+
+            var bmp = Decode(msg.ImageBytes);
+            if (bmp is null) return;
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => CurrentPreview = bmp));
+        }
+
+        private static System.Windows.Media.Imaging.BitmapSource? Decode(byte[] jpeg)
+        {
+            try
+            {
+                var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                using var ms = new MemoryStream(jpeg);
+                bmp.BeginInit();
+                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bmp.StreamSource = ms;
+                bmp.EndInit();
+                bmp.Freeze();
+                return bmp;
+            }
+            catch
+            {
+                return null;
             }
         }
+
+        partial void OnSelectedPreviewCameraChanged(AgentCameraOption? value) => CurrentPreview = null;
 
         [RelayCommand]
         private async System.Threading.Tasks.Task GoToXyAsync()
@@ -500,70 +495,38 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
-        [RelayCommand]
-        private async System.Threading.Tasks.Task OpenShutterAsync()
+        private async System.Threading.Tasks.Task SendCameraOpAsync(string op)
         {
-            if (_serialClient != null) await _serialClient.SetShutterAsync(true);
+            var sel = SelectedPreviewCamera;
+            if (sel == null || AppServices.NatsService == null) return;
+            try
+            {
+                await AppServices.NatsService.PublishCameraControlAsync(new CameraControlMessage
+                {
+                    AgentId = sel.AgentId,
+                    CameraIndex = sel.CameraIndex,
+                    Op = op,
+                    Timestamp = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RecipeEditor] camera op publish failed: {ex.Message}");
+            }
         }
 
-        [RelayCommand]
-        private async System.Threading.Tasks.Task CloseShutterAsync()
-        {
-            if (_serialClient != null) await _serialClient.SetShutterAsync(false);
-        }
-
-        [RelayCommand]
-        private async System.Threading.Tasks.Task StartCameraAsync()
-        {
-            if (_serialClient != null) await _serialClient.SetCameraRunningAsync(true);
-        }
-
-        [RelayCommand]
-        private async System.Threading.Tasks.Task StopCameraAsync()
-        {
-            if (_serialClient != null) await _serialClient.SetCameraRunningAsync(false);
-        }
+        [RelayCommand] private System.Threading.Tasks.Task OpenShutterAsync() => SendCameraOpAsync(CameraControlOps.ShutterOpen);
+        [RelayCommand] private System.Threading.Tasks.Task CloseShutterAsync() => SendCameraOpAsync(CameraControlOps.ShutterClose);
+        [RelayCommand] private System.Threading.Tasks.Task StartCameraAsync() => SendCameraOpAsync(CameraControlOps.Run);
+        [RelayCommand] private System.Threading.Tasks.Task StopCameraAsync() => SendCameraOpAsync(CameraControlOps.Stop);
 
         public System.Threading.Tasks.Task StartJog(ServoAxis axis, bool positive) => AppServices.PlcController?.JogAsync(axis, positive, true) ?? System.Threading.Tasks.Task.CompletedTask;
         public System.Threading.Tasks.Task StopJog(ServoAxis axis, bool positive) => AppServices.PlcController?.JogAsync(axis, positive, false) ?? System.Threading.Tasks.Task.CompletedTask;
 
-        private async void PollTimer_Tick(object? sender, EventArgs e)
-        {
-            try
-            {
-                if (AppServices.PlcController != null)
-                {
-                    var st = await AppServices.PlcController.ReadStatusAsync();
-                    CurrentServoX = st.ServoXPosition;
-                    CurrentServoY = st.ServoYPosition;
-                }
-                if (_serialClient != null)
-                {
-                    try { FpaTemperature = await _serialClient.ReadFpaTemperatureAsync(); } catch { }
-                }
-            }
-            catch { }
-        }
-
         public void Dispose()
         {
-            if (_pollTimer != null)
-            {
-                _pollTimer.Stop();
-                _pollTimer.Tick -= PollTimer_Tick;
-                _pollTimer = null;
-            }
-            if (_frameHandler != null && AppServices.LiveThermalCamera != null)
-            {
-                AppServices.LiveThermalCamera.FrameReady -= _frameHandler;
-                _ = AppServices.LiveThermalCamera.StopAsync();
-                _frameHandler = null;
-            }
-            if (_serialClient != null)
-            {
-                _serialClient.Dispose();
-                _serialClient = null;
-            }
+            // ponytail: NatsCommunicationService has no unsubscribe API (fire-and-forget loops),
+            // same as ManualControlViewModel — nothing to release here.
         }
     }
 }
