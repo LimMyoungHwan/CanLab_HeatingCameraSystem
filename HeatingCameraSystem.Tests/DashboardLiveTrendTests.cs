@@ -113,10 +113,10 @@ public class DashboardLiveTrendTests
         var vm = new MainViewModel();
         object? first = vm.CurrentViewModel;
 
-        vm.NavigateToLiveViewCommand.Execute(null);
+        vm.CurrentViewModel = null; // navigate away (sentinel; sibling VMs need AppServices)
         vm.NavigateToDashboardCommand.Execute(null);
         object? second = vm.CurrentViewModel;
-        vm.NavigateToLiveViewCommand.Execute(null);
+        vm.CurrentViewModel = null;
         vm.NavigateToDashboardCommand.Execute(null);
 
         Assert.Same(first, second);

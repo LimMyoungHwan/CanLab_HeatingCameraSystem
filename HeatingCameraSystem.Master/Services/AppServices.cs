@@ -24,7 +24,7 @@ namespace HeatingCameraSystem.Master.Services
         public static string ImageCacheDir { get; private set; } = string.Empty;
         public static LiteDatabase Db { get; private set; } = null!;
         public static IRecipeRepository RecipeRepo { get; private set; } = null!;
-        public static ICameraMappingRepository MappingRepo { get; private set; } = null!;
+        public static ICameraMappingRepository MappingRepo { get; private set; } = null!; // ponytail: F4 이후 소비자 없음 — 후속 정리에서 삭제 가능
         public static IDashboardLayoutRepository DashboardLayoutRepo { get; private set; } = null!;
         public static ICaptureHistoryRepository HistoryRepo { get; private set; } = null!;
         public static ICameraSerialSettingsRepository CameraSerialSettingsRepo { get; private set; } = null!;

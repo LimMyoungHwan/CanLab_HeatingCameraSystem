@@ -27,24 +27,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         }
 
         [RelayCommand]
-        private void NavigateToLiveView()
-        {
-            CurrentViewTitle = "라이브 영상 (Live)";
-            CurrentViewModel = new LiveViewModel();
-        }
-
-        [RelayCommand]
         private void NavigateToRecipeEditor()
         {
             CurrentViewTitle = "레시피 편집기 (Recipe Editor)";
             CurrentViewModel = new RecipeEditorViewModel();
-        }
-
-        [RelayCommand]
-        private void NavigateToCameraMapping()
-        {
-            CurrentViewTitle = "카메라 맵핑 (Camera Mapping)";
-            CurrentViewModel = new CameraMappingViewModel();
         }
 
         [RelayCommand]
