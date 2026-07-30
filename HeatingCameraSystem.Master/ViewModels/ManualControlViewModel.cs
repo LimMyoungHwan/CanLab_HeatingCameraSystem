@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media.Imaging;
@@ -45,17 +46,18 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private int _colorMapIndex = LivePreviewColorMode.Grayscale ? 1 : 0;
 
         [ObservableProperty] private string _statusMessage = "대기";
-        [ObservableProperty] private int _servoXPosition;
-        [ObservableProperty] private int _servoYPosition;
+        [ObservableProperty] private float _servoXPosition;
+        [ObservableProperty] private float _servoYPosition;
         [ObservableProperty] private int _currentPoint;
         [ObservableProperty] private bool _servoXBusy;
         [ObservableProperty] private bool _servoYBusy;
         [ObservableProperty] private float _fanSpeedHz;
 
-        [ObservableProperty] private int _absoluteTargetX;
-        [ObservableProperty] private int _absoluteTargetY;
-        [ObservableProperty] private int _relativeStepX;
-        [ObservableProperty] private int _relativeStepY;
+        // mm 단위(PLC 워드 0.1mm 분해능)
+        [ObservableProperty] private float _absoluteTargetX;
+        [ObservableProperty] private float _absoluteTargetY;
+        [ObservableProperty] private float _relativeStepX;
+        [ObservableProperty] private float _relativeStepY;
 
         [ObservableProperty] private bool _cooler1st;
         [ObservableProperty] private bool _cooler2nd;
@@ -73,7 +75,25 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private float _blackBody1Current;
         [ObservableProperty] private float _blackBody2Current;
 
+        // 온/습도 제어 · 온도 램프 · 모터/팬 (PLC 설정 화면에서 이동)
+        [ObservableProperty] private float _targetTemperature = 25f;
+        [ObservableProperty] private float _targetHumidity = 50f;
+        [ObservableProperty] private float _rampTargetTemperature = 25f;
+        [ObservableProperty] private int _rampMinutes = 10;
+
+        [ObservableProperty]
+        [NotifyCanExecuteChangedFor(nameof(StartRampCommand))]
+        private bool _isRamping;
+
+        [ObservableProperty] private int _servoSpeedPercent = 100;
+        // FanSpeedHz는 스냅샷 현재값이므로 목표값은 별도 속성으로 둔다(1초 폴링에 덮이지 않게).
+        [ObservableProperty] private float _fanSpeedTargetHz;
+
+        private CancellationTokenSource? _rampCts;
         private bool _blackBodyPolling;
+
+        // AppServices does not expose RecipeEngineSettings; use the required local fallback.
+        private const int RampStepIntervalSeconds = 30;
 
         public int[] PointNumbers { get; } = Enumerable.Range(1, 20).ToArray();
 
@@ -223,7 +243,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand]
         private Task MoveRelative(string dir)
         {
-            int x = ServoXPosition, y = ServoYPosition;
+            float x = ServoXPosition, y = ServoYPosition;
             switch (dir)
             {
                 case "X+": x += RelativeStepX; break;
@@ -234,6 +254,62 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
             return RunAsync(p => p.MoveToCoordinateAsync(x, y), $"상대이동 {dir}");
         }
+
+        [RelayCommand]
+        private Task ApplyTemperature() => RunAsync(async p =>
+        {
+            await p.SetTargetTemperatureAsync(TargetTemperature);
+            await p.SetControlTemperatureAsync(TargetTemperature);
+        }, "타겟 온도");
+
+        [RelayCommand]
+        private Task ApplyHumidity() => RunAsync(p => p.SetTargetHumidityAsync(TargetHumidity), "타겟 습도");
+
+        private bool CanStartRamp() => !IsRamping;
+
+        [RelayCommand(CanExecute = nameof(CanStartRamp))]
+        private async Task StartRampAsync()
+        {
+            var plc = AppServices.PlcController;
+            if (plc == null) { StatusMessage = "PLC 미초기화"; return; }
+
+            _rampCts?.Dispose();
+            _rampCts = new CancellationTokenSource();
+            IsRamping = true;
+            try
+            {
+                float start = await plc.GetCurrentTemperatureAsync();
+                _rampCts.Token.ThrowIfCancellationRequested();
+                var controller = new TemperatureRampController(plc, RampStepIntervalSeconds);
+                var rampProgress = new Progress<string>(message => StatusMessage = message);
+                await controller.RampAsync(start, RampTargetTemperature, RampMinutes, rampProgress, _rampCts.Token);
+                StatusMessage = "온도 램프 완료됨";
+            }
+            catch (OperationCanceledException)
+            {
+                StatusMessage = "램프 중지됨";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"온도 램프 오류: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"[ManualControl] {ex.Message}");
+            }
+            finally
+            {
+                IsRamping = false;
+                _rampCts?.Dispose();
+                _rampCts = null;
+            }
+        }
+
+        [RelayCommand]
+        private void StopRamp() => _rampCts?.Cancel();
+
+        [RelayCommand]
+        private Task ApplyServoSpeed() => RunAsync(p => p.SetServoSpeedAsync(ServoSpeedPercent), "서보 속도");
+
+        [RelayCommand]
+        private Task ApplyFanSpeed() => RunAsync(p => p.SetFanSpeedAsync(FanSpeedTargetHz), "팬 속도");
 
         [RelayCommand]
         private Task ApplyBlackBody1() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(0, BlackBody1Target), "흑체1 온도");

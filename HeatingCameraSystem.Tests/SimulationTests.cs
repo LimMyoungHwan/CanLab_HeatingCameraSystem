@@ -27,15 +27,28 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
-        public async Task SetTargetTemperature_SnapsCurrentToTarget()
+        public async Task SetControlTemperature_SnapsCurrentToControl()
+        {
+            var plc = new FakePlcController();
+            await plc.ConnectAsync("any");
+
+            await plc.SetControlTemperatureAsync(42.5f);
+            var actual = await plc.GetCurrentTemperatureAsync();
+
+            Assert.Equal(42.5f, actual);
+        }
+
+        [Fact]
+        public async Task SetTargetTemperature_ChangesTargetWithoutChangingCurrent()
         {
             var plc = new FakePlcController();
             await plc.ConnectAsync("any");
 
             await plc.SetTargetTemperatureAsync(42.5f);
-            var actual = await plc.GetCurrentTemperatureAsync();
+            var status = await plc.ReadStatusAsync();
 
-            Assert.Equal(42.5f, actual);
+            Assert.Equal(42.5f, status.TargetTemperature);
+            Assert.Equal(25f, status.CurrentTemperature);
         }
 
         [Fact]
@@ -68,11 +81,11 @@ namespace HeatingCameraSystem.Tests
             var plc = new FakePlcController();
             await plc.ConnectAsync("any");
 
-            await plc.MoveToCoordinateAsync(1234, 5678);
+            await plc.MoveToCoordinateAsync(123.4f, 567.8f);
             var s = await plc.ReadStatusAsync();
 
-            Assert.Equal(1234, s.ServoXPosition);
-            Assert.Equal(5678, s.ServoYPosition);
+            Assert.Equal(123.4f, s.ServoXPosition, precision: 2);
+            Assert.Equal(567.8f, s.ServoYPosition, precision: 2);
         }
 
         [Fact]

@@ -70,6 +70,9 @@ namespace HeatingCameraSystem.Protocols
         }
 
         public Task SetTargetTemperatureAsync(float temperature)
+            => WriteWordAsync(_s.TempTarget, ToScaled(temperature, 10));
+
+        public Task SetControlTemperatureAsync(float temperature)
             => WriteWordAsync(_s.TempSv, ToScaled(temperature, 10));
 
         public async Task<float> GetCurrentTemperatureAsync()
@@ -86,10 +89,16 @@ namespace HeatingCameraSystem.Protocols
 
         // ── 흑체 ──
         public Task SetBlackBodyTemperatureAsync(int blackBodyIndex, float temperature)
-            => WriteWordAsync(blackBodyIndex == 0 ? _s.Bb1Sv : _s.Bb2Sv, ToScaled(temperature, 10));
+            => WriteWordAsync(blackBodyIndex == 0 ? _s.Bb1Sv : _s.Bb2Sv, ToScaled(temperature, 100));
 
         public async Task<float> GetCurrentBlackBodyTemperatureAsync(int blackBodyIndex)
-            => FromScaled(await ReadWordAsync(blackBodyIndex == 0 ? _s.Bb1Pv : _s.Bb2Pv), 10);
+            => FromScaled(await ReadWordAsync(blackBodyIndex == 0 ? _s.Bb1Pv : _s.Bb2Pv), 100);
+
+        public async Task WriteBlackBodyTemperaturesAsync(int blackBodyIndex, float currentTemperature, float targetTemperature)
+        {
+            await WriteWordAsync(blackBodyIndex == 0 ? _s.Bb1Pv : _s.Bb2Pv, ToScaled(currentTemperature, 100));
+            await WriteWordAsync(blackBodyIndex == 0 ? _s.Bb1Sv : _s.Bb2Sv, ToScaled(targetTemperature, 100));
+        }
 
         // ── 서보/모션 ──
         public Task MoveServoToPositionAsync(int positionIndex)
@@ -106,31 +115,33 @@ namespace HeatingCameraSystem.Protocols
         public Task SetServoSpeedAsync(int percent)
             => WriteWordAsync(_s.ServoSpeedPercent, (short)Math.Clamp(percent, 1, 100));
 
+        // JOG는 누름/뗌 유지 동작이므로 P 비트라도 모멘터리 펄스를 적용하지 않는다.
         public Task JogAsync(ServoAxis axis, bool positive, bool on)
-            => WriteBitAsync(JogBit(axis, positive), on);
+            => WriteBitRawAsync(JogBit(axis, positive), on);
 
         public Task HomeAsync(ServoAxis axis)
             => WriteBitAsync(axis == ServoAxis.X ? _s.BitHomeX : _s.BitHomeY, true);
 
-        public async Task SetPointCoordinateAsync(int positionIndex, int x, int y)
+        // 좌표 워드는 0.1mm 단위 정수(x10 스케일). 외부 API는 mm 단위 float.
+        public async Task SetPointCoordinateAsync(int positionIndex, float x, float y)
         {
             var (xDev, yDev) = PointCoordDevices(positionIndex);
-            await WriteWordAsync(xDev, (short)x);
-            await WriteWordAsync(yDev, (short)y);
+            await WriteWordAsync(xDev, ToScaled(x, 10));
+            await WriteWordAsync(yDev, ToScaled(y, 10));
         }
 
-        public async Task<(int X, int Y)> GetPointCoordinateAsync(int positionIndex)
+        public async Task<(float X, float Y)> GetPointCoordinateAsync(int positionIndex)
         {
             var (xDev, yDev) = PointCoordDevices(positionIndex);
             short x = await ReadWordAsync(xDev);
             short y = await ReadWordAsync(yDev);
-            return (x, y);
+            return (FromScaled(x, 10), FromScaled(y, 10));
         }
 
-        public async Task MoveToCoordinateAsync(int x, int y)
+        public async Task MoveToCoordinateAsync(float x, float y)
         {
-            await WriteWordAsync(_s.ServoPointXBase, (short)x);
-            await WriteWordAsync(_s.ServoPointYBase, (short)y);
+            await WriteWordAsync(_s.ServoPointXBase, ToScaled(x, 10));
+            await WriteWordAsync(_s.ServoPointYBase, ToScaled(y, 10));
             await WriteBitAsync(_s.ServoPointMoveBase, true);
         }
 
@@ -160,15 +171,15 @@ namespace HeatingCameraSystem.Protocols
             var s = new PlcStatusSnapshot
             {
                 CurrentTemperature = FromScaled(await ReadWordAsync(_s.TempPv), 10),
-                TargetTemperature = FromScaled(await ReadWordAsync(_s.TempSv), 10),
+                TargetTemperature = FromScaled(await ReadWordAsync(_s.TempTarget), 10),
                 CurrentHumidity = FromScaled(await ReadWordAsync(_s.HumPv), 10),
                 TargetHumidity = FromScaled(await ReadWordAsync(_s.HumSv), 10),
-                BlackBody1Pv = FromScaled(await ReadWordAsync(_s.Bb1Pv), 10),
-                BlackBody1Sv = FromScaled(await ReadWordAsync(_s.Bb1Sv), 10),
-                BlackBody2Pv = FromScaled(await ReadWordAsync(_s.Bb2Pv), 10),
-                BlackBody2Sv = FromScaled(await ReadWordAsync(_s.Bb2Sv), 10),
-                ServoXPosition = await ReadWordAsync(_s.ServoXPos),
-                ServoYPosition = await ReadWordAsync(_s.ServoYPos),
+                BlackBody1Pv = FromScaled(await ReadWordAsync(_s.Bb1Pv), 100),
+                BlackBody1Sv = FromScaled(await ReadWordAsync(_s.Bb1Sv), 100),
+                BlackBody2Pv = FromScaled(await ReadWordAsync(_s.Bb2Pv), 100),
+                BlackBody2Sv = FromScaled(await ReadWordAsync(_s.Bb2Sv), 100),
+                ServoXPosition = FromScaled(await ReadWordAsync(_s.ServoXPos), 10),
+                ServoYPosition = FromScaled(await ReadWordAsync(_s.ServoYPos), 10),
                 ServoXBusy = await ReadBitAsync(_s.ServoXBusyBit),
                 ServoYBusy = await ReadBitAsync(_s.ServoYBusyBit),
                 ServoXHomeComplete = await ReadBitAsync(_s.ServoXHomeBit),
@@ -213,6 +224,11 @@ namespace HeatingCameraSystem.Protocols
 
         public Task TriggerEmergencyStopAsync()
             => WriteBitAsync(_s.BitEmergencyStop, true);
+
+        // P 비트 → WriteBitAsync가 ON 후 PulseHoldMs 뒤 OFF까지 처리.
+        public Task ResetErrorAsync() => WriteBitAsync(_s.BitErrorReset, true);
+
+        public Task BuzzerOffAsync() => WriteBitAsync(_s.BitBuzzerOff, true);
 
         public void Dispose() => Disconnect();
 
@@ -326,7 +342,20 @@ namespace HeatingCameraSystem.Protocols
                 return client.Read(new[] { ParseBit(token) }).Values.First().BitValue;
             });
 
-        private Task WriteBitAsync(string token, bool on)
+        // P 영역 트리거 비트는 모멘터리: ON 쓰고 PulseHoldMs 대기 후 OFF로 되돌린다(PLC가 상승엣지로 래치).
+        // OFF 쓰기와 비-P 디바이스는 그대로 통과.
+        private async Task WriteBitAsync(string token, bool on)
+        {
+            await WriteBitRawAsync(token, on);
+            if (!on || !IsPulseBit(token)) return;
+            await Task.Delay(_s.PulseHoldMs);
+            await WriteBitRawAsync(token, false);
+        }
+
+        private static bool IsPulseBit(string token)
+            => token.Length > 0 && char.ToUpperInvariant(token[0]) == 'P';
+
+        private Task WriteBitRawAsync(string token, bool on)
             => Exec(client =>
             {
                 if (TrySplitDotted(token, out string wordToken, out int bit))

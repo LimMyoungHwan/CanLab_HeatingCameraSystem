@@ -59,11 +59,12 @@ namespace HeatingCameraSystem.Core.Config
 
         // ── 온도/습도 (word, ×10 스케일: 100.0℃ = 1000) ──
         public string TempPv { get; set; } = "D100";
-        public string TempSv { get; set; } = "D102";
+        public string TempSv { get; set; } = "D102";       // 제어 온도
+        public string TempTarget { get; set; } = "D112";   // 최종 목표 온도
         public string HumPv { get; set; } = "D130";
         public string HumSv { get; set; } = "D131";
 
-        // ── 흑체 (word, ×10) ──
+        // ── 흑체 (word, ×100) ──
         public string Bb1Pv { get; set; } = "D140";
         public string Bb1Sv { get; set; } = "D142";
         public string Bb2Pv { get; set; } = "D150";
@@ -76,6 +77,8 @@ namespace HeatingCameraSystem.Core.Config
         public string BitHumidityControl { get; set; } = "D281.0"; // 습도제어 켜짐
         // ponytail: 문서엔 챔버 비상정지 '상태'만 존재. PC 트리거 쓰기비트는 임의 지정 — 실제 비트 확인 후 교체.
         public string BitEmergencyStop { get; set; } = "M2000";
+        public string BitErrorReset { get; set; } = "P525";   // 에러 리셋(챔버 모터) — 모멘터리
+        public string BitBuzzerOff { get; set; } = "P250";    // 부저 OFF — 모멘터리
 
         // ── 서보/모션 ──
         public string ServoXPos { get; set; } = "D2540";
@@ -89,6 +92,10 @@ namespace HeatingCameraSystem.Core.Config
         public string ServoCurrentPoint { get; set; } = "D2740";
         // ponytail: '모터 전체 속도 1~100%'는 신규 제어 — 실제 대상 레지스터 미확정 placeholder.
         public string ServoSpeedPercent { get; set; } = "D2560";
+
+        // P 영역 트리거 비트는 모멘터리(원터치): ON 쓰고 PulseHoldMs 후 OFF로 되돌린다.
+        // 장비 실측에 따라 조정 가능한 캘리브레이션 값(기본 100ms).
+        public int PulseHoldMs { get; set; } = 100;
 
         // 포인트 이동 원터치 비트: P601~P620 (번호 = base + (idx-1))
         public string ServoPointMoveBase { get; set; } = "P601";
@@ -168,9 +175,9 @@ namespace HeatingCameraSystem.Core.Config
 
     /// <summary>
     /// CI Systems SR-800N 흑체 직접-제어 설정. Enabled=true이면 PLC 경유 대신 SR-800N 컨트롤러를
-    /// RS-232로 직접 제어한다(컨트롤러 1대 = 흑체 1개, 대수 = Units.Count). 시리얼 파라미터는
-    /// Units에서 포트별로 지정(SR-800N 규격 115200 8N1). InterMessageDelayMs는 메시지 간
-    /// 안전 간격(SR-800N 규격상 필수 아님, 기본 50ms). Simulated=true이면 물리 장비 없이 동일한
+    /// 직접 제어한다(컨트롤러 1대 = 흑체 1개, 대수 = Units.Count). 유닛별 연결 방식은
+    /// Units[i].ConnectionType으로 지정(Serial = RS-232 115200 8N1, Ip = TCP). InterMessageDelayMs는
+    /// 메시지 간 안전 간격(SR-800N 규격상 필수 아님, 기본 50ms). Simulated=true이면 물리 장비 없이 동일한
     /// 컨트롤러/프로토콜 경로로 인메모리 SR-800N을 구동한다(현재값이 SimulatedRampCelsiusPerSecond 속도로 목표에 수렴).
     /// </summary>
     public class BlackBodySettings
@@ -180,11 +187,29 @@ namespace HeatingCameraSystem.Core.Config
         public double SimulatedRampCelsiusPerSecond { get; set; } = 5.0;
         public int InterMessageDelayMs { get; set; } = 50;
         public int ReadTimeoutMs { get; set; } = 1500;
-        public List<SerialSettings> Units { get; set; } = new()
+        public List<BlackBodyUnitSettings> Units { get; set; } = new()
         {
-            new SerialSettings { PortName = "COM4", BaudRate = 115200 },
-            new SerialSettings { PortName = "COM5", BaudRate = 115200 }
+            new() { PortName = "COM4" },
+            new() { PortName = "COM5" }
         };
+    }
+
+    public enum BlackBodyConnectionType
+    {
+        Serial,
+        Ip
+    }
+
+    public class BlackBodyUnitSettings
+    {
+        public BlackBodyConnectionType ConnectionType { get; set; } = BlackBodyConnectionType.Serial;
+        public string PortName { get; set; } = "COM4";
+        public int BaudRate { get; set; } = 115200;
+        public int DataBits { get; set; } = 8;
+        public string Parity { get; set; } = "None";
+        public string StopBits { get; set; } = "One";
+        public string IpAddress { get; set; } = "192.168.1.100";
+        public int Port { get; set; } = 5000;
     }
 
     public class RecipeEngineSettings

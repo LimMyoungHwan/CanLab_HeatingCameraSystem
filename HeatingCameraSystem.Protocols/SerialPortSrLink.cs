@@ -6,11 +6,11 @@ namespace HeatingCameraSystem.Protocols
 {
     public sealed class SerialPortSrLink : ISrLink
     {
-        private readonly SerialSettings _cfg;
+        private readonly BlackBodyUnitSettings _cfg;
         private readonly int _readTimeoutMs;
         private SerialPort? _port;
 
-        public SerialPortSrLink(SerialSettings cfg, int readTimeoutMs)
+        public SerialPortSrLink(BlackBodyUnitSettings cfg, int readTimeoutMs)
         {
             _cfg = cfg ?? throw new ArgumentNullException(nameof(cfg));
             _readTimeoutMs = readTimeoutMs;

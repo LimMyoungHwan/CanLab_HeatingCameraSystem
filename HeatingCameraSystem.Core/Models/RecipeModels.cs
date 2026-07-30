@@ -37,8 +37,8 @@ namespace HeatingCameraSystem.Core.Models
         public float TargetBlackBodyTemperature { get; set; }
 
         // 서보 유닛 직접 이동 XY 좌표 (direct-XY-move)
-        public int PositionX { get; set; }
-        public int PositionY { get; set; }
+        public float PositionX { get; set; }
+        public float PositionY { get; set; }
 
         // 스텝별 챔버 목표 온도/습도
         public double TargetChamberTemperature { get; set; }

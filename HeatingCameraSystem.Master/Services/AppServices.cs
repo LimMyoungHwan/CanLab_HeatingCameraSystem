@@ -93,15 +93,14 @@ namespace HeatingCameraSystem.Master.Services
             ConnectionMonitor = new ConnectionMonitorService(PlcController, ShutterController, Settings);
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
 
-            PlcStatus = new PlcStatusService(PlcController);
+            PlcStatus = new PlcStatusService(PlcController, Settings.BlackBody.Enabled ? BlackBodyController : null);
             PlcStatus.Start();
         }
 
         public static IBlackBodyController CreateBlackBodyController(HardwareSettings settings, IPlcController plc)
         {
             if (settings.SimulationMode) return new FakeBlackBodyController();
-            if (settings.BlackBody.Enabled) return new SrBlackBodyController(settings.BlackBody);
-            return new PlcBlackBodyAdapter(plc);
+            return new SrBlackBodyController(settings.BlackBody, plc: plc);
         }
 
         public static async Task TryConnectServicesAsync()

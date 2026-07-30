@@ -343,14 +343,22 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                     <TextBlock Text="X POSITION" Style="{StaticResource Lbl}"/>
-                                    <TextBlock Text="{Binding ServoXPosition}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
-                                        <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
-                                    </TextBlock>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding ServoXPosition, StringFormat={}{0:F1}}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
+                                            <TextBlock.Effect>
+                                                <DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/>
+                                            </TextBlock.Effect>
+                                        </TextBlock>
+                                        <TextBlock Text="mm" Style="{StaticResource Unit}"/>
+                                    </StackPanel>
                                     <TextBlock Text="Y POSITION" Style="{StaticResource Lbl}" Margin="0,8,8,5"/>
-                                    <TextBlock Text="{Binding ServoYPosition}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
-                                        <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
-                                    </TextBlock>
-                                    <TextBlock Text="{Binding CurrentPoint, StringFormat={loc:Loc Dash_CurrentPoint}}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Secondary}" Margin="0,8,0,0"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding ServoYPosition, StringFormat={}{0:F1}}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
+                                            <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
+                                        </TextBlock>
+                                        <TextBlock Text="mm" Style="{StaticResource Unit}"/>
+                                    </StackPanel>
+                                    <!--<TextBlock Text="{Binding CurrentPoint, StringFormat={loc:Loc Dash_CurrentPoint}}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Secondary}" Margin="0,8,0,0"/>-->
                                 </StackPanel>
                                 <!-- XY mini-map -->
                                 <Border Grid.Column="1" Width="126" Height="126" VerticalAlignment="Center" Background="#080d15" BorderBrush="{StaticResource CardEdge}" BorderThickness="1" CornerRadius="8">
@@ -445,7 +453,7 @@
                         <StackPanel>
                             <Grid Margin="0,0,0,12">
                                 <TextBlock Text="{loc:Loc Dash_AlarmsTitle}" Style="{StaticResource CardHeader}" Margin="0"/>
-                                <TextBlock Text="{Binding Alarms.Count, StringFormat={loc:Loc Dash_AlarmsCount}}" FontSize="11" FontWeight="Bold" Foreground="#ff8f88" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                <!--<TextBlock Text="{Binding Alarms.Count, StringFormat={loc:Loc Dash_AlarmsCount}}" FontSize="11" FontWeight="Bold" Foreground="#ff8f88" HorizontalAlignment="Right" VerticalAlignment="Center"/>-->
                             </Grid>
                             <StackPanel Orientation="Horizontal">
                                 <StackPanel.Style>

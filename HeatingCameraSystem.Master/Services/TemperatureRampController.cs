@@ -28,9 +28,11 @@ namespace HeatingCameraSystem.Master.Services
             IProgress<string>? progress,
             CancellationToken ct)
         {
+            await _plcController.SetTargetTemperatureAsync(target);
+
             if (minutes <= 0)
             {
-                await _plcController.SetTargetTemperatureAsync(target);
+                await _plcController.SetControlTemperatureAsync(target);
                 return;
             }
 
@@ -41,13 +43,13 @@ namespace HeatingCameraSystem.Master.Services
             {
                 double frac = Math.Min((_utcNow() - startedAt).TotalSeconds / durationSeconds, 1.0);
                 float sv = start + (float)((target - start) * frac);
-                await _plcController.SetTargetTemperatureAsync(sv);
+                await _plcController.SetControlTemperatureAsync(sv);
                 progress?.Report($"온도 램프 {sv:F1}℃ / {target:F1}℃");
                 if (frac >= 1.0) break;
                 await _delay(_stepDelay, ct);
             }
 
-            await _plcController.SetTargetTemperatureAsync(target);
+            await _plcController.SetControlTemperatureAsync(target);
         }
     }
 }

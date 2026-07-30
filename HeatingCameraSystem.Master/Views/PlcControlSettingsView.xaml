@@ -1,192 +1,412 @@
-<UserControl x:Class="HeatingCameraSystem.Master.Views.PlcControlSettingsView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:loc="clr-namespace:HeatingCameraSystem.Master.Localization"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             mc:Ignorable="d" d:DesignHeight="768" d:DesignWidth="1024"
-             Background="#0e1321" Foreground="#dee2f7">
+﻿<UserControl
+    x:Class="HeatingCameraSystem.Master.Views.PlcControlSettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:config="clr-namespace:HeatingCameraSystem.Core.Config;assembly=HeatingCameraSystem.Core"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="clr-namespace:HeatingCameraSystem.Master.Localization"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    d:DesignHeight="768"
+    d:DesignWidth="1024"
+    Background="#0e1321"
+    Foreground="#dee2f7"
+    mc:Ignorable="d">
     <UserControl.Resources>
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background" Value="#161b2a"/>
-            <Setter Property="BorderBrush" Value="#3b4949"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="6"/>
-            <Setter Property="Padding" Value="14"/>
-            <Setter Property="Margin" Value="6"/>
+            <Setter Property="Background" Value="#161b2a" />
+            <Setter Property="BorderBrush" Value="#3b4949" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Margin" Value="6" />
         </Style>
         <Style x:Key="Head" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Foreground" Value="#47eaed"/>
-            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="#47eaed" />
+            <Setter Property="Margin" Value="0,0,0,10" />
         </Style>
         <Style x:Key="Lbl" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#bac9c9"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="0,0,10,0"/>
+            <Setter Property="Foreground" Value="#bac9c9" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,10,0" />
         </Style>
         <Style TargetType="TextBox">
-            <Setter Property="Background" Value="#0e1321"/>
-            <Setter Property="Foreground" Value="#dee2f7"/>
-            <Setter Property="BorderBrush" Value="#3b4949"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="6,4"/>
-            <Setter Property="MinWidth" Value="80"/>
-            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Background" Value="#0e1321" />
+            <Setter Property="Foreground" Value="#dee2f7" />
+            <Setter Property="BorderBrush" Value="#3b4949" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="MinWidth" Value="80" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#0e1321" />
+            <Setter Property="Foreground" Value="#172033" />
+            <Setter Property="BorderBrush" Value="#3b4949" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="MinWidth" Value="100" />
         </Style>
         <Style x:Key="Apply" TargetType="Button">
-            <Setter Property="Background" Value="#2f3444"/>
-            <Setter Property="Foreground" Value="#47eaed"/>
-            <Setter Property="BorderBrush" Value="#3b4949"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="12,4"/>
-            <Setter Property="Margin" Value="0,0,0,0"/>
+            <Setter Property="Background" Value="#2f3444" />
+            <Setter Property="Foreground" Value="#47eaed" />
+            <Setter Property="BorderBrush" Value="#3b4949" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="12,4" />
+            <Setter Property="Margin" Value="0,0,0,0" />
         </Style>
         <Style x:Key="FieldRow" TargetType="StackPanel">
-            <Setter Property="Orientation" Value="Horizontal"/>
-            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="Margin" Value="0,0,0,8" />
         </Style>
     </UserControl.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Bottom" Background="#1a1f2e" BorderBrush="#3b4949" BorderThickness="0,1,0,0" Padding="14,8">
-            <TextBlock Text="{Binding StatusMessage}" Foreground="#bac9c9"/>
+        <Border
+            Padding="14,8"
+            Background="#1a1f2e"
+            BorderBrush="#3b4949"
+            BorderThickness="0,1,0,0"
+            DockPanel.Dock="Bottom">
+            <TextBlock Foreground="#bac9c9" Text="{Binding StatusMessage}" />
         </Border>
 
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <WrapPanel Orientation="Horizontal">
-                <Border Style="{StaticResource Card}" Width="360">
+                <Border Width="360" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="{loc:Loc Plc_Connection}" Style="{StaticResource Head}"/>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Plc_Connection}" />
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Plc_IpAddress}" Style="{StaticResource Lbl}" Width="110"/>
-                            <TextBox Text="{Binding PlcIpAddress}" Width="150"/>
+                            <TextBlock
+                                Width="110"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_IpAddress}" />
+                            <TextBox Width="150" Text="{Binding PlcIpAddress}" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Plc_Port}" Style="{StaticResource Lbl}" Width="110"/>
-                            <TextBox Text="{Binding PlcPort}" Width="80"/>
+                            <TextBlock
+                                Width="110"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_Port}" />
+                            <TextBox Width="80" Text="{Binding PlcPort}" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Plc_Station}" Style="{StaticResource Lbl}" Width="110"/>
-                            <TextBox Text="{Binding PlcStationNo}" Width="60"/>
+                            <TextBlock
+                                Width="110"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_Station}" />
+                            <TextBox Width="60" Text="{Binding PlcStationNo}" />
                         </StackPanel>
-                        <Button Content="{loc:Loc Common_Save}" Style="{StaticResource Apply}" Command="{Binding SavePlcConnectionCommand}" HorizontalAlignment="Left" Margin="0,4,0,0"/>
+                        <Button
+                            Margin="0,4,0,0"
+                            HorizontalAlignment="Left"
+                            Command="{Binding SavePlcConnectionCommand}"
+                            Content="{loc:Loc Common_Save}"
+                            Style="{StaticResource Apply}" />
                     </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource Card}" Width="360">
+                <Border Width="340" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="{loc:Loc Plc_ChamberBbTitle}" Style="{StaticResource Head}"/>
+                        <TextBlock Style="{StaticResource Head}" Text="흑체 연결 설정" />
+                        <CheckBox
+                            Margin="0,0,0,10"
+                            Content="직접 제어 사용"
+                            Foreground="#dee2f7"
+                            IsChecked="{Binding BlackBodyEnabled}" />
+
+                        <TextBlock
+                            Margin="0,0,0,6"
+                            FontWeight="Bold"
+                            Style="{StaticResource Lbl}"
+                            Text="흑체 1" />
+                        <ComboBox
+                            Margin="0,0,0,8"
+                            ItemsSource="{Binding BlackBodyConnectionTypes}"
+                            SelectedItem="{Binding BlackBody1.ConnectionType}" />
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding BlackBody1.ConnectionType}" Value="{x:Static config:BlackBodyConnectionType.Serial}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <StackPanel Style="{StaticResource FieldRow}">
+                                <TextBlock
+                                    Width="110"
+                                    Style="{StaticResource Lbl}"
+                                    Text="COM 포트" />
+                                <TextBox Text="{Binding BlackBody1.PortName}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FieldRow}">
+                                <TextBlock
+                                    Width="110"
+                                    Style="{StaticResource Lbl}"
+                                    Text="Baud Rate" />
+                                <TextBox Text="{Binding BlackBody1.BaudRate}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding BlackBody1.ConnectionType}" Value="{x:Static config:BlackBodyConnectionType.Ip}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <StackPanel Style="{StaticResource FieldRow}">
+                                <TextBlock
+                                    Width="110"
+                                    Style="{StaticResource Lbl}"
+                                    Text="IP 주소" />
+                                <TextBox Width="150" Text="{Binding BlackBody1.IpAddress}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FieldRow}">
+                                <TextBlock
+                                    Width="110"
+                                    Style="{StaticResource Lbl}"
+                                    Text="포트" />
+                                <TextBox Text="{Binding BlackBody1.Port}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <TextBlock
+                            Margin="0,8,0,6"
+                            FontWeight="Bold"
+                            Style="{StaticResource Lbl}"
+                            Text="흑체 2" />
+                        <ComboBox
+                            Margin="0,0,0,8"
+                            ItemsSource="{Binding BlackBodyConnectionTypes}"
+                            SelectedItem="{Binding BlackBody2.ConnectionType}" />
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding BlackBody2.ConnectionType}" Value="{x:Static config:BlackBodyConnectionType.Serial}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <StackPanel Style="{StaticResource FieldRow}">
+                                <TextBlock
+                                    Width="110"
+                                    Style="{StaticResource Lbl}"
+                                    Text="COM 포트" />
+                                <TextBox Text="{Binding BlackBody2.PortName}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FieldRow}">
+                                <TextBlock
+                                    Width="110"
+                                    Style="{StaticResource Lbl}"
+                                    Text="Baud Rate" />
+                                <TextBox Text="{Binding BlackBody2.BaudRate}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding BlackBody2.ConnectionType}" Value="{x:Static config:BlackBodyConnectionType.Ip}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <StackPanel Style="{StaticResource FieldRow}">
+                                <TextBlock
+                                    Width="110"
+                                    Style="{StaticResource Lbl}"
+                                    Text="IP 주소" />
+                                <TextBox Width="150" Text="{Binding BlackBody2.IpAddress}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource FieldRow}">
+                                <TextBlock
+                                    Width="110"
+                                    Style="{StaticResource Lbl}"
+                                    Text="포트" />
+                                <TextBox Text="{Binding BlackBody2.Port}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <Button
+                            Margin="0,4,0,0"
+                            HorizontalAlignment="Left"
+                            Command="{Binding SaveBlackBodyConnectionCommand}"
+                            Content="{loc:Loc Common_Save}"
+                            Style="{StaticResource Apply}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Width="360" Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Plc_ChamberBbTitle}" />
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Plc_TargetTemp}" Style="{StaticResource Lbl}" Width="110"/>
-                            <TextBox Text="{Binding TargetTemperature}"/>
-                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyTemperatureCommand}"/>
+                            <TextBlock
+                                Width="110"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Status_Bb1Target}" />
+                            <TextBox Text="{Binding BlackBody1Target}" />
+                            <Button
+                                Command="{Binding ApplyBlackBody1Command}"
+                                Content="{loc:Loc Common_Apply}"
+                                Style="{StaticResource Apply}" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Plc_TargetHum}" Style="{StaticResource Lbl}" Width="110"/>
-                            <TextBox Text="{Binding TargetHumidity}"/>
-                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyHumidityCommand}"/>
-                        </StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Plc_HumidityControl}" Style="{StaticResource Lbl}" Width="110"/>
-                            <CheckBox IsChecked="{Binding HumidityControl}" Foreground="#dee2f7" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyHumidityControlCommand}"/>
-                        </StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Status_Bb1Target}" Style="{StaticResource Lbl}" Width="110"/>
-                            <TextBox Text="{Binding BlackBody1Target}"/>
-                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyBlackBody1Command}"/>
-                        </StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Status_Bb2Target}" Style="{StaticResource Lbl}" Width="110"/>
-                            <TextBox Text="{Binding BlackBody2Target}"/>
-                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyBlackBody2Command}"/>
+                            <TextBlock
+                                Width="110"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Status_Bb2Target}" />
+                            <TextBox Text="{Binding BlackBody2Target}" />
+                            <Button
+                                Command="{Binding ApplyBlackBody2Command}"
+                                Content="{loc:Loc Common_Apply}"
+                                Style="{StaticResource Apply}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource Card}" Width="360">
+                <Border Width="360" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="{loc:Loc Plc_TempRamp}" Style="{StaticResource Head}"/>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Plc_AdminSettings}" />
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Plc_TargetTemp}" Style="{StaticResource Lbl}" Width="110"/>
-                            <TextBox Text="{Binding RampTargetTemperature}"/>
+                            <TextBlock
+                                Width="150"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_OverheatLimit}" />
+                            <TextBox Text="{Binding OverheatLimit}" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Plc_ReachTime}" Style="{StaticResource Lbl}" Width="110"/>
-                            <TextBox Text="{Binding RampMinutes}"/>
+                            <TextBlock
+                                Width="150"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_CoolerRoomBoundary}" />
+                            <TextBox Text="{Binding CoolerRoomBoundary}" />
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="{loc:Loc Plc_RampStart}" Style="{StaticResource Apply}" Command="{Binding StartRampCommand}" Margin="0,0,8,0"/>
-                            <Button Content="{loc:Loc Common_Stop}" Style="{StaticResource Apply}" Command="{Binding StopRampCommand}" IsEnabled="{Binding IsRamping}"/>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock
+                                Width="150"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_Cooler2ndBoundary}" />
+                            <TextBox Text="{Binding Cooler2ndBoundary}" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock
+                                Width="150"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_CoolerDelay}" />
+                            <TextBox Text="{Binding CoolerDelayMinutes}" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock
+                                Width="150"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_BypassBoundary}" />
+                            <TextBox Text="{Binding BypassBoundary}" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock
+                                Width="150"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_MfcMin}" />
+                            <TextBox Text="{Binding MfcMinOutput}" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock
+                                Width="150"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_MfcMax}" />
+                            <TextBox Text="{Binding MfcMaxOutput}" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource FieldRow}">
+                            <TextBlock
+                                Width="150"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_PairGlassBoundary}" />
+                            <TextBox Text="{Binding PairGlassBoundary}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                            <Button
+                                Margin="0,0,8,0"
+                                Command="{Binding LoadAdminCommand}"
+                                Content="{loc:Loc Common_Load}"
+                                Style="{StaticResource Apply}" />
+                            <Button
+                                Command="{Binding SaveAdminCommand}"
+                                Content="{loc:Loc Common_Save}"
+                                Style="{StaticResource Apply}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource Card}" Width="360">
-                    <StackPanel>
-                        <TextBlock Text="{loc:Loc Plc_MotorFan}" Style="{StaticResource Head}"/>
-                        <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Plc_ServoSpeed}" Style="{StaticResource Lbl}" Width="130"/>
-                            <TextBox Text="{Binding ServoSpeedPercent}"/>
-                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyServoSpeedCommand}"/>
-                        </StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}">
-                            <TextBlock Text="{loc:Loc Status_FanSpeed}" Style="{StaticResource Lbl}" Width="130"/>
-                            <TextBox Text="{Binding FanSpeedHz}"/>
-                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Apply}" Command="{Binding ApplyFanSpeedCommand}"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource Card}" Width="360">
-                    <StackPanel>
-                        <TextBlock Text="{loc:Loc Plc_AdminSettings}" Style="{StaticResource Head}"/>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_OverheatLimit}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding OverheatLimit}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_CoolerRoomBoundary}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding CoolerRoomBoundary}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_Cooler2ndBoundary}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding Cooler2ndBoundary}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_CoolerDelay}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding CoolerDelayMinutes}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_BypassBoundary}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding BypassBoundary}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_MfcMin}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding MfcMinOutput}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_MfcMax}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding MfcMaxOutput}"/></StackPanel>
-                        <StackPanel Style="{StaticResource FieldRow}"><TextBlock Text="{loc:Loc Plc_PairGlassBoundary}" Style="{StaticResource Lbl}" Width="150"/><TextBox Text="{Binding PairGlassBoundary}"/></StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                            <Button Content="{loc:Loc Common_Load}" Style="{StaticResource Apply}" Command="{Binding LoadAdminCommand}" Margin="0,0,8,0"/>
-                            <Button Content="{loc:Loc Common_Save}" Style="{StaticResource Apply}" Command="{Binding SaveAdminCommand}"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource Card}" Width="360">
+                <Border Width="360" Style="{StaticResource Card}">
                     <StackPanel>
                         <Grid Margin="0,0,0,10">
-                            <TextBlock Text="{loc:Loc Plc_ServoPointsTitle}" Style="{StaticResource Head}"/>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <Button Content="{loc:Loc Common_Load}" Style="{StaticResource Apply}" Command="{Binding LoadPointsCommand}" Margin="0,0,8,0"/>
-                                <Button Content="{loc:Loc Common_Save}" Style="{StaticResource Apply}" Command="{Binding SavePointsCommand}"/>
+                            <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Plc_ServoPointsTitle}" />
+                            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                                <Button
+                                    Margin="0,0,8,0"
+                                    Command="{Binding LoadPointsCommand}"
+                                    Content="{loc:Loc Common_Load}"
+                                    Style="{StaticResource Apply}" />
+                                <Button
+                                    Command="{Binding SavePointsCommand}"
+                                    Content="{loc:Loc Common_Save}"
+                                    Style="{StaticResource Apply}" />
                             </StackPanel>
                         </Grid>
                         <Grid Margin="0,0,0,4">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Loc Plc_Point}" Style="{StaticResource Lbl}"/>
-                            <TextBlock Grid.Column="1" Text="X" Style="{StaticResource Lbl}"/>
-                            <TextBlock Grid.Column="2" Text="Y" Style="{StaticResource Lbl}"/>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="60" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                Grid.Column="0"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_Point}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                Style="{StaticResource Lbl}"
+                                Text="X" />
+                            <TextBlock
+                                Grid.Column="2"
+                                Style="{StaticResource Lbl}"
+                                Text="Y" />
                         </Grid>
-                        <ItemsControl ItemsSource="{Binding Points}" MaxHeight="360">
+                        <ItemsControl MaxHeight="360" ItemsSource="{Binding Points}">
                             <ItemsControl.Template>
                                 <ControlTemplate TargetType="ItemsControl">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsPresenter/></ScrollViewer>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
                                 </ControlTemplate>
                             </ItemsControl.Template>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Margin="0,2">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{Binding Index}" Foreground="#dee2f7" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Column="1" Text="{Binding X}"/>
-                                        <TextBox Grid.Column="2" Text="{Binding Y}"/>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="60" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock
+                                            Grid.Column="0"
+                                            VerticalAlignment="Center"
+                                            Foreground="#dee2f7"
+                                            Text="{Binding Index}" />
+                                        <TextBox Grid.Column="1" Text="{Binding X}" />
+                                        <TextBox Grid.Column="2" Text="{Binding Y}" />
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

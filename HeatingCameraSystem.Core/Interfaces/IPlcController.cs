@@ -17,6 +17,7 @@ namespace HeatingCameraSystem.Core.Interfaces
         Task StartChamberAsync();   // 온도제어 시작 (M10 + PC RUN)
         Task StopChamberAsync();    // 온도제어 정지 (M11)
         Task SetTargetTemperatureAsync(float temperature);
+        Task SetControlTemperatureAsync(float temperature);
         Task<float> GetCurrentTemperatureAsync();
         Task SetTargetHumidityAsync(float humidity);
         Task<float> GetCurrentHumidityAsync();
@@ -25,6 +26,7 @@ namespace HeatingCameraSystem.Core.Interfaces
         // ── 흑체 온도 제어 (index 0=흑체1, 1=흑체2) ──
         Task SetBlackBodyTemperatureAsync(int blackBodyIndex, float temperature);
         Task<float> GetCurrentBlackBodyTemperatureAsync(int blackBodyIndex);
+        Task WriteBlackBodyTemperaturesAsync(int blackBodyIndex, float currentTemperature, float targetTemperature);
 
         // ── 서보/직교로봇 모션 ──
         Task MoveServoToPositionAsync(int positionIndex);        // 원터치 포인트 이동 (P601~)
@@ -32,9 +34,9 @@ namespace HeatingCameraSystem.Core.Interfaces
         Task SetServoSpeedAsync(int percent);                    // 모터 전체 속도 1~100%
         Task JogAsync(ServoAxis axis, bool positive, bool on);   // JOG±: 누름(on=true)/뗌(on=false)
         Task HomeAsync(ServoAxis axis);                          // 원점 실행
-        Task SetPointCoordinateAsync(int positionIndex, int x, int y);  // 포인트 목표좌표 쓰기
-        Task<(int X, int Y)> GetPointCoordinateAsync(int positionIndex); // 포인트 목표좌표 읽기
-        Task MoveToCoordinateAsync(int x, int y);                        // 절대좌표 직접 이동 (X/Y 쓰고 이동 트리거)
+        Task SetPointCoordinateAsync(int positionIndex, float x, float y);  // 포인트 목표좌표 쓰기
+        Task<(float X, float Y)> GetPointCoordinateAsync(int positionIndex); // 포인트 목표좌표 읽기
+        Task MoveToCoordinateAsync(float x, float y);                        // 절대좌표 직접 이동 (X/Y 쓰고 이동 트리거)
 
         // ── 수동 장비 제어 (원터치) ──
         Task SetEquipmentAsync(PlcEquipment equipment, bool on);
@@ -48,5 +50,9 @@ namespace HeatingCameraSystem.Core.Interfaces
 
         // ── 비상 정지 (PC 트리거) ──
         Task TriggerEmergencyStopAsync();
+
+        // ── 알람 처리 (모멘터리 트리거) ──
+        Task ResetErrorAsync();   // 에러 리셋 (챔버 모터, P525)
+        Task BuzzerOffAsync();    // 부저 OFF (P250)
     }
 }

@@ -1,18 +1,21 @@
 using System.Net;
 using System.Net.Sockets;
 using HeatingCameraSystem.Core.Config;
+using HeatingCameraSystem.Core.Interfaces;
+using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Protocols;
 using HeatingCameraSystem.Protocols.Simulation;
 using HeatingCameraSystem.Master.Services;
 using HeatingCameraSystem.Simulator.Config;
 using HeatingCameraSystem.Simulator.Plc;
+using Moq;
 
 namespace HeatingCameraSystem.Tests;
 
 public class BlackBodyRoutingTests
 {
     [Fact]
-    public void AppServices_SelectsFakeOnlyForSimulationMode()
+    public void AppServices_SelectsDirectControllerOutsideSimulationMode()
     {
         using var plc = new FakePlcController();
 
@@ -20,7 +23,7 @@ public class BlackBodyRoutingTests
         using var real = AppServices.CreateBlackBodyController(new HardwareSettings { SimulationMode = false }, plc);
 
         Assert.IsType<FakeBlackBodyController>(fake);
-        Assert.IsType<PlcBlackBodyAdapter>(real);
+        Assert.IsType<SrBlackBodyController>(real);
     }
 
     [Fact]
@@ -34,6 +37,74 @@ public class BlackBodyRoutingTests
 
         Assert.IsType<SrBlackBodyController>(bb);
         Assert.Equal(2, bb.Count);
+    }
+
+    [Fact]
+    public async Task SrController_WritesSetpointToBlackBodyAndPlc()
+    {
+        var plc = new Mock<IPlcController>();
+        var settings = new BlackBodySettings
+        {
+            Simulated = true,
+            Units = [new BlackBodyUnitSettings()]
+        };
+        using var blackBody = new SrBlackBodyController(settings, plc: plc.Object);
+        await blackBody.ConnectAsync();
+
+        await blackBody.SetTemperatureAsync(0, 35f);
+
+        Assert.Equal(35f, await blackBody.GetTargetTemperatureAsync(0));
+        plc.Verify(x => x.SetBlackBodyTemperatureAsync(0, 35f), Times.Once);
+    }
+
+    [Fact]
+    public async Task UdpSrLink_WritesAndReadsCompleteFrame()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        int port = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+        byte[] response = { SrProtocol.Sync, 1, 0, 2, 0x12, 0x34 };
+        Task serverTask = Task.Run(async () =>
+        {
+            UdpReceiveResult request = await server.ReceiveAsync();
+            await server.SendAsync(response, request.RemoteEndPoint);
+        });
+
+        using var link = new UdpSrLink(new BlackBodyUnitSettings
+        {
+            ConnectionType = BlackBodyConnectionType.Ip,
+            IpAddress = "127.0.0.1",
+            Port = port
+        }, 1500);
+        link.Open();
+        link.Write(new byte[] { 0xAA, 0xBB });
+
+        Assert.Equal(response, link.Read());
+        await serverTask;
+    }
+
+    [Fact]
+    public async Task PlcStatusService_WritesDirectBlackBodyValuesToPlc()
+    {
+        var plc = new Mock<IPlcController>();
+        plc.Setup(x => x.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot());
+        plc.Setup(x => x.WriteBlackBodyTemperaturesAsync(It.IsAny<int>(), It.IsAny<float>(), It.IsAny<float>()))
+            .Returns(Task.CompletedTask);
+        var blackBody = new Mock<IBlackBodyController>();
+        blackBody.SetupGet(x => x.Count).Returns(2);
+        blackBody.Setup(x => x.GetCurrentTemperatureAsync(0)).ReturnsAsync(30.1f);
+        blackBody.Setup(x => x.GetTargetTemperatureAsync(0)).ReturnsAsync(35f);
+        blackBody.Setup(x => x.GetCurrentTemperatureAsync(1)).ReturnsAsync(40.2f);
+        blackBody.Setup(x => x.GetTargetTemperatureAsync(1)).ReturnsAsync(45f);
+        var service = new PlcStatusService(plc.Object, blackBody.Object);
+
+        await service.RefreshAsync();
+
+        plc.Verify(x => x.WriteBlackBodyTemperaturesAsync(0, 30.1f, 35f), Times.Once);
+        plc.Verify(x => x.WriteBlackBodyTemperaturesAsync(1, 40.2f, 45f), Times.Once);
+        Assert.Equal(30.1f, service.Snapshot.BlackBody1Pv);
+        Assert.Equal(35f, service.Snapshot.BlackBody1Sv);
+        Assert.Equal(40.2f, service.Snapshot.BlackBody2Pv);
+        Assert.Equal(45f, service.Snapshot.BlackBody2Sv);
     }
 
     [Fact]

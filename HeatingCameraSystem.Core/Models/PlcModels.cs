@@ -61,8 +61,9 @@ namespace HeatingCameraSystem.Core.Models
         public float BlackBody2Sv { get; set; }
 
         // ── 서보/모션 ──
-        public int ServoXPosition { get; set; }
-        public int ServoYPosition { get; set; }
+        // PLC 워드는 0.1mm 단위 정수(x10 스케일). 여기서는 스케일 해제된 mm 값.
+        public float ServoXPosition { get; set; }
+        public float ServoYPosition { get; set; }
         public bool ServoXBusy { get; set; }
         public bool ServoYBusy { get; set; }
         public bool ServoXHomeComplete { get; set; }

@@ -11,7 +11,7 @@ public class SimulatedSrDeviceTests
         Enabled = true,
         Simulated = true,
         SimulatedRampCelsiusPerSecond = ramp,
-        Units = new() { new SerialSettings(), new SerialSettings() }
+        Units = new() { new BlackBodyUnitSettings(), new BlackBodyUnitSettings() }
     };
 
     [Fact]

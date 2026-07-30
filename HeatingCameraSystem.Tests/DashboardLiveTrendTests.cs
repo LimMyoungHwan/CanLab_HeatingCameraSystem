@@ -196,24 +196,28 @@ public class DashboardLiveTrendTests
         public Task StartChamberAsync() => Task.CompletedTask;
         public Task StopChamberAsync() => Task.CompletedTask;
         public Task SetTargetTemperatureAsync(float temperature) => Task.CompletedTask;
+        public Task SetControlTemperatureAsync(float temperature) => Task.CompletedTask;
         public Task<float> GetCurrentTemperatureAsync() => Task.FromResult((float)(_sample++ % 101));
         public Task SetTargetHumidityAsync(float humidity) => Task.CompletedTask;
         public Task<float> GetCurrentHumidityAsync() => Task.FromResult((float)(_sample % 101));
         public Task SetHumidityControlAsync(bool on) => Task.CompletedTask;
         public Task SetBlackBodyTemperatureAsync(int blackBodyIndex, float temperature) => Task.CompletedTask;
         public Task<float> GetCurrentBlackBodyTemperatureAsync(int blackBodyIndex) => Task.FromResult(0f);
+        public Task WriteBlackBodyTemperaturesAsync(int blackBodyIndex, float currentTemperature, float targetTemperature) => Task.CompletedTask;
         public Task MoveServoToPositionAsync(int positionIndex) => Task.CompletedTask;
         public Task<bool> IsServoAtPositionAsync(int positionIndex) => Task.FromResult(true);
         public Task SetServoSpeedAsync(int percent) => Task.CompletedTask;
         public Task JogAsync(ServoAxis axis, bool positive, bool on) => Task.CompletedTask;
         public Task HomeAsync(ServoAxis axis) => Task.CompletedTask;
-        public Task SetPointCoordinateAsync(int positionIndex, int x, int y) => Task.CompletedTask;
-        public Task<(int X, int Y)> GetPointCoordinateAsync(int positionIndex) => Task.FromResult((0, 0));
-        public Task MoveToCoordinateAsync(int x, int y) => Task.CompletedTask;
+        public Task SetPointCoordinateAsync(int positionIndex, float x, float y) => Task.CompletedTask;
+        public Task<(float X, float Y)> GetPointCoordinateAsync(int positionIndex) => Task.FromResult((0f, 0f));
+        public Task MoveToCoordinateAsync(float x, float y) => Task.CompletedTask;
         public Task SetEquipmentAsync(PlcEquipment equipment, bool on) => Task.CompletedTask;
         public Task SetFanSpeedAsync(float hz) => Task.CompletedTask;
         public Task WriteAdminSettingsAsync(PlcAdminSettings settings) => Task.CompletedTask;
         public Task<PlcStatusSnapshot> ReadStatusAsync() => Task.FromResult(new PlcStatusSnapshot());
         public Task TriggerEmergencyStopAsync() => Task.CompletedTask;
+        public Task ResetErrorAsync() => Task.CompletedTask;
+        public Task BuzzerOffAsync() => Task.CompletedTask;
     }
 }

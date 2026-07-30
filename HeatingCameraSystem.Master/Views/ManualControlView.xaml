@@ -1,234 +1,624 @@
-<UserControl x:Class="HeatingCameraSystem.Master.Views.ManualControlView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:conv="clr-namespace:HeatingCameraSystem.Master.Converters"
-             xmlns:loc="clr-namespace:HeatingCameraSystem.Master.Localization"
-             mc:Ignorable="d" d:DesignHeight="768" d:DesignWidth="1024"
-             Background="#0e1321" Foreground="#dee2f7">
+﻿<UserControl
+    x:Class="HeatingCameraSystem.Master.Views.ManualControlView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="clr-namespace:HeatingCameraSystem.Master.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="clr-namespace:HeatingCameraSystem.Master.Localization"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    d:DesignHeight="768"
+    d:DesignWidth="1024"
+    Background="#0e1321"
+    Foreground="#dee2f7"
+    mc:Ignorable="d">
     <UserControl.Resources>
-        <conv:BoolToBrushConverter x:Key="Lamp" OnBrush="#4ae183" OffBrush="#33404a"/>
+        <conv:BoolToBrushConverter
+            x:Key="Lamp"
+            OffBrush="#33404a"
+            OnBrush="#4ae183" />
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background" Value="#161b2a"/>
-            <Setter Property="BorderBrush" Value="#3b4949"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="6"/>
-            <Setter Property="Padding" Value="14"/>
-            <Setter Property="Margin" Value="6"/>
+            <Setter Property="Background" Value="#161b2a" />
+            <Setter Property="BorderBrush" Value="#3b4949" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Margin" Value="6" />
         </Style>
         <Style x:Key="Head" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Foreground" Value="#47eaed"/>
-            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="#47eaed" />
+            <Setter Property="Margin" Value="0,0,0,10" />
         </Style>
         <Style x:Key="Lbl" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#bac9c9"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="0,0,10,0"/>
+            <Setter Property="Foreground" Value="#bac9c9" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,10,0" />
         </Style>
         <Style x:Key="Btn" TargetType="Button">
-            <Setter Property="Background" Value="#2f3444"/>
-            <Setter Property="Foreground" Value="#dee2f7"/>
-            <Setter Property="BorderBrush" Value="#3b4949"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="12,8"/>
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="MinWidth" Value="70"/>
+            <Setter Property="Background" Value="#2f3444" />
+            <Setter Property="Foreground" Value="#dee2f7" />
+            <Setter Property="BorderBrush" Value="#3b4949" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="MinWidth" Value="70" />
         </Style>
         <Style x:Key="Toggle" TargetType="ToggleButton">
-            <Setter Property="Background" Value="#2f3444"/>
-            <Setter Property="Foreground" Value="#dee2f7"/>
-            <Setter Property="BorderBrush" Value="#3b4949"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="MinWidth" Value="110"/>
+            <Setter Property="Background" Value="#2f3444" />
+            <Setter Property="Foreground" Value="#dee2f7" />
+            <Setter Property="BorderBrush" Value="#3b4949" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="MinWidth" Value="110" />
             <Style.Triggers>
                 <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background" Value="#1f6f3f"/>
-                    <Setter Property="Foreground" Value="#eafff2"/>
-                    <Setter Property="BorderBrush" Value="#4ae183"/>
+                    <Setter Property="Background" Value="#1f6f3f" />
+                    <Setter Property="Foreground" Value="#eafff2" />
+                    <Setter Property="BorderBrush" Value="#4ae183" />
                 </Trigger>
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Bottom" Background="#1a1f2e" BorderBrush="#3b4949" BorderThickness="0,1,0,0" Padding="14,8">
-            <TextBlock Text="{Binding StatusMessage}" Foreground="#bac9c9"/>
+        <Border
+            Padding="14,8"
+            Background="#1a1f2e"
+            BorderBrush="#3b4949"
+            BorderThickness="0,1,0,0"
+            DockPanel.Dock="Bottom">
+            <TextBlock Foreground="#bac9c9" Text="{Binding StatusMessage}" />
         </Border>
 
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <WrapPanel Orientation="Horizontal">
-                <Border Style="{StaticResource Card}" Width="360">
+                <Border Width="360" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="{loc:Loc Equip_Chamber}" Style="{StaticResource Head}"/>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Equip_Chamber}" />
                         <WrapPanel>
-                            <Button Content="{loc:Loc Manual_TempStart}" Style="{StaticResource Btn}" Command="{Binding StartChamberCommand}"/>
-                            <Button Content="{loc:Loc Manual_TempStop}" Style="{StaticResource Btn}" Command="{Binding StopChamberCommand}"/>
-                            <Button Content="{loc:Loc Equip_EStop}" Style="{StaticResource Btn}" Background="#7a2020" Foreground="#ffd9d6" Command="{Binding EmergencyStopCommand}"/>
+                            <Button
+                                Command="{Binding StartChamberCommand}"
+                                Content="{loc:Loc Manual_TempStart}"
+                                Style="{StaticResource Btn}" />
+                            <Button
+                                Command="{Binding StopChamberCommand}"
+                                Content="{loc:Loc Manual_TempStop}"
+                                Style="{StaticResource Btn}" />
+                            <Button
+                                Background="#7a2020"
+                                Command="{Binding EmergencyStopCommand}"
+                                Content="{loc:Loc Equip_EStop}"
+                                Foreground="#ffd9d6"
+                                Style="{StaticResource Btn}" />
                         </WrapPanel>
-                        <StackPanel Orientation="Horizontal" Margin="4,10,0,0">
-                            <CheckBox Content="{loc:Loc Plc_HumidityControl}" IsChecked="{Binding HumidityControl}" Foreground="#dee2f7" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource Card}" Width="360">
-                    <StackPanel>
-                        <TextBlock Text="{loc:Loc Manual_EquipOneTouch}" Style="{StaticResource Head}"/>
-                        <WrapPanel>
-                            <ToggleButton Content="{loc:Loc Equip_Cooler1}" Style="{StaticResource Toggle}" IsChecked="{Binding Cooler1st}"/>
-                            <ToggleButton Content="{loc:Loc Equip_Cooler2}" Style="{StaticResource Toggle}" IsChecked="{Binding Cooler2nd}"/>
-                            <ToggleButton Content="{loc:Loc Equip_CoolerRoom}" Style="{StaticResource Toggle}" IsChecked="{Binding CoolerRoom}"/>
-                            <ToggleButton Content="{loc:Loc Equip_Blower1}" Style="{StaticResource Toggle}" IsChecked="{Binding Blower1}"/>
-                            <ToggleButton Content="{loc:Loc Equip_Blower2}" Style="{StaticResource Toggle}" IsChecked="{Binding Blower2}"/>
-                            <ToggleButton Content="{loc:Loc Manual_Chiller}" Style="{StaticResource Toggle}" IsChecked="{Binding Chiller}"/>
-                            <ToggleButton Content="{loc:Loc Manual_DoorLock}" Style="{StaticResource Toggle}" IsChecked="{Binding DoorLock}"/>
-                            <ToggleButton Content="{loc:Loc Manual_Lighting}" Style="{StaticResource Toggle}" IsChecked="{Binding Lighting}"/>
-                            <ToggleButton Content="{loc:Loc Equip_PairGlass}" Style="{StaticResource Toggle}" IsChecked="{Binding PairGlass}"/>
-                        </WrapPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource Card}" Width="360">
-                    <StackPanel>
-                        <TextBlock Text="{loc:Loc Manual_ServoOp}" Style="{StaticResource Head}"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="{loc:Loc Manual_XPosCol}" Style="{StaticResource Lbl}"/>
-                            <TextBlock Text="{Binding ServoXPosition}" Foreground="#47eaed" FontWeight="Bold" Margin="0,0,16,0"/>
-                            <Ellipse Width="10" Height="10" Fill="{Binding ServoXBusy, Converter={StaticResource Lamp}}" VerticalAlignment="Center"/>
-                            <TextBlock Text=" X BUSY" Style="{StaticResource Lbl}"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="{loc:Loc Manual_YPosCol}" Style="{StaticResource Lbl}"/>
-                            <TextBlock Text="{Binding ServoYPosition}" Foreground="#47eaed" FontWeight="Bold" Margin="0,0,16,0"/>
-                            <Ellipse Width="10" Height="10" Fill="{Binding ServoYBusy, Converter={StaticResource Lamp}}" VerticalAlignment="Center"/>
-                            <TextBlock Text=" Y BUSY" Style="{StaticResource Lbl}"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <TextBlock Text="{loc:Loc Manual_CurrentPoint}" Style="{StaticResource Lbl}"/>
-                            <TextBlock Text="{Binding CurrentPoint}" Foreground="#47eaed" FontWeight="Bold"/>
-                        </StackPanel>
-                        <WrapPanel Margin="0,6,0,0">
-                            <Button Content="{loc:Loc Manual_XJogMinus}" Style="{StaticResource Btn}" Tag="X-" PreviewMouseLeftButtonDown="JogDown" PreviewMouseLeftButtonUp="JogUp"/>
-                            <Button Content="{loc:Loc Manual_XJogPlus}" Style="{StaticResource Btn}" Tag="X+" PreviewMouseLeftButtonDown="JogDown" PreviewMouseLeftButtonUp="JogUp"/>
-                            <Button Content="{loc:Loc Manual_YJogMinus}" Style="{StaticResource Btn}" Tag="Y-" PreviewMouseLeftButtonDown="JogDown" PreviewMouseLeftButtonUp="JogUp"/>
-                            <Button Content="{loc:Loc Manual_YJogPlus}" Style="{StaticResource Btn}" Tag="Y+" PreviewMouseLeftButtonDown="JogDown" PreviewMouseLeftButtonUp="JogUp"/>
-                            <Button Content="{loc:Loc Manual_HomeX}" Style="{StaticResource Btn}" Command="{Binding HomeXCommand}"/>
-                            <Button Content="{loc:Loc Manual_HomeY}" Style="{StaticResource Btn}" Command="{Binding HomeYCommand}"/>
-                        </WrapPanel>
-
-                        <TextBlock Text="{loc:Loc Manual_MoveAbsolute}" Style="{StaticResource Head}" Margin="0,12,0,6"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="X" Style="{StaticResource Lbl}"/>
-                            <TextBox Text="{Binding AbsoluteTargetX, UpdateSourceTrigger=PropertyChanged}" Width="70" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="8,6" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <Button Content="{loc:Loc Manual_MoveX}" Style="{StaticResource Btn}" Command="{Binding MoveAbsoluteCommand}" CommandParameter="X"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="Y" Style="{StaticResource Lbl}"/>
-                            <TextBox Text="{Binding AbsoluteTargetY, UpdateSourceTrigger=PropertyChanged}" Width="70" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="8,6" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <Button Content="{loc:Loc Manual_MoveY}" Style="{StaticResource Btn}" Command="{Binding MoveAbsoluteCommand}" CommandParameter="Y"/>
+                        <StackPanel Margin="4,10,0,0" Orientation="Horizontal">
+                            <CheckBox
+                                VerticalAlignment="Center"
+                                Content="{loc:Loc Plc_HumidityControl}"
+                                Foreground="#dee2f7"
+                                IsChecked="{Binding HumidityControl}" />
                         </StackPanel>
 
-                        <TextBlock Text="{loc:Loc Manual_MoveRelative}" Style="{StaticResource Head}" Margin="0,12,0,6"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="X" Style="{StaticResource Lbl}"/>
-                            <TextBox Text="{Binding RelativeStepX, UpdateSourceTrigger=PropertyChanged}" Width="70" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="8,6" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <Button Content="-" Style="{StaticResource Btn}" MinWidth="46" Command="{Binding MoveRelativeCommand}" CommandParameter="X-"/>
-                            <Button Content="+" Style="{StaticResource Btn}" MinWidth="46" Command="{Binding MoveRelativeCommand}" CommandParameter="X+"/>
+                        <StackPanel Margin="0,10,0,6" Orientation="Horizontal">
+                            <TextBlock
+                                Width="90"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_TargetTemp}" />
+                            <TextBox
+                                Width="80"
+                                Padding="8,6"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding TargetTemperature}" />
+                            <Button
+                                Command="{Binding ApplyTemperatureCommand}"
+                                Content="{loc:Loc Common_Apply}"
+                                Style="{StaticResource Btn}" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Y" Style="{StaticResource Lbl}"/>
-                            <TextBox Text="{Binding RelativeStepY, UpdateSourceTrigger=PropertyChanged}" Width="70" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="8,6" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <Button Content="-" Style="{StaticResource Btn}" MinWidth="46" Command="{Binding MoveRelativeCommand}" CommandParameter="Y-"/>
-                            <Button Content="+" Style="{StaticResource Btn}" MinWidth="46" Command="{Binding MoveRelativeCommand}" CommandParameter="Y+"/>
+                            <TextBlock
+                                Width="90"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_TargetHum}" />
+                            <TextBox
+                                Width="80"
+                                Padding="8,6"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding TargetHumidity}" />
+                            <Button
+                                Command="{Binding ApplyHumidityCommand}"
+                                Content="{loc:Loc Common_Apply}"
+                                Style="{StaticResource Btn}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource Card}" Width="360">
+                <Border Width="360" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="{loc:Loc Manual_MovePointTitle}" Style="{StaticResource Head}"/>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Plc_TempRamp}" />
+                        <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                            <TextBlock
+                                Width="110"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_TargetTemp}" />
+                            <TextBox
+                                Width="80"
+                                Padding="8,6"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding RampTargetTemperature}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                            <TextBlock
+                                Width="110"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_ReachTime}" />
+                            <TextBox
+                                Width="80"
+                                Padding="8,6"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding RampMinutes}" />
+                        </StackPanel>
+                        <WrapPanel>
+                            <Button
+                                Command="{Binding StartRampCommand}"
+                                Content="{loc:Loc Plc_RampStart}"
+                                Style="{StaticResource Btn}" />
+                            <Button
+                                Command="{Binding StopRampCommand}"
+                                Content="{loc:Loc Common_Stop}"
+                                IsEnabled="{Binding IsRamping}"
+                                Style="{StaticResource Btn}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Width="360" Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Plc_MotorFan}" />
+                        <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                            <TextBlock
+                                Width="130"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Plc_ServoSpeed}" />
+                            <TextBox
+                                Width="70"
+                                Padding="8,6"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding ServoSpeedPercent}" />
+                            <Button
+                                Command="{Binding ApplyServoSpeedCommand}"
+                                Content="{loc:Loc Common_Apply}"
+                                Style="{StaticResource Btn}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                Width="130"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Status_FanSpeed}" />
+                            <TextBox
+                                Width="70"
+                                Padding="8,6"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding FanSpeedTargetHz}" />
+                            <Button
+                                Command="{Binding ApplyFanSpeedCommand}"
+                                Content="{loc:Loc Common_Apply}"
+                                Style="{StaticResource Btn}" />
+                            <TextBlock
+                                Margin="10,0,6,0"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Manual_Current}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontWeight="Bold"
+                                Foreground="#47eaed"
+                                Text="{Binding FanSpeedHz, StringFormat={}{0:0.00} Hz}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Width="360" Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Manual_EquipOneTouch}" />
+                        <WrapPanel>
+                            <ToggleButton
+                                Content="{loc:Loc Equip_Cooler1}"
+                                IsChecked="{Binding Cooler1st}"
+                                Style="{StaticResource Toggle}" />
+                            <ToggleButton
+                                Content="{loc:Loc Equip_Cooler2}"
+                                IsChecked="{Binding Cooler2nd}"
+                                Style="{StaticResource Toggle}" />
+                            <ToggleButton
+                                Content="{loc:Loc Equip_CoolerRoom}"
+                                IsChecked="{Binding CoolerRoom}"
+                                Style="{StaticResource Toggle}" />
+                            <ToggleButton
+                                Content="{loc:Loc Equip_Blower1}"
+                                IsChecked="{Binding Blower1}"
+                                Style="{StaticResource Toggle}" />
+                            <ToggleButton
+                                Content="{loc:Loc Equip_Blower2}"
+                                IsChecked="{Binding Blower2}"
+                                Style="{StaticResource Toggle}" />
+                            <ToggleButton
+                                Content="{loc:Loc Manual_Chiller}"
+                                IsChecked="{Binding Chiller}"
+                                Style="{StaticResource Toggle}" />
+                            <ToggleButton
+                                Content="{loc:Loc Manual_DoorLock}"
+                                IsChecked="{Binding DoorLock}"
+                                Style="{StaticResource Toggle}" />
+                            <ToggleButton
+                                Content="{loc:Loc Manual_Lighting}"
+                                IsChecked="{Binding Lighting}"
+                                Style="{StaticResource Toggle}" />
+                            <ToggleButton
+                                Content="{loc:Loc Equip_PairGlass}"
+                                IsChecked="{Binding PairGlass}"
+                                Style="{StaticResource Toggle}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Width="360" Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Manual_ServoOp}" />
+                        <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Lbl}" Text="{loc:Loc Manual_XPosCol}" />
+                            <TextBlock
+                                Margin="0,0,16,0"
+                                FontWeight="Bold"
+                                Foreground="#47eaed"
+                                Text="{Binding ServoXPosition, StringFormat={}{0:F1}}" />
+                            <Ellipse
+                                Width="10"
+                                Height="10"
+                                VerticalAlignment="Center"
+                                Fill="{Binding ServoXBusy, Converter={StaticResource Lamp}}" />
+                            <TextBlock Style="{StaticResource Lbl}" Text=" X BUSY" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Lbl}" Text="{loc:Loc Manual_YPosCol}" />
+                            <TextBlock
+                                Margin="0,0,16,0"
+                                FontWeight="Bold"
+                                Foreground="#47eaed"
+                                Text="{Binding ServoYPosition, StringFormat={}{0:F1}}" />
+                            <Ellipse
+                                Width="10"
+                                Height="10"
+                                VerticalAlignment="Center"
+                                Fill="{Binding ServoYBusy, Converter={StaticResource Lamp}}" />
+                            <TextBlock Style="{StaticResource Lbl}" Text=" Y BUSY" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,4" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Lbl}" Text="{loc:Loc Manual_CurrentPoint}" />
+                            <TextBlock
+                                FontWeight="Bold"
+                                Foreground="#47eaed"
+                                Text="{Binding CurrentPoint}" />
+                        </StackPanel>
+                        <WrapPanel Margin="0,6,0,0">
+                            <Button
+                                Content="{loc:Loc Manual_XJogMinus}"
+                                PreviewMouseLeftButtonDown="JogDown"
+                                PreviewMouseLeftButtonUp="JogUp"
+                                Style="{StaticResource Btn}"
+                                Tag="X-" />
+                            <Button
+                                Content="{loc:Loc Manual_XJogPlus}"
+                                PreviewMouseLeftButtonDown="JogDown"
+                                PreviewMouseLeftButtonUp="JogUp"
+                                Style="{StaticResource Btn}"
+                                Tag="X+" />
+                            <Button
+                                Content="{loc:Loc Manual_YJogMinus}"
+                                PreviewMouseLeftButtonDown="JogDown"
+                                PreviewMouseLeftButtonUp="JogUp"
+                                Style="{StaticResource Btn}"
+                                Tag="Y-" />
+                            <Button
+                                Content="{loc:Loc Manual_YJogPlus}"
+                                PreviewMouseLeftButtonDown="JogDown"
+                                PreviewMouseLeftButtonUp="JogUp"
+                                Style="{StaticResource Btn}"
+                                Tag="Y+" />
+                            <Button
+                                Command="{Binding HomeXCommand}"
+                                Content="{loc:Loc Manual_HomeX}"
+                                Style="{StaticResource Btn}" />
+                            <Button
+                                Command="{Binding HomeYCommand}"
+                                Content="{loc:Loc Manual_HomeY}"
+                                Style="{StaticResource Btn}" />
+                        </WrapPanel>
+
+                        <TextBlock
+                            Margin="0,12,0,6"
+                            Style="{StaticResource Head}"
+                            Text="{loc:Loc Manual_MoveAbsolute}" />
+                        <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Lbl}" Text="X" />
+                            <TextBox
+                                Width="70"
+                                Margin="0,0,6,0"
+                                Padding="8,6"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding AbsoluteTargetX, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button
+                                Command="{Binding MoveAbsoluteCommand}"
+                                CommandParameter="X"
+                                Content="{loc:Loc Manual_MoveX}"
+                                Style="{StaticResource Btn}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Lbl}" Text="Y" />
+                            <TextBox
+                                Width="70"
+                                Margin="0,0,6,0"
+                                Padding="8,6"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding AbsoluteTargetY, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button
+                                Command="{Binding MoveAbsoluteCommand}"
+                                CommandParameter="Y"
+                                Content="{loc:Loc Manual_MoveY}"
+                                Style="{StaticResource Btn}" />
+                        </StackPanel>
+
+                        <TextBlock
+                            Margin="0,12,0,6"
+                            Style="{StaticResource Head}"
+                            Text="{loc:Loc Manual_MoveRelative}" />
+                        <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Lbl}" Text="X" />
+                            <TextBox
+                                Width="70"
+                                Margin="0,0,6,0"
+                                Padding="8,6"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding RelativeStepX, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button
+                                MinWidth="46"
+                                Command="{Binding MoveRelativeCommand}"
+                                CommandParameter="X-"
+                                Content="-"
+                                Style="{StaticResource Btn}" />
+                            <Button
+                                MinWidth="46"
+                                Command="{Binding MoveRelativeCommand}"
+                                CommandParameter="X+"
+                                Content="+"
+                                Style="{StaticResource Btn}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Lbl}" Text="Y" />
+                            <TextBox
+                                Width="70"
+                                Margin="0,0,6,0"
+                                Padding="8,6"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding RelativeStepY, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button
+                                MinWidth="46"
+                                Command="{Binding MoveRelativeCommand}"
+                                CommandParameter="Y-"
+                                Content="-"
+                                Style="{StaticResource Btn}" />
+                            <Button
+                                MinWidth="46"
+                                Command="{Binding MoveRelativeCommand}"
+                                CommandParameter="Y+"
+                                Content="+"
+                                Style="{StaticResource Btn}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Width="360" Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Manual_MovePointTitle}" />
                         <ItemsControl ItemsSource="{Binding PointNumbers}">
                             <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><UniformGrid Columns="5"/></ItemsPanelTemplate>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="5" />
+                                </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Button Content="{Binding}" Style="{StaticResource Btn}" MinWidth="52"
-                                            Command="{Binding DataContext.MoveToPointCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                            CommandParameter="{Binding}"/>
+                                    <Button
+                                        MinWidth="52"
+                                        Command="{Binding DataContext.MoveToPointCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding}"
+                                        Content="{Binding}"
+                                        Style="{StaticResource Btn}" />
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource Card}" Width="360">
+                <Border Width="360" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="{loc:Loc Manual_BlackBody}" Style="{StaticResource Head}"/>
-                        
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="{loc:Loc Manual_Bb1Target}" Style="{StaticResource Lbl}"/>
-                            <TextBox Text="{Binding BlackBody1Target}" Width="80" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="12,8" VerticalAlignment="Center"/>
-                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Btn}" Command="{Binding ApplyBlackBody1Command}"/>
-                            <TextBlock Text="{loc:Loc Manual_Current}" Style="{StaticResource Lbl}" Margin="10,0,10,0"/>
-                            <TextBlock Text="{Binding BlackBody1Current, StringFormat={}{0:0.0} ℃}" Foreground="#47eaed" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Manual_BlackBody}" />
+
+                        <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Lbl}" Text="{loc:Loc Manual_Bb1Target}" />
+                            <TextBox
+                                Width="80"
+                                Padding="12,8"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding BlackBody1Target}" />
+                            <Button
+                                Command="{Binding ApplyBlackBody1Command}"
+                                Content="{loc:Loc Common_Apply}"
+                                Style="{StaticResource Btn}" />
+                            <TextBlock
+                                Margin="10,0,10,0"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Manual_Current}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontWeight="Bold"
+                                Foreground="#47eaed"
+                                Text="{Binding BlackBody1Current, StringFormat={}{0:0.0} ℃}" />
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{loc:Loc Manual_Bb2Target}" Style="{StaticResource Lbl}"/>
-                            <TextBox Text="{Binding BlackBody2Target}" Width="80" Background="#2f3444" Foreground="#dee2f7" BorderBrush="#3b4949" Padding="12,8" VerticalAlignment="Center"/>
-                            <Button Content="{loc:Loc Common_Apply}" Style="{StaticResource Btn}" Command="{Binding ApplyBlackBody2Command}"/>
-                            <TextBlock Text="{loc:Loc Manual_Current}" Style="{StaticResource Lbl}" Margin="10,0,10,0"/>
-                            <TextBlock Text="{Binding BlackBody2Current, StringFormat={}{0:0.0} ℃}" Foreground="#47eaed" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Lbl}" Text="{loc:Loc Manual_Bb2Target}" />
+                            <TextBox
+                                Width="80"
+                                Padding="12,8"
+                                VerticalAlignment="Center"
+                                Background="#2f3444"
+                                BorderBrush="#3b4949"
+                                Foreground="#dee2f7"
+                                Text="{Binding BlackBody2Target}" />
+                            <Button
+                                Command="{Binding ApplyBlackBody2Command}"
+                                Content="{loc:Loc Common_Apply}"
+                                Style="{StaticResource Btn}" />
+                            <TextBlock
+                                Margin="10,0,10,0"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Manual_Current}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontWeight="Bold"
+                                Foreground="#47eaed"
+                                Text="{Binding BlackBody2Current, StringFormat={}{0:0.0} ℃}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource Card}" Width="732">
+                <Border Width="732" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="{loc:Loc Manual_CameraControl}" Style="{StaticResource Head}"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <TextBlock Text="{loc:Loc Manual_CameraSelect}" Style="{StaticResource Lbl}"/>
-                            <ComboBox ItemsSource="{Binding Cameras}" SelectedItem="{Binding SelectedCamera}"
-                                      DisplayMemberPath="Title" MinWidth="240"/>
-                            <TextBlock Text="{loc:Loc Dash_ColorMap}" Style="{StaticResource Lbl}" Margin="16,0,0,0"/>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Manual_CameraControl}" />
+                        <StackPanel Margin="0,0,0,10" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Lbl}" Text="{loc:Loc Manual_CameraSelect}" />
+                            <ComboBox
+                                MinWidth="240"
+                                DisplayMemberPath="Title"
+                                ItemsSource="{Binding Cameras}"
+                                SelectedItem="{Binding SelectedCamera}" />
+                            <TextBlock
+                                Margin="16,0,0,0"
+                                Style="{StaticResource Lbl}"
+                                Text="{loc:Loc Dash_ColorMap}" />
                             <ComboBox MinWidth="140" SelectedIndex="{Binding ColorMapIndex, Mode=TwoWay}">
-                                <ComboBoxItem Content="{loc:Loc Dash_Color}"/>
-                                <ComboBoxItem Content="{loc:Loc Dash_Grayscale}"/>
+                                <ComboBoxItem Content="{loc:Loc Dash_Color}" />
+                                <ComboBoxItem Content="{loc:Loc Dash_Grayscale}" />
                             </ComboBox>
                         </StackPanel>
-                        <Border BorderBrush="#3b4949" BorderThickness="1" CornerRadius="4" Padding="10" Background="#1a1f2e">
+                        <Border
+                            Padding="10"
+                            Background="#1a1f2e"
+                            BorderBrush="#3b4949"
+                            BorderThickness="1"
+                            CornerRadius="4">
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding SelectedCamera}" Value="{x:Null}">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Setter Property="Visibility" Value="Collapsed" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
                             <StackPanel DataContext="{Binding SelectedCamera}">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Text="{Binding Title}" Foreground="#47eaed" FontWeight="Bold" Margin="0,0,10,0"/>
-                                    <TextBlock Text="{Binding LastAckStatus}" Style="{StaticResource Lbl}"/>
+                                <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
+                                    <TextBlock
+                                        Margin="0,0,10,0"
+                                        FontWeight="Bold"
+                                        Foreground="#47eaed"
+                                        Text="{Binding Title}" />
+                                    <TextBlock Style="{StaticResource Lbl}" Text="{Binding LastAckStatus}" />
                                 </StackPanel>
                                 <DockPanel>
-                                    <Image DockPanel.Dock="Left" Source="{Binding LiveImage}" Width="240" Height="180" Stretch="Uniform" Margin="0,0,12,0"/>
+                                    <Image
+                                        Width="240"
+                                        Height="180"
+                                        Margin="0,0,12,0"
+                                        DockPanel.Dock="Left"
+                                        Source="{Binding LiveImage}"
+                                        Stretch="Uniform" />
                                     <WrapPanel>
-                                        <Button Content="RUN" Style="{StaticResource Btn}" Command="{Binding DataContext.SendRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-                                        <Button Content="STOP" Style="{StaticResource Btn}" Command="{Binding DataContext.SendStopCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-                                        <Button Content="{loc:Loc Manual_ShutterOpen}" Style="{StaticResource Btn}" Command="{Binding DataContext.SendShutterOpenCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-                                        <Button Content="{loc:Loc Manual_ShutterClose}" Style="{StaticResource Btn}" Command="{Binding DataContext.SendShutterCloseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-                                        <Button Content="{loc:Loc Manual_Capture}" Style="{StaticResource Btn}" Command="{Binding DataContext.SendCaptureCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-                                        <Button Content="NUC" Style="{StaticResource Btn}" Command="{Binding DataContext.SendNucCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-                                        <Button Content="{loc:Loc Manual_SaveConfig}" Style="{StaticResource Btn}" Command="{Binding DataContext.SendSaveConfigCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-                                        <Button Content="{loc:Loc Common_RefreshInfo}" Style="{StaticResource Btn}" Command="{Binding DataContext.SendRefreshInfoCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                                        <Button
+                                            Command="{Binding DataContext.SendRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="RUN"
+                                            Style="{StaticResource Btn}" />
+                                        <Button
+                                            Command="{Binding DataContext.SendStopCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="STOP"
+                                            Style="{StaticResource Btn}" />
+                                        <Button
+                                            Command="{Binding DataContext.SendShutterOpenCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="{loc:Loc Manual_ShutterOpen}"
+                                            Style="{StaticResource Btn}" />
+                                        <Button
+                                            Command="{Binding DataContext.SendShutterCloseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="{loc:Loc Manual_ShutterClose}"
+                                            Style="{StaticResource Btn}" />
+                                        <Button
+                                            Command="{Binding DataContext.SendCaptureCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="{loc:Loc Manual_Capture}"
+                                            Style="{StaticResource Btn}" />
+                                        <Button
+                                            Command="{Binding DataContext.SendNucCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="NUC"
+                                            Style="{StaticResource Btn}" />
+                                        <Button
+                                            Command="{Binding DataContext.SendSaveConfigCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="{loc:Loc Manual_SaveConfig}"
+                                            Style="{StaticResource Btn}" />
+                                        <Button
+                                            Command="{Binding DataContext.SendRefreshInfoCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="{loc:Loc Common_RefreshInfo}"
+                                            Style="{StaticResource Btn}" />
                                     </WrapPanel>
                                 </DockPanel>
                             </StackPanel>

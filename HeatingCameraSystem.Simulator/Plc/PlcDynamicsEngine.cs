@@ -10,6 +10,10 @@ public sealed class PlcDynamicsEngine : IDisposable
     private readonly PlcSettings _plc;
     private readonly DynamicsSettings _dynamics;
     private readonly Timer _timer;
+    // 원터치 P 비트는 PulseHoldMs(기본 100ms)만 ON이므로 dynamics tick(=100ms)으로는 놓칠 수 있다.
+    // 실 PLC 스캔처럼 트리거만 별도로 빠르게 샘플링한다.
+    private const int TriggerScanMs = 20;
+    private readonly Timer _triggerTimer;
     private readonly object _gate = new();
     private readonly bool[] _moveLatch;
     private readonly CancellationTokenSource _cts = new();
@@ -22,14 +26,20 @@ public sealed class PlcDynamicsEngine : IDisposable
         _dynamics = dynamics;
         _moveLatch = new bool[Math.Max(1, plc.ServoPointCount)];
         _timer = new Timer(_ => Tick(), null, Timeout.Infinite, Timeout.Infinite);
+        _triggerTimer = new Timer(_ => ScanTriggers(), null, Timeout.Infinite, Timeout.Infinite);
     }
 
-    public void Start() => _timer.Change(_dynamics.TickMs, _dynamics.TickMs);
+    public void Start()
+    {
+        _timer.Change(_dynamics.TickMs, _dynamics.TickMs);
+        _triggerTimer.Change(TriggerScanMs, TriggerScanMs);
+    }
 
     public void Dispose()
     {
         _disposed = true;
         _cts.Cancel();
+        _triggerTimer.Dispose();
         _timer.Dispose();
         // ponytail: not disposing _cts — an in-flight Tick may still reference its Token; Cancel is enough
     }
@@ -41,11 +51,17 @@ public sealed class PlcDynamicsEngine : IDisposable
         {
             StepScaled(_plc.TempPv, _plc.TempSv, _dynamics.TemperatureRatePerSecond);
             StepScaled(_plc.HumPv, _plc.HumSv, _dynamics.HumidityRatePerSecond);
-            StepScaled(_plc.Bb1Pv, _plc.Bb1Sv, _dynamics.BlackbodyRatePerSecond);
-            StepScaled(_plc.Bb2Pv, _plc.Bb2Sv, _dynamics.BlackbodyRatePerSecond);
+            // 흑체 워드는 ×100 스케일(PlcXgtClient와 일치).
+            StepScaled(_plc.Bb1Pv, _plc.Bb1Sv, _dynamics.BlackbodyRatePerSecond, scale: 100);
+            StepScaled(_plc.Bb2Pv, _plc.Bb2Sv, _dynamics.BlackbodyRatePerSecond, scale: 100);
             MirrorEquipmentStatus();
-            DetectPointMoves();
         }
+    }
+
+    private void ScanTriggers()
+    {
+        if (_disposed) return;
+        lock (_gate) DetectPointMoves();
     }
 
     private void MirrorEquipmentStatus()
@@ -60,11 +76,11 @@ public sealed class PlcDynamicsEngine : IDisposable
 
     private void Mirror(string source, string target) => _memory.WriteBitToken(target, _memory.ReadBitToken(source));
 
-    private void StepScaled(string pvToken, string svToken, double ratePerSecond)
+    private void StepScaled(string pvToken, string svToken, double ratePerSecond, int scale = 10)
     {
         short pv = _memory.ReadWordToken(pvToken);
         short sv = _memory.ReadWordToken(svToken);
-        int maxStep = Math.Max(1, (int)Math.Round(ratePerSecond * 10 * _dynamics.TickMs / 1000.0));
+        int maxStep = Math.Max(1, (int)Math.Round(ratePerSecond * scale * _dynamics.TickMs / 1000.0));
         int delta = sv - pv;
         if (delta == 0) return;
         int step = Math.Clamp(delta, -maxStep, maxStep);

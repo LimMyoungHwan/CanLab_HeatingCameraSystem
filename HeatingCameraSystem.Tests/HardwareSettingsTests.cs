@@ -45,7 +45,20 @@ namespace HeatingCameraSystem.Tests
                     TempPv = "D200",
                     TempSv = "D202"
                 },
-                Nats = new NatsSettings { Url = "nats://master.local:4222" }
+                Nats = new NatsSettings { Url = "nats://master.local:4222" },
+                BlackBody = new BlackBodySettings
+                {
+                    Enabled = true,
+                    Units = new()
+                    {
+                        new BlackBodyUnitSettings
+                        {
+                            ConnectionType = BlackBodyConnectionType.Ip,
+                            IpAddress = "10.0.1.80",
+                            Port = 4001
+                        }
+                    }
+                }
             };
 
             string json = JsonSerializer.Serialize(original, Opts);
@@ -59,6 +72,10 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal("D200", restored.Plc.TempPv);
             Assert.Equal("D202", restored.Plc.TempSv);
             Assert.Equal("nats://master.local:4222", restored.Nats.Url);
+            Assert.True(restored.BlackBody.Enabled);
+            Assert.Equal(BlackBodyConnectionType.Ip, restored.BlackBody.Units[0].ConnectionType);
+            Assert.Equal("10.0.1.80", restored.BlackBody.Units[0].IpAddress);
+            Assert.Equal(4001, restored.BlackBody.Units[0].Port);
         }
 
         [Fact]

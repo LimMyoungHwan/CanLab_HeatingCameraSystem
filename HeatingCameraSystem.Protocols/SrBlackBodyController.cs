@@ -21,36 +21,43 @@ namespace HeatingCameraSystem.Protocols
     {
         private sealed class Unit
         {
-            public Unit(SerialSettings config, ISrLink link)
+            public Unit(BlackBodyUnitSettings config, ISrLink link)
             {
                 Config = config;
                 Link = link;
             }
 
-            public SerialSettings Config { get; }
+            public BlackBodyUnitSettings Config { get; }
             public ISrLink Link { get; }
             public readonly SemaphoreSlim Gate = new(1, 1);
             public long LastSendTicks;
         }
 
         private readonly BlackBodySettings _settings;
+        private readonly IPlcController? _plc;
         private readonly Unit[] _units;
         private volatile bool _connected;
 
-        public SrBlackBodyController(BlackBodySettings settings, Func<SerialSettings, ISrLink>? linkFactory = null)
+        public SrBlackBodyController(
+            BlackBodySettings settings,
+            Func<BlackBodyUnitSettings, ISrLink>? linkFactory = null,
+            IPlcController? plc = null)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            Func<SerialSettings, ISrLink> factory = linkFactory ?? DefaultLink;
+            _plc = plc;
+            Func<BlackBodyUnitSettings, ISrLink> factory = linkFactory ?? DefaultLink;
             var units = new List<Unit>();
-            foreach (SerialSettings cfg in settings.Units)
+            foreach (BlackBodyUnitSettings cfg in settings.Units)
                 units.Add(new Unit(cfg, factory(cfg)));
             _units = units.ToArray();
         }
 
-        private ISrLink DefaultLink(SerialSettings cfg)
+        private ISrLink DefaultLink(BlackBodyUnitSettings cfg)
             => _settings.Simulated
                 ? new SimulatedSrDevice(_settings)
-                : new SerialPortSrLink(cfg, _settings.ReadTimeoutMs);
+                : cfg.ConnectionType == BlackBodyConnectionType.Ip
+                    ? new UdpSrLink(cfg, _settings.ReadTimeoutMs)
+                    : new SerialPortSrLink(cfg, _settings.ReadTimeoutMs);
 
         public int Count => _units.Length;
         public bool IsConnected => _connected;
@@ -67,7 +74,7 @@ namespace HeatingCameraSystem.Protocols
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[SrBlackBody] connect unit {u.Config.PortName} failed: {ex.Message}");
+                    Debug.WriteLine($"[SrBlackBody] connect unit {Describe(u.Config)} failed: {ex.Message}");
                 }
                 finally { u.Gate.Release(); }
             }
@@ -79,13 +86,17 @@ namespace HeatingCameraSystem.Protocols
             foreach (Unit u in _units)
             {
                 try { if (u.Link.IsOpen) u.Link.Close(); }
-                catch (Exception ex) { Debug.WriteLine($"[SrBlackBody] close {u.Config.PortName}: {ex.Message}"); }
+                catch (Exception ex) { Debug.WriteLine($"[SrBlackBody] close {Describe(u.Config)}: {ex.Message}"); }
             }
             _connected = false;
         }
 
         public Task SetTemperatureAsync(int blackBodyIndex, float celsius)
-            => WithUnit(blackBodyIndex, u => SendNoReplyLocked(u, SrProtocol.SetTemperature(celsius)));
+            => _plc == null
+                ? WithUnit(blackBodyIndex, u => SendNoReplyLocked(u, SrProtocol.SetTemperature(celsius)))
+                : Task.WhenAll(
+                    WithUnit(blackBodyIndex, u => SendNoReplyLocked(u, SrProtocol.SetTemperature(celsius))),
+                    _plc.SetBlackBodyTemperatureAsync(blackBodyIndex, celsius));
 
         public Task<float> GetCurrentTemperatureAsync(int blackBodyIndex)
             => WithUnit(blackBodyIndex, u => QueryFloatLocked(u, SrProtocol.GetTemperature(), SrProtocol.ParamCurrentTemperature));
@@ -156,5 +167,10 @@ namespace HeatingCameraSystem.Protocols
             int wait = _settings.InterMessageDelayMs - (int)elapsedMs;
             if (wait > 0) Thread.Sleep(wait);
         }
+
+        private static string Describe(BlackBodyUnitSettings config)
+            => config.ConnectionType == BlackBodyConnectionType.Ip
+                ? $"{config.IpAddress}:{config.Port}"
+                : config.PortName;
     }
 }

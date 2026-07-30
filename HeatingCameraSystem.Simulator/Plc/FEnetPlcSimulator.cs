@@ -67,12 +67,13 @@ public sealed class FEnetPlcSimulator : IPlcSimulatorEndpoint
     {
         WriteScaled(_plc.TempPv, 25.0f, 10);
         WriteScaled(_plc.TempSv, 25.0f, 10);
+        WriteScaled(_plc.TempTarget, 25.0f, 10);
         WriteScaled(_plc.HumPv, 50.0f, 10);
         WriteScaled(_plc.HumSv, 50.0f, 10);
-        WriteScaled(_plc.Bb1Pv, 25.0f, 10);
-        WriteScaled(_plc.Bb1Sv, 25.0f, 10);
-        WriteScaled(_plc.Bb2Pv, 25.0f, 10);
-        WriteScaled(_plc.Bb2Sv, 25.0f, 10);
+        WriteScaled(_plc.Bb1Pv, 25.0f, 100);
+        WriteScaled(_plc.Bb1Sv, 25.0f, 100);
+        WriteScaled(_plc.Bb2Pv, 25.0f, 100);
+        WriteScaled(_plc.Bb2Sv, 25.0f, 100);
         _memory.WriteWordToken(_plc.ServoCurrentPoint, 0);
         _memory.WriteBitToken(_plc.ServoXHomeBit, true);
         _memory.WriteBitToken(_plc.ServoYHomeBit, true);

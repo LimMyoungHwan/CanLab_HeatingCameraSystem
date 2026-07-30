@@ -112,8 +112,8 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private float _blackBody2Pv;
         [ObservableProperty] private float _blackBody2Sv;
 
-        [ObservableProperty] private int _servoXPosition;
-        [ObservableProperty] private int _servoYPosition;
+        [ObservableProperty] private float _servoXPosition;
+        [ObservableProperty] private float _servoYPosition;
         [ObservableProperty] private bool _servoXBusy;
         [ObservableProperty] private bool _servoYBusy;
         [ObservableProperty] private bool _servoXHomeComplete;

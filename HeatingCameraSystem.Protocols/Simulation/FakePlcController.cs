@@ -16,12 +16,12 @@ namespace HeatingCameraSystem.Protocols.Simulation
         private float _targetHum;
         private bool _humidityOn;
         private int _currentPoint = -1;
-        private int _servoX;
-        private int _servoY;
+        private float _servoX;
+        private float _servoY;
         private int _servoSpeedPercent = 100;
         private float _fanHz;
         private readonly ConcurrentDictionary<int, float> _bbCurrent = new();
-        private readonly ConcurrentDictionary<int, (int X, int Y)> _pointCoords = new();
+        private readonly ConcurrentDictionary<int, (float X, float Y)> _pointCoords = new();
         private readonly ConcurrentDictionary<PlcEquipment, bool> _equipment = new();
         private PlcAdminSettings _admin = new();
 
@@ -67,8 +67,16 @@ namespace HeatingCameraSystem.Protocols.Simulation
         public Task SetTargetTemperatureAsync(float temperature)
         {
             EnsureConnected();
-            lock (_gate) { _targetTemp = temperature; _currentTemp = temperature; }
-            Log($"SetTargetTemperatureAsync({temperature}) -> current snaps to target");
+            lock (_gate) _targetTemp = temperature;
+            Log($"SetTargetTemperatureAsync({temperature})");
+            return Task.CompletedTask;
+        }
+
+        public Task SetControlTemperatureAsync(float temperature)
+        {
+            EnsureConnected();
+            lock (_gate) _currentTemp = temperature;
+            Log($"SetControlTemperatureAsync({temperature}) -> current snaps to control");
             return Task.CompletedTask;
         }
 
@@ -118,6 +126,13 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.FromResult(_bbCurrent.GetOrAdd(blackBodyIndex, 25.0f));
         }
 
+        public Task WriteBlackBodyTemperaturesAsync(int blackBodyIndex, float currentTemperature, float targetTemperature)
+        {
+            EnsureConnected();
+            _bbCurrent[blackBodyIndex] = currentTemperature;
+            return Task.CompletedTask;
+        }
+
         public Task MoveServoToPositionAsync(int positionIndex)
         {
             EnsureConnected();
@@ -160,7 +175,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
-        public Task SetPointCoordinateAsync(int positionIndex, int x, int y)
+        public Task SetPointCoordinateAsync(int positionIndex, float x, float y)
         {
             EnsureConnected();
             _pointCoords[positionIndex] = (x, y);
@@ -168,13 +183,13 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
-        public Task<(int X, int Y)> GetPointCoordinateAsync(int positionIndex)
+        public Task<(float X, float Y)> GetPointCoordinateAsync(int positionIndex)
         {
             EnsureConnected();
-            return Task.FromResult(_pointCoords.GetOrAdd(positionIndex, (0, 0)));
+            return Task.FromResult(_pointCoords.GetOrAdd(positionIndex, (0f, 0f)));
         }
 
-        public Task MoveToCoordinateAsync(int x, int y)
+        public Task MoveToCoordinateAsync(float x, float y)
         {
             EnsureConnected();
             lock (_gate) { _servoX = x; _servoY = y; _currentPoint = 0; }
@@ -217,8 +232,9 @@ namespace HeatingCameraSystem.Protocols.Simulation
                 snap.CurrentHumidity = _currentHum;
                 snap.TargetHumidity = _targetHum;
                 snap.CurrentPoint = _currentPoint;
-                snap.ServoXPosition = _servoX;
-                snap.ServoYPosition = _servoY;
+                // 실 PLC 워드는 0.1mm 단위이므로 동일한 분해능으로 양자화.
+                snap.ServoXPosition = MathF.Round(_servoX, 1);
+                snap.ServoYPosition = MathF.Round(_servoY, 1);
                 snap.FanSpeedHz = _fanHz;
                 snap.Heater = true;
                 snap.Blower1 = _equipment.GetValueOrDefault(PlcEquipment.Blower1);
@@ -238,6 +254,20 @@ namespace HeatingCameraSystem.Protocols.Simulation
         {
             EnsureConnected();
             Log("TriggerEmergencyStopAsync() -> ESTOP");
+            return Task.CompletedTask;
+        }
+
+        public Task ResetErrorAsync()
+        {
+            EnsureConnected();
+            Log("ResetErrorAsync() -> pulse");
+            return Task.CompletedTask;
+        }
+
+        public Task BuzzerOffAsync()
+        {
+            EnsureConnected();
+            Log("BuzzerOffAsync() -> pulse");
             return Task.CompletedTask;
         }
 

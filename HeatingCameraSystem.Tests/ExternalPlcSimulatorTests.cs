@@ -28,26 +28,34 @@ public class ExternalPlcSimulatorTests
         Assert.Equal(25.0f, await client.GetCurrentTemperatureAsync(), precision: 1);
         Assert.Equal(50.0f, await client.GetCurrentHumidityAsync(), precision: 1);
 
+        var plcSettings = new PlcSettings();
         await client.SetTargetTemperatureAsync(40.0f);
+        PlcStatusSnapshot targetSet = await client.ReadStatusAsync();
+        Assert.Equal(40.0f, targetSet.TargetTemperature, precision: 1);
+        Assert.Equal(25.0f, targetSet.CurrentTemperature, precision: 1);
+        Assert.Equal(400, simulator.Memory.ReadWordToken(plcSettings.TempTarget));
+        Assert.Equal(250, simulator.Memory.ReadWordToken(plcSettings.TempSv));
+        await client.SetControlTemperatureAsync(40.0f);
+        Assert.Equal(400, simulator.Memory.ReadWordToken(plcSettings.TempSv));
         await WaitUntilAsync(async () => await client.GetCurrentTemperatureAsync() >= 39.5f, TimeSpan.FromSeconds(2));
 
         await client.SetBlackBodyTemperatureAsync(0, 55.0f);
         await WaitUntilAsync(async () => await client.GetCurrentBlackBodyTemperatureAsync(0) >= 54.5f, TimeSpan.FromSeconds(2));
 
-        await client.SetPointCoordinateAsync(1, 123, 456);
+        await client.SetPointCoordinateAsync(1, 123.5f, 456.5f);
         await client.MoveServoToPositionAsync(1);
         await WaitUntilAsync(async () => (await client.ReadStatusAsync()).ServoXBusy, TimeSpan.FromSeconds(1));
         await WaitUntilAsync(async () => await client.IsServoAtPositionAsync(1), TimeSpan.FromSeconds(2));
 
         PlcStatusSnapshot moved = await client.ReadStatusAsync();
-        Assert.Equal(123, moved.ServoXPosition);
-        Assert.Equal(456, moved.ServoYPosition);
+        Assert.Equal(123.5f, moved.ServoXPosition, precision: 2);
+        Assert.Equal(456.5f, moved.ServoYPosition, precision: 2);
 
         await client.SetEquipmentAsync(PlcEquipment.Blower1, true);
         await client.SetFanSpeedAsync(37.5f);
         var admin = new PlcAdminSettings { OverheatLimit = 91.2f, CoolerDelayMinutes = 7 };
         await client.WriteAdminSettingsAsync(admin);
-        simulator.Memory.WriteBitToken(new PlcSettings().ErrorBitBase, true);
+        simulator.Memory.WriteBitToken(plcSettings.ErrorBitBase, true);
 
         await WaitUntilAsync(async () => (await client.ReadStatusAsync()).Blower1, TimeSpan.FromSeconds(1));
         PlcStatusSnapshot status = await client.ReadStatusAsync();

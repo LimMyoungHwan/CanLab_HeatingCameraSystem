@@ -17,8 +17,8 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private int _stepNumber;
         [ObservableProperty] private string _nodeAssignment = string.Empty;
         [ObservableProperty] private float _blackbodyRef;
-        [ObservableProperty] private int _positionX;
-        [ObservableProperty] private int _positionY;
+        [ObservableProperty] private float _positionX;
+        [ObservableProperty] private float _positionY;
         [ObservableProperty] private double _targetChamberTemperature;
         [ObservableProperty] private double _targetChamberHumidity;
 

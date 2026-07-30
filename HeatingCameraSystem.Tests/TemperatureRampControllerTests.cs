@@ -11,7 +11,7 @@ namespace HeatingCameraSystem.Tests
         {
             var values = new List<float>();
             var plc = new Mock<IPlcController>();
-            plc.Setup(p => p.SetTargetTemperatureAsync(It.IsAny<float>()))
+            plc.Setup(p => p.SetControlTemperatureAsync(It.IsAny<float>()))
                 .Callback<float>(values.Add)
                 .Returns(Task.CompletedTask);
 
@@ -27,7 +27,32 @@ namespace HeatingCameraSystem.Tests
             await controller.RampAsync(10f, 20f, 1, null, CancellationToken.None);
 
             Assert.NotEmpty(values);
+            Assert.Equal(10f, values[0]);
             Assert.All(values.Zip(values.Skip(1)), pair => Assert.True(pair.First <= pair.Second));
+            Assert.Equal(20f, values[^1]);
+            plc.Verify(p => p.SetTargetTemperatureAsync(20f), Times.Once);
+        }
+
+        [Fact]
+        public async Task RampAsync_DecreasesMonotonicallyFromCurrentToTarget()
+        {
+            var values = new List<float>();
+            var plc = new Mock<IPlcController>();
+            plc.Setup(p => p.SetControlTemperatureAsync(It.IsAny<float>()))
+                .Callback<float>(values.Add)
+                .Returns(Task.CompletedTask);
+            var now = DateTime.UtcNow;
+            Task AdvanceTime(TimeSpan delay, CancellationToken _)
+            {
+                now += delay;
+                return Task.CompletedTask;
+            }
+            var controller = new TemperatureRampController(plc.Object, 10, AdvanceTime, () => now);
+
+            await controller.RampAsync(30f, 20f, 1, null, CancellationToken.None);
+
+            Assert.Equal(30f, values[0]);
+            Assert.All(values.Zip(values.Skip(1)), pair => Assert.True(pair.First >= pair.Second));
             Assert.Equal(20f, values[^1]);
         }
 
@@ -36,7 +61,7 @@ namespace HeatingCameraSystem.Tests
         {
             var values = new List<float>();
             var plc = new Mock<IPlcController>();
-            plc.Setup(p => p.SetTargetTemperatureAsync(It.IsAny<float>()))
+            plc.Setup(p => p.SetControlTemperatureAsync(It.IsAny<float>()))
                 .Callback<float>(values.Add)
                 .Returns(Task.CompletedTask);
 
@@ -69,6 +94,7 @@ namespace HeatingCameraSystem.Tests
                 await controller.RampAsync(10f, 20f, minutes, null, CancellationToken.None);
 
                 plc.Verify(p => p.SetTargetTemperatureAsync(20f), Times.Once);
+                plc.Verify(p => p.SetControlTemperatureAsync(20f), Times.Once);
                 plc.VerifyNoOtherCalls();
             }
         }

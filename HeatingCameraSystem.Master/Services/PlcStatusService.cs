@@ -10,6 +10,7 @@ namespace HeatingCameraSystem.Master.Services
     public partial class PlcStatusService : ObservableObject
     {
         private readonly IPlcController? _plc;
+        private readonly IBlackBodyController? _blackBody;
         private readonly DispatcherTimer _timer;
         private bool[]? _prevErrorBits;
         private bool _wasConnected = true;
@@ -22,9 +23,10 @@ namespace HeatingCameraSystem.Master.Services
 
         public event EventHandler<PlcStatusSnapshot>? Updated;
 
-        public PlcStatusService(IPlcController? plc, int intervalSeconds = 1)
+        public PlcStatusService(IPlcController? plc, IBlackBodyController? blackBody = null, int intervalSeconds = 1)
         {
             _plc = plc;
+            _blackBody = blackBody;
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(intervalSeconds) };
             _timer.Tick += async (_, _) => await PollAsync();
         }
@@ -40,6 +42,17 @@ namespace HeatingCameraSystem.Master.Services
             try
             {
                 var s = await _plc.ReadStatusAsync();
+                if (_blackBody != null)
+                {
+                    for (int i = 0; i < _blackBody.Count; i++)
+                    {
+                        float current = await _blackBody.GetCurrentTemperatureAsync(i);
+                        float target = await _blackBody.GetTargetTemperatureAsync(i);
+                        await _plc.WriteBlackBodyTemperaturesAsync(i, current, target);
+                        if (i == 0) { s.BlackBody1Pv = current; s.BlackBody1Sv = target; }
+                        if (i == 1) { s.BlackBody2Pv = current; s.BlackBody2Sv = target; }
+                    }
+                }
                 Snapshot = s;
                 IsEmergencyStop = s.ErrorBits.Length > 0 && s.ErrorBits[0];
                 RaiseErrorEdges(s.ErrorBits);
@@ -63,6 +76,8 @@ namespace HeatingCameraSystem.Master.Services
                 Updated?.Invoke(this, Snapshot);
             }
         }
+
+        public Task RefreshAsync() => PollAsync();
 
         private void RaiseErrorEdges(bool[] bits)
         {

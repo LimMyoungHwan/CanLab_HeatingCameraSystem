@@ -97,9 +97,9 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="{loc:Loc Status_XPos}" Style="{StaticResource Lbl}"/>
-                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ServoXPosition}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ServoXPosition, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
                             <TextBlock Grid.Row="1" Text="{loc:Loc Status_YPos}" Style="{StaticResource Lbl}"/>
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ServoYPosition}" Style="{StaticResource Val}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ServoYPosition, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
                             <TextBlock Grid.Row="2" Text="{loc:Loc Status_CurrentPoint}" Style="{StaticResource Lbl}"/>
                             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CurrentPoint}" Style="{StaticResource Val}"/>
                             <TextBlock Grid.Row="3" Text="{loc:Loc Dash_XErrorCode}" Style="{StaticResource Lbl}"/>
