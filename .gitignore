@@ -47,3 +47,6 @@ docs/PC통신라이브러리예제/
 HeatingCameraSystem.Simulator/ImageStorage/
 HeatingCameraSystem.Simulator/simulator.json
 ImageStorage/
+
+# E2EDriver live-capture run logs
+e2e-live-capture-*.log

@@ -17,6 +17,9 @@ internal static class Program
 
     private static async Task<int> Main(string[] args)
     {
+        if (args.Length > 0 && args[0].Equals("--live-capture", StringComparison.OrdinalIgnoreCase))
+            return await LiveCaptureProof.RunAsync(args);
+
         if (args.Length > 0 && args[0].Equals("--external-simulator", StringComparison.OrdinalIgnoreCase))
             return await RunExternalSimulatorAsync(args);
 
