@@ -31,5 +31,19 @@ Thumbs.db
 desktop.ini
 .DS_Store
 
-# Logs
-*.log
+# Agent/IDE tool state
+.bkit/
+.council/
+.omo/run-continuation/
+.omo/boulder.json
+
+# Vendor SDK docs (kept locally, not in repo)
+docs/EnetClient.zip
+docs/EnetClient/
+docs/PC통신라이브러리예제*.zip
+docs/PC통신라이브러리예제/
+
+# Simulator runtime output
+HeatingCameraSystem.Simulator/ImageStorage/
+HeatingCameraSystem.Simulator/simulator.json
+ImageStorage/
