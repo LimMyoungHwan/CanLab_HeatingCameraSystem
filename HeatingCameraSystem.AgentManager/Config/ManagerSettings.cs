@@ -26,5 +26,11 @@ namespace HeatingCameraSystem.AgentManager.Config
         public bool   WarnAlertEnabled    { get; set; } = false;
         public string InstallRoot         { get; set; } = @"C:\HeatingCameraSystem";
         public string AgentExePath        { get; set; } = @"C:\HeatingCameraSystem\Agent\HeatingCameraSystem.Agent.exe";
+
+        // [S7] Path to the single WPF AgentUI that now owns all local cameras. Retained alongside
+        // AgentExePath (console Agent) during migration. NOTE: the Manager service does NOT launch
+        // this itself (session-0 isolation + UVC single-handle) — a logon Scheduled Task (S8) does.
+        // Kept in settings for S8 deployment/diagnostics and future interactive-mode launch.
+        public string AgentUiExePath      { get; set; } = @"C:\HeatingCameraSystem\AgentUI\HeatingCameraSystem.AgentUI.exe";
     }
 }

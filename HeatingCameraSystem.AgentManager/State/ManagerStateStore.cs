@@ -54,6 +54,14 @@ namespace HeatingCameraSystem.AgentManager.State
                 return _state.Cameras.FirstOrDefault(c => c.HardwareId == hardwareId);
         }
 
+        // [S7] Reverse lookup by logical AgentId — used by AgentSupervisor.NoteHeartbeat to
+        // reconcile a heartbeat (keyed by AgentId) back to its CameraEntry (keyed by HardwareId).
+        public CameraEntry? GetByAgentId(string agentId)
+        {
+            lock (_lock)
+                return _state.Cameras.FirstOrDefault(c => c.AgentId == agentId);
+        }
+
         public void Upsert(CameraEntry entry)
         {
             lock (_lock)

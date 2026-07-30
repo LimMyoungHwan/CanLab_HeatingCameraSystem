@@ -70,7 +70,7 @@ docker compose -f docs/deployment/docker-compose.yml up -d
 
 ## 5. Camera PC 배포 (카메라당)
 
-### 5a. AgentUI (운영자 UI 버전)
+### 5a. AgentUI (운영자 UI 버전, 권장)
 
 1. `agent_bin\` 폴더를 Camera PC로 복사.
 2. `HeatingCameraSystem.AgentUI.exe` 실행 → `%LOCALAPPDATA%\HeatingCameraSystem\AgentUI\agentui.json` 자동 생성.
@@ -79,8 +79,15 @@ docker compose -f docs/deployment/docker-compose.yml up -d
    - `NATS URL`: `nats://<서버IP>:4222`
    - 카메라 행마다 `Device Name`(예: `CLTC_T_VGA_G2_S_r150`) 입력 → **`COM 자동 감지`** → COM 자동 매칭 → **Save**
 4. 재시작.
+5. **자동 시작(권장)**: 관리자 PowerShell에서
+   `./docs/deployment/install-agentui-task.ps1 -InstallRoot C:\HeatingCameraSystem`
+   → 로그온 시 AgentUI 자동 실행(실패 시 3회 재시작) 예약작업 등록. 무인 운영은 **자동 로그인** 필요
+   (Sysinternals Autologon 권장 — 스크립트 `.DESCRIPTION` 참고). 창 없이 서빙만 하려면 `-Headless`.
 
-### 5b. Agent (헤드리스 콘솔 버전)
+### 5b. Agent (헤드리스 콘솔 버전 — 진단/폴백용)
+
+> AgentUI(5a)가 기본 배포 경로다. 콘솔 Agent 는 은퇴하지 않고 **단일 카메라 진단·폴백**용으로 유지된다
+> (Manager 자동 감독 경로에서는 더 이상 spawn 되지 않음 — S7).
 
 1. `agent_console_bin\` 폴더를 Camera PC로 복사.
 2. 실행: `HeatingCameraSystem.Agent.exe` (인수로 오버라이드 가능: `HeatingCameraSystem.Agent.exe Agent_Bay1 nats://<서버IP>:4222`).

@@ -101,6 +101,9 @@ public class ManagerWorker : BackgroundService
         _cmdHandler.Subscribe();
         _logDump.Subscribe();
 
+        // [S7] Feed AgentUI per-camera heartbeats into the supervisor for liveness + disable reconcile.
+        await _nats.SubscribeAgentStatusAsync(status => _supervisor.NoteHeartbeat(status.AgentId));
+
         // Initial camera enumeration: merge discovered with stored state
         var discovered = _enumerator.Enumerate();
         foreach (var cam in discovered)
@@ -142,19 +145,6 @@ public class ManagerWorker : BackgroundService
         // PnP change watcher
         _enumerator.Changed += OnPnpChanged;
         _enumerator.StartWatching();
-
-        // Alert on permanently dropped agents
-        _supervisor.AgentDropped += (hwId, reason) =>
-        {
-            _ = _nats.PublishLogAlertAsync(new LogAlertMessage
-            {
-                PCId      = _settings.PCId,
-                AgentId   = _store.GetByHardwareId(hwId)?.AgentId ?? hwId,
-                Level     = LogAlertLevel.Fatal,
-                Message   = $"Agent permanently dropped: {reason}",
-                Timestamp = DateTime.UtcNow,
-            });
-        };
 
         // Publish initial inventory
         await _inventory.PublishAsync();
@@ -200,8 +190,9 @@ public class ManagerWorker : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
+        // [S7] Do NOT unload AgentUI cameras on service stop — AgentUI runs independently
+        // (logon Scheduled Task) and must keep serving standalone when the Manager is down.
         _enumerator.StopWatching();
-        _supervisor.KillAll();
         _logTail.Dispose();
         await _nats.DisposeAsync();
         await base.StopAsync(cancellationToken);

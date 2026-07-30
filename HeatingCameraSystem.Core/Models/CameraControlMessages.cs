@@ -20,6 +20,13 @@ namespace HeatingCameraSystem.Core.Models
         public const string Nuc = "nuc";
         public const string SaveConfig = "saveConfig";
         public const string RefreshInfo = "refreshInfo";
+
+        // [S7] Per-camera runtime load/unload — distinct from serial Run/Stop above.
+        // The Manager (redefined AgentSupervisor) uses these to load/unload a single camera
+        // runtime inside the one AgentUI process without killing the process. runtimeLoad is
+        // idempotent (re)load, so a Restart is a single Load message (no unload→load race).
+        public const string RuntimeLoad = "runtimeLoad";
+        public const string RuntimeUnload = "runtimeUnload";
     }
 
     public class CameraControlAckMessage

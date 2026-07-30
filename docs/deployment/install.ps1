@@ -19,13 +19,14 @@ $ErrorActionPreference = "Stop"
 
 $managerDir = Join-Path $InstallRoot "Manager"
 $agentDir   = Join-Path $InstallRoot "Agent"
+$agentUiDir = Join-Path $InstallRoot "AgentUI"
 $logsDir    = Join-Path $InstallRoot "logs"
 
 Write-Host "=== HeatingCameraSystem Manager Installer ===" -ForegroundColor Cyan
 Write-Host "Install root: $InstallRoot"
 
 # 1. 디렉터리 생성
-foreach ($dir in @($managerDir, $agentDir, $logsDir)) {
+foreach ($dir in @($managerDir, $agentDir, $agentUiDir, $logsDir)) {
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         Write-Host "  Created: $dir"
@@ -41,13 +42,15 @@ if (-not $NatsUrl) {
 # 3. manager-settings.json 생성
 $settingsPath = Join-Path $managerDir "manager-settings.json"
 $settings = @{
-    PCId             = $env:COMPUTERNAME
-    NatsUrl          = $NatsUrl
-    SimulationMode   = $false
-    LogRetentionDays = 7
-    WarnAlertEnabled = $false
-    InstallRoot      = $InstallRoot
-    AgentExePath     = Join-Path $agentDir "HeatingCameraSystem.Agent.exe"
+    PCId                = $env:COMPUTERNAME
+    NatsUrl             = $NatsUrl
+    SimulateEnumeration = $false
+    SimulateAgentMode   = $false
+    LogRetentionDays    = 7
+    WarnAlertEnabled    = $false
+    InstallRoot         = $InstallRoot
+    AgentExePath        = Join-Path $agentDir "HeatingCameraSystem.Agent.exe"
+    AgentUiExePath      = Join-Path $agentUiDir "HeatingCameraSystem.AgentUI.exe"
 } | ConvertTo-Json -Depth 3
 
 Set-Content -Path $settingsPath -Value $settings -Encoding UTF8
@@ -66,7 +69,7 @@ if ($existing) {
 }
 
 & sc.exe create $serviceName binPath= "`"$exePath`" `"$InstallRoot`"" start= auto obj= LocalSystem displayname= "HCS Agent Manager"
-& sc.exe description $serviceName "HeatingCameraSystem Agent Manager - camera auto-discovery and Agent process supervisor"
+& sc.exe description $serviceName "HeatingCameraSystem Agent Manager - camera approval/inventory + AgentUI runtime supervisor over NATS (S7)"
 & sc.exe failure $serviceName reset= 0 actions= restart/5000/restart/5000/restart/5000
 
 Write-Host "  Service '$serviceName' registered." -ForegroundColor Green
@@ -86,7 +89,9 @@ if (-not $existingRule) {
 Write-Host ""
 Write-Host "=== Installation Complete ===" -ForegroundColor Cyan
 Write-Host "Next steps:"
-Write-Host "  1. Copy Manager build output to: $managerDir"
-Write-Host "  2. Copy Agent build output to:   $agentDir"
-Write-Host "  3. Start service: Start-Service $serviceName"
-Write-Host "  4. Verify: Get-Service $serviceName"
+Write-Host "  1. Copy Manager build output to:  $managerDir"
+Write-Host "  2. Copy AgentUI build output to:  $agentUiDir  (primary camera app)"
+Write-Host "  3. Register AgentUI logon task:   ./docs/deployment/install-agentui-task.ps1 -InstallRoot $InstallRoot"
+Write-Host "  4. Start service: Start-Service $serviceName"
+Write-Host "  5. Verify: Get-Service $serviceName"
+Write-Host "  (console Agent at $agentDir is optional - diagnostic/fallback only)"

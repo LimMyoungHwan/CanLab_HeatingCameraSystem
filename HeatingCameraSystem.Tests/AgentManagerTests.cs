@@ -120,6 +120,92 @@ namespace HeatingCameraSystem.Tests
         }
     }
 
+    // ── AgentSupervisor 재정의 (S7): NATS 런타임 load/unload + heartbeat 기반 IsRunning ──
+
+    public class AgentSupervisorRedefinedTests : IDisposable
+    {
+        private readonly string _tempDir;
+        private readonly ManagerStateStore _store;
+        private readonly List<CameraControlMessage> _published = new();
+        private readonly AgentSupervisor _supervisor;
+
+        public AgentSupervisorRedefinedTests()
+        {
+            _tempDir = Path.Combine(Path.GetTempPath(), $"hcs_sup7_{Guid.NewGuid():N}");
+            Directory.CreateDirectory(_tempDir);
+            _store = new ManagerStateStore(_tempDir);
+
+            var nats = new Mock<INatsCommunicationService>();
+            nats.Setup(n => n.PublishCameraControlAsync(It.IsAny<CameraControlMessage>()))
+                .Callback<CameraControlMessage>(m => _published.Add(m))
+                .Returns(Task.CompletedTask);
+
+            _supervisor = new AgentSupervisor(new ManagerSettings(), _store,
+                NullLogger<AgentSupervisor>.Instance, nats.Object);
+        }
+
+        private CameraEntry Approve(string hardwareId, string agentId, bool disabled = false)
+        {
+            var entry = new CameraEntry
+            {
+                HardwareId = hardwareId,
+                AgentId    = agentId,
+                OpenCvIndex = 1,
+                IsApproved = true,
+                IsDisabled = disabled,
+            };
+            _store.Upsert(entry);
+            return entry;
+        }
+
+        [Fact]
+        public void Spawn_PublishesRuntimeLoad_NoProcess()
+        {
+            _supervisor.Spawn(Approve("HW1", "PC_a1"));
+
+            Assert.Contains(_published, m => m.AgentId == "PC_a1" && m.Op == CameraControlOps.RuntimeLoad);
+        }
+
+        [Fact]
+        public void Kill_PublishesRuntimeUnload()
+        {
+            _supervisor.Spawn(Approve("HW2", "PC_a2"));
+            _published.Clear();
+
+            _supervisor.Kill("HW2");
+
+            Assert.Contains(_published, m => m.AgentId == "PC_a2" && m.Op == CameraControlOps.RuntimeUnload);
+        }
+
+        [Fact]
+        public void IsRunning_TrueOnlyAfterHeartbeat()
+        {
+            _supervisor.Spawn(Approve("HW3", "PC_a3"));
+            Assert.False(_supervisor.IsRunning("HW3"));
+
+            _supervisor.NoteHeartbeat("PC_a3");
+            Assert.True(_supervisor.IsRunning("HW3"));
+        }
+
+        [Fact]
+        public void NoteHeartbeat_DisabledCamera_ReUnloads()
+        {
+            Approve("HW4", "PC_a4", disabled: true);
+            _published.Clear();
+
+            _supervisor.NoteHeartbeat("PC_a4");
+
+            Assert.Contains(_published, m => m.AgentId == "PC_a4" && m.Op == CameraControlOps.RuntimeUnload);
+        }
+
+        public void Dispose()
+        {
+            _supervisor.Dispose();
+            try { Directory.Delete(_tempDir, true); }
+            catch { /* best effort cleanup */ }
+        }
+    }
+
     // ── ManagerSettings 플래그 분리 검증 ─────────────────────────────────────────
     // [SC-12 범위 2] Plan SC: SC-04 — ManagerSettings JSON 왕복 직렬화 검증.
 

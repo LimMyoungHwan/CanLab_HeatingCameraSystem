@@ -46,6 +46,14 @@ namespace HeatingCameraSystem.AgentUI
 
             AgentUiLog.Initialize();
 
+            // [S8] Headless deploy mode: run cameras + NATS with no window. WPF would exit on
+            // last-window-close, so switch to explicit shutdown before skipping the MainWindow.
+            bool headless = e.Args.Any(a => a.Equals("--headless", StringComparison.OrdinalIgnoreCase));
+            if (headless)
+            {
+                ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            }
+
             AgentUiConfig config = AgentUiConfig.LoadOrCreate();
 
             Func<CameraDescriptor, ICameraRuntime> sourceFactory = config.SimulationMode
@@ -144,6 +152,22 @@ namespace HeatingCameraSystem.AgentUI
                 {
                     try
                     {
+                        // [S7] Per-camera runtime load/unload from the Manager: release or
+                        // re-acquire ONE camera's UVC handle without touching the others or the
+                        // process. runtimeLoad is an idempotent reload (drop stale, re-add, start).
+                        if (op == CameraControlOps.RuntimeUnload)
+                        {
+                            _manager!.Remove(descriptor.AgentId);
+                            return (true, "runtime unloaded");
+                        }
+                        if (op == CameraControlOps.RuntimeLoad)
+                        {
+                            _manager!.Remove(descriptor.AgentId);
+                            ICameraRuntime runtime = _manager.Add(descriptor);
+                            await runtime.StartAsync();
+                            return (true, "runtime loaded");
+                        }
+
                         CameraPanelViewModel? panel = _mainViewModel?.Cameras
                             .FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId);
                         if (panel is null)
@@ -181,6 +205,12 @@ namespace HeatingCameraSystem.AgentUI
             AgentUiLog.Logger.Information(
                 "AgentUI started: {CameraCount} cameras, simulation={Simulation}, nats={NatsUrl}",
                 config.Cameras.Count, config.SimulationMode, config.NatsUrl);
+
+            if (headless)
+            {
+                AgentUiLog.Logger.Information("AgentUI started headless — no window; NATS + camera runtimes active.");
+                return;
+            }
 
             _mainViewModel.DataBrowser = new DataBrowserViewModel(_store);
             _mainViewModel.Logs = new LogViewerViewModel(AgentUiLog.LogDir);

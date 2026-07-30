@@ -91,11 +91,10 @@ namespace HeatingCameraSystem.AgentManager.Services
                     break;
 
                 case ManagerCommandOp.Restart:
+                    // [S7] runtimeLoad is an idempotent reload, so a restart is a single Load
+                    // message to AgentUI — no unload->load NATS race.
                     if (entry is not null)
-                    {
-                        _supervisor.Kill(cmd.HardwareId);
                         _supervisor.Spawn(entry);
-                    }
                     break;
 
                 case ManagerCommandOp.Disable:
