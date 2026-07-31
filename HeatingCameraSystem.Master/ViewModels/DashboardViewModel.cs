@@ -12,6 +12,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Master.Localization;
 using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
@@ -143,6 +144,11 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private bool _isEmergencyStop;
         [ObservableProperty] private bool _hasActiveErrors;
 
+        // PLC 에러 엣지 후 Recipe Start 인터록: 에러 클리어 + 서보 원점(±0.5mm) 복귀 전까지 잠금 유지.
+        [ObservableProperty]
+        [NotifyCanExecuteChangedFor(nameof(StartRecipeCommand))]
+        private bool _recoveryLockActive;
+
         public ObservableCollection<DashboardSlot> CameraFeeds { get; } = new ObservableCollection<DashboardSlot>();
         public ObservableCollection<AgentNode> Agents { get; } = new ObservableCollection<AgentNode>();
         public ObservableCollection<Recipe> Recipes { get; } = new ObservableCollection<Recipe>();
@@ -161,12 +167,14 @@ namespace HeatingCameraSystem.Master.ViewModels
         private readonly IPlcController? _plcController;
         private readonly INatsCommunicationService? _natsService;
         private readonly IDashboardLayoutRepository? _dashboardLayoutRepo;
+        private readonly IDialogService? _dialogService;
         private readonly Func<IEnumerable<Recipe>> _loadRecipes;
         private readonly Dictionary<int, List<DashboardLayoutSlot>> _persistedLayout = new();
         private readonly Queue<(float Temperature, float Humidity)> _samples = new();
         private bool _recipeRunning;
         private bool _plcErrorLatched;
         private int _activeRecipeStepIndex = -1;
+        private const float OriginToleranceMm = 0.5f;
         private CancellationTokenSource? _recipeCts;
         private System.Windows.Threading.DispatcherTimer? _offlineCheckTimer;
 
@@ -176,7 +184,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                 AppServices.NatsService,
                 () => AppServices.RecipeRepo?.GetAllAsync().GetAwaiter().GetResult() ?? Array.Empty<Recipe>(),
                 true,
-                AppServices.DashboardLayoutRepo)
+                AppServices.DashboardLayoutRepo,
+                AppServices.DialogService)
         {
         }
 
@@ -185,11 +194,13 @@ namespace HeatingCameraSystem.Master.ViewModels
             INatsCommunicationService? natsService,
             Func<IEnumerable<Recipe>>? loadRecipes,
             bool startTimers,
-            IDashboardLayoutRepository? dashboardLayoutRepo = null)
+            IDashboardLayoutRepository? dashboardLayoutRepo = null,
+            IDialogService? dialogService = null)
         {
             _plcController = plcController;
             _natsService = natsService;
             _dashboardLayoutRepo = dashboardLayoutRepo;
+            _dialogService = dialogService;
             _loadRecipes = loadRecipes ?? (() => Array.Empty<Recipe>());
             CurrentTemperature = 0f;
             CurrentHumidity = 0f;
@@ -474,6 +485,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             UpdateActiveErrors(s.ErrorBits);
             HandlePlcErrors(s.ErrorBits);
+            ReleaseRecoveryLockIfRecovered(s);
             AddTrendSample(CurrentTemperature, CurrentHumidity);
         }
 
@@ -486,6 +498,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             if (anyError && !_plcErrorLatched)
             {
                 _plcErrorLatched = true;
+                RecoveryLockActive = true;
 
                 var names = PlcDeviceCatalog.ErrorNames;
                 var fired = new List<string>();
@@ -493,25 +506,62 @@ namespace HeatingCameraSystem.Master.ViewModels
                     if (errorBits[i] && !string.IsNullOrEmpty(names[i]))
                         fired.Add(names[i]);
                 string message = fired.Count > 0
-                    ? $"PLC 에러 감지 — 전체 정지: {string.Join(", ", fired)}"
-                    : "PLC 에러 감지 — 전체 정지";
+                    ? Localize("Plc_ErrorStop", string.Join(", ", fired))
+                    : Localize("Plc_ErrorStopNoDetails");
                 AlarmSink.Raise(AlarmSeverity.Error, "PLC", message);
+                _dialogService?.ShowError(Localize("Plc_ErrorTitle"), message);
+                _recipeCts?.Cancel();
 
                 // ponytail: TriggerEmergencyStopAsync는 BitEmergencyStop(=M2000)을 쓰는데 이는 HardwareSettings의
                 // 문서화된 PLACEHOLDER 주소다 — 소프트웨어 stop-all + 알람은 올바르나 실제 PLC estop 비트는 하드웨어
                 // 확인이 필요하다(주소는 변경하지 말 것).
                 if (_plcController != null)
-                {
-                    _ = _plcController.TriggerEmergencyStopAsync();
-                    _ = _plcController.StopChamberAsync();
-                }
+                    _ = StopAllForPlcErrorAsync(_plcController);
             }
             else if (!anyError && _plcErrorLatched)
             {
                 _plcErrorLatched = false;
-                AlarmSink.Raise(AlarmSeverity.Info, "PLC", "PLC 에러 해제");
+                AlarmSink.Raise(AlarmSeverity.Info, "PLC", Localize("Plc_ErrorCleared"));
             }
         }
+
+        private bool CanStartRecipe => !RecoveryLockActive;
+
+        // 복구 인터록 해제: 에러 비트 전부 클리어 + 서보 X/Y 모두 원점 ±0.5mm 이내일 때만. 에러 해제만으로는 열리지 않는다.
+        private void ReleaseRecoveryLockIfRecovered(PlcStatusSnapshot s)
+        {
+            if (!RecoveryLockActive) return;
+            bool errorsClear = !s.ErrorBits.Any(b => b);
+            bool atOrigin = Math.Abs(s.ServoXPosition) <= OriginToleranceMm
+                         && Math.Abs(s.ServoYPosition) <= OriginToleranceMm;
+            if (errorsClear && atOrigin)
+                RecoveryLockActive = false;
+        }
+
+        // 두 정지를 독립적으로 시작해 비상정지 쓰기 지연이 챔버 정지를 막지 않게 한다.
+        private static async Task StopAllForPlcErrorAsync(IPlcController plc)
+        {
+            Task chamberStop = ObserveStopAsync("Plc_ChamberStopFailed", plc.StopChamberAsync);
+            Task emergencyStop = ObserveStopAsync("Plc_EmergencyStopFailed", plc.TriggerEmergencyStopAsync);
+            await Task.WhenAll(chamberStop, emergencyStop);
+        }
+
+        private static async Task ObserveStopAsync(string label, Func<Task> stop)
+        {
+            try
+            {
+                await stop().WaitAsync(TimeSpan.FromSeconds(2));
+            }
+            catch (Exception ex)
+            {
+                string message = Localize(label, ex.Message);
+                AlarmSink.Raise(AlarmSeverity.Error, "PLC", message);
+                System.Diagnostics.Debug.WriteLine($"[Dashboard] {message}");
+            }
+        }
+
+        private static string Localize(string key, params object[] args) =>
+            string.Format(LocalizationManager.Instance[key], args);
 
         private async Task RefreshBlackBodyAsync(PlcStatusSnapshot s)
         {
@@ -668,7 +718,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             LoadCameraFeeds();
         }
 
-        [RelayCommand]
+        [RelayCommand(CanExecute = nameof(CanStartRecipe))]
         private async Task StartRecipeAsync()
         {
             if (AppServices.RecipeEngine == null) { RecipeStatus = "서비스 미초기화"; return; }
