@@ -29,6 +29,7 @@ namespace HeatingCameraSystem.Master.Services
         public static IDashboardLayoutRepository DashboardLayoutRepo { get; private set; } = null!;
         public static ICaptureHistoryRepository HistoryRepo { get; private set; } = null!;
         public static IChamberHistoryRepository ChamberHistoryRepo { get; private set; } = null!;
+        public static IAlarmHistoryRepository? AlarmHistoryRepo { get; private set; }
         public static ICameraSerialSettingsRepository CameraSerialSettingsRepo { get; private set; } = null!;
         public static ICameraDeviceRepository CameraDeviceRepo { get; private set; } = null!;
         public static NatsCommunicationService? NatsService { get; private set; }
@@ -85,6 +86,7 @@ namespace HeatingCameraSystem.Master.Services
             DashboardLayoutRepo = new LiteDbDashboardLayoutRepository(Db);
             HistoryRepo = new LiteDbCaptureHistoryRepository(Db);
             ChamberHistoryRepo = new LiteDbChamberHistoryRepository(Db);
+            AlarmHistoryRepo = new LiteDbAlarmHistoryRepository(Db);
             CameraSerialSettingsRepo = new LiteDbCameraSerialSettingsRepository(Db);
             CameraDeviceRepo = new LiteDbCameraDeviceRepository(Db);
 

@@ -34,6 +34,21 @@ namespace HeatingCameraSystem.Master.Services
                 });
                 while (Entries.Count > MaxEntries)
                     Entries.RemoveAt(Entries.Count - 1);
+
+                try
+                {
+                    _ = AppServices.AlarmHistoryRepo?.InsertAsync(new AlarmHistoryRecord
+                    {
+                        Timestamp = DateTime.Now,
+                        Severity = severity,
+                        Source = source,
+                        Message = message
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AlarmSink] history insert failed: {ex.Message}");
+                }
             }
 
             var dispatcher = Application.Current?.Dispatcher;
@@ -41,6 +56,19 @@ namespace HeatingCameraSystem.Master.Services
                 Add();
             else
                 dispatcher.Invoke(Add);
+        }
+
+        public static void Remove(AlarmEntry? entry)
+        {
+            if (entry is null) return;
+
+            void RemoveEntry() => Entries.Remove(entry);
+
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess())
+                RemoveEntry();
+            else
+                dispatcher.Invoke(RemoveEntry);
         }
     }
 }
