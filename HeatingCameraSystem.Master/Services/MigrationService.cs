@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
 using LiteDB;
@@ -9,6 +10,7 @@ namespace HeatingCameraSystem.Master.Services
     public static class MigrationService
     {
         private const string MigrationFlag = "MigrationDone_CameraSerialSettings_To_CameraDevice";
+        private const string RecipeMigrationFlag = "MigrationDone_LiteDbRecipes_To_Files";
 
         public static void Run(LiteDatabase db, ICameraDeviceRepository deviceRepo)
         {
@@ -44,6 +46,27 @@ namespace HeatingCameraSystem.Master.Services
             }
 
             meta.Upsert(new BsonDocument { ["_id"] = MigrationFlag, ["DoneAt"] = DateTime.UtcNow.ToString("O") });
+        }
+
+        public static void MigrateRecipesToFiles(LiteDatabase db, IRecipeRepository fileRepo)
+        {
+            var meta = db.GetCollection<BsonDocument>("_migrations");
+            if (meta.FindById(RecipeMigrationFlag) != null) return;
+
+            // Markerless installations may already have completed the previous empty-folder migration.
+            // Preserve those files instead of overwriting edits or resurrecting deleted recipes.
+            if (fileRepo.GetAllAsync().GetAwaiter().GetResult().Any())
+            {
+                meta.Upsert(new BsonDocument { ["_id"] = RecipeMigrationFlag, ["DoneAt"] = DateTime.UtcNow.ToString("O") });
+                return;
+            }
+
+            var legacyRepo = new LiteDbRecipeRepository(db);
+            foreach (var recipe in legacyRepo.GetAllAsync().GetAwaiter().GetResult())
+                fileRepo.SaveAsync(recipe).GetAwaiter().GetResult();
+
+            // Flag last: a seed that throws midway leaves the marker unset, so it retries next startup.
+            meta.Upsert(new BsonDocument { ["_id"] = RecipeMigrationFlag, ["DoneAt"] = DateTime.UtcNow.ToString("O") });
         }
 
         public static void BackupDatabase(string dbPath)
