@@ -41,23 +41,32 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand]
         private Task ResetError() => TriggerAsync(p => p.ResetErrorAsync(), "에러 리셋");
 
+        [RelayCommand]
+        private Task PlcOrigin() => TriggerAsync(async p =>
+        {
+            await p.SetPointCoordinateAsync(1, 0f, 0f);
+            await p.MoveServoToPositionAsync(1);
+        }, LocalizationManager.Instance["Plc_Origin"]);
+
         private async Task TriggerAsync(Func<IPlcController, Task> action, string label)
         {
             var plc = AppServices.PlcController;
             if (plc == null)
             {
-                AlarmActionMessage = "PLC 미초기화";
+                AlarmActionMessage = LocalizationManager.Instance["Plc_NotInitialized"];
                 return;
             }
 
             try
             {
                 await action(plc);
-                AlarmActionMessage = $"{label} 완료 {DateTime.Now:HH:mm:ss}";
+                AlarmActionMessage = string.Format(
+                    LocalizationManager.Instance["Plc_ActionCompleted"], label, DateTime.Now.ToString("HH:mm:ss"));
             }
             catch (Exception ex)
             {
-                AlarmActionMessage = $"{label} 실패: {ex.Message}";
+                AlarmActionMessage = string.Format(
+                    LocalizationManager.Instance["Plc_ActionFailed"], label, ex.Message);
                 System.Diagnostics.Debug.WriteLine($"[Main] {label} failed: {ex.Message}");
             }
         }

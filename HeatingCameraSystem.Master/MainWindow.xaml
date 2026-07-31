@@ -11,8 +11,8 @@
     xmlns:views="clr-namespace:HeatingCameraSystem.Master.Views"
     xmlns:vm="clr-namespace:HeatingCameraSystem.Master.ViewModels"
     Title="{loc:Loc Window_Title}"
-    Width="1024"
-    Height="768"
+    Width="1900"
+    Height="1060"
     Background="#F5F6FA"
     Icon="/Assets/canlab.ico"
     mc:Ignorable="d">
@@ -225,6 +225,10 @@
                     <Button
                         Command="{Binding ResetErrorCommand}"
                         Content="{loc:Loc Nav_ErrorReset}"
+                        Style="{StaticResource AlarmBtn}" />
+                    <Button
+                        Command="{Binding PlcOriginCommand}"
+                        Content="{loc:Loc Nav_PlcOrigin}"
                         Style="{StaticResource AlarmBtn}" />
                     <TextBlock
                         Margin="0,0,0,4"
