@@ -123,6 +123,41 @@ public class DashboardLiveTrendTests
         Assert.Same(first, vm.CurrentViewModel);
     }
 
+    [Fact]
+    public void RefreshRecipes_PreservesExistingSelection()
+    {
+        var recipes = new List<Recipe>
+        {
+            new() { Id = "recipe-1", Name = "Recipe 1" },
+            new() { Id = "recipe-2", Name = "Recipe 2" }
+        };
+        var vm = new DashboardViewModel(null, null, () => recipes, false);
+        vm.SelectedRecipe = recipes[1];
+        recipes.Add(new Recipe { Id = "recipe-3", Name = "Recipe 3" });
+
+        vm.RefreshRecipesCommand.Execute(null);
+
+        Assert.Equal("recipe-2", vm.SelectedRecipe?.Id);
+        Assert.Equal(3, vm.Recipes.Count);
+    }
+
+    [Fact]
+    public void RefreshRecipes_FallsBackWhenSelectedRecipeWasDeleted()
+    {
+        var recipes = new List<Recipe>
+        {
+            new() { Id = "recipe-1", Name = "Recipe 1" },
+            new() { Id = "recipe-2", Name = "Recipe 2" }
+        };
+        var vm = new DashboardViewModel(null, null, () => recipes, false);
+        vm.SelectedRecipe = recipes[1];
+        recipes.RemoveAt(1);
+
+        vm.RefreshRecipesCommand.Execute(null);
+
+        Assert.Equal("recipe-1", vm.SelectedRecipe?.Id);
+    }
+
     private static byte[] CreateJpeg()
     {
         var scene = new SyntheticThermalScene(new FrameSettings(64, 48), () => 1);

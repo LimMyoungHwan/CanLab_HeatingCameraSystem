@@ -250,10 +250,14 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private void LoadRecipes()
         {
+            string? previousRecipeId = SelectedRecipe?.Id;
             Recipes.Clear();
             foreach (var r in _loadRecipes())
                 Recipes.Add(r);
-            SelectedRecipe = Recipes.FirstOrDefault();
+            SelectedRecipe = (previousRecipeId == null
+                ? null
+                : Recipes.FirstOrDefault(r => r.Id == previousRecipeId))
+                ?? Recipes.FirstOrDefault();
         }
 
         [RelayCommand]

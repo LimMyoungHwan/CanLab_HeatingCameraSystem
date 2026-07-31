@@ -249,8 +249,8 @@
             </Grid.ColumnDefinitions>
 
             <!-- ─── COL 0 : TELEMETRY CARDS ─── -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="16,16,10,16">
-                <StackPanel>
+            <StackPanel Grid.Column="0" Margin="16,16,10,16">
+                <StackPanel Width="384">
 
                     <!-- CHAMBER -->
                     <Border Style="{StaticResource Card}">
@@ -317,17 +317,37 @@
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
                             <TextBlock Text="{loc:Loc Dash_BlackBodyTitle}" Style="{StaticResource CardHeader}"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Dash_Bb1Pv}" Style="{StaticResource Lbl}"/>
-                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding BlackBody1Pv, StringFormat={}{0:F1} &#176;C}" Style="{StaticResource Val}" Foreground="{StaticResource Primary}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Loc Dash_Bb1Sv}" Style="{StaticResource Lbl}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding BlackBody1Sv, StringFormat={}{0:F1} &#176;C}" Style="{StaticResource Val}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="{loc:Loc Dash_Bb2Pv}" Style="{StaticResource Lbl}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding BlackBody2Pv, StringFormat={}{0:F1} &#176;C}" Style="{StaticResource Val}" Foreground="{StaticResource Primary}"/>
-                                <TextBlock Grid.Row="3" Grid.Column="0" Text="{loc:Loc Dash_Bb2Sv}" Style="{StaticResource Lbl}"/>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding BlackBody2Sv, StringFormat={}{0:F1} &#176;C}" Style="{StaticResource Val}"/>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{loc:Loc Dash_Bb1Pv}" Style="{StaticResource Lbl}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding BlackBody1Pv, StringFormat={}{0:F1}}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
+                                            <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
+                                        </TextBlock>
+                                        <TextBlock Text="&#176;C" Style="{StaticResource Unit}"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{loc:Loc Dash_Bb1Sv}" FontSize="11" Foreground="{StaticResource Outline}" Margin="0,0,4,0"/>
+                                        <TextBlock Text="{Binding BlackBody1Sv, StringFormat={}{0:F1}&#176;C}" FontSize="11" Foreground="{StaticResource Outline}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                    <TextBlock Text="{loc:Loc Dash_Bb2Pv}" Style="{StaticResource Lbl}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding BlackBody2Pv, StringFormat={}{0:F1}}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
+                                            <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
+                                        </TextBlock>
+                                        <TextBlock Text="&#176;C" Style="{StaticResource Unit}"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{loc:Loc Dash_Bb2Sv}" FontSize="11" Foreground="{StaticResource Outline}" Margin="0,0,4,0"/>
+                                        <TextBlock Text="{Binding BlackBody2Sv, StringFormat={}{0:F1}&#176;C}" FontSize="11" Foreground="{StaticResource Outline}"/>
+                                    </StackPanel>
+                                </StackPanel>
                             </Grid>
                         </StackPanel>
                     </Border>
@@ -336,12 +356,12 @@
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
                             <TextBlock Text="{loc:Loc Dash_MotionTitle}" Style="{StaticResource CardHeader}"/>
-                            <Grid>
+                            <Grid Margin="0,0,0,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="X POSITION" Style="{StaticResource Lbl}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding ServoXPosition, StringFormat={}{0:F1}}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
@@ -351,25 +371,16 @@
                                         </TextBlock>
                                         <TextBlock Text="mm" Style="{StaticResource Unit}"/>
                                     </StackPanel>
-                                    <TextBlock Text="Y POSITION" Style="{StaticResource Lbl}" Margin="0,8,8,5"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Y POSITION" Style="{StaticResource Lbl}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding ServoYPosition, StringFormat={}{0:F1}}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
                                             <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
                                         </TextBlock>
                                         <TextBlock Text="mm" Style="{StaticResource Unit}"/>
                                     </StackPanel>
-                                    <!--<TextBlock Text="{Binding CurrentPoint, StringFormat={loc:Loc Dash_CurrentPoint}}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Secondary}" Margin="0,8,0,0"/>-->
                                 </StackPanel>
-                                <!-- XY mini-map -->
-                                <Border Grid.Column="1" Width="126" Height="126" VerticalAlignment="Center" Background="#080d15" BorderBrush="{StaticResource CardEdge}" BorderThickness="1" CornerRadius="8">
-                                    <Grid>
-                                        <Border Width="1" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#1c2b38"/>
-                                        <Border Height="1" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#1c2b38"/>
-                                        <Ellipse Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center" Fill="{StaticResource Secondary}">
-                                            <Ellipse.Effect><DropShadowEffect Color="#4ae183" BlurRadius="14" ShadowDepth="0" Opacity="0.9"/></Ellipse.Effect>
-                                        </Ellipse>
-                                    </Grid>
-                                </Border>
                             </Grid>
                             <Border Height="1" Background="{StaticResource CardEdge}" Margin="0,12,0,10"/>
                             <WrapPanel>
@@ -401,18 +412,34 @@
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
                             <TextBlock Text="{loc:Loc Dash_ProgramTitle}" Style="{StaticResource CardHeader}"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Dash_StepLabel}" Style="{StaticResource Lbl}"/>
-                                <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <TextBlock Text="{Binding CurrentStep}" Style="{StaticResource Val}" Foreground="{StaticResource Primary}" Margin="0"/>
-                                    <TextBlock Text="{Binding TotalSteps, StringFormat= / {0}}" Style="{StaticResource Val}" Margin="0"/>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{loc:Loc Dash_StepLabel}" Style="{StaticResource Lbl}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding CurrentStep}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}"/>
+                                        <TextBlock Text="{Binding TotalSteps, StringFormat= / {0}}" FontSize="14" Foreground="{StaticResource Outline}" VerticalAlignment="Bottom" Margin="4,0,0,6"/>
+                                    </StackPanel>
                                 </StackPanel>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Loc Dash_FanLabel}" Style="{StaticResource Lbl}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FanSpeedHz, StringFormat={}{0:F2} Hz}" Style="{StaticResource Val}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="{loc:Loc Dash_GasLabel}" Style="{StaticResource Lbl}"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding GasFlow, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                    <TextBlock Text="{loc:Loc Dash_FanLabel}" Style="{StaticResource Lbl}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding FanSpeedHz, StringFormat={}{0:F2}}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}"/>
+                                        <TextBlock Text="Hz" Style="{StaticResource Unit}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                            <Border Height="1" Background="{StaticResource CardEdge}" Margin="0,0,0,8"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Loc Dash_GasLabel}" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding GasFlow, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
                             </Grid>
                         </StackPanel>
                     </Border>
@@ -436,79 +463,8 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- ALARMS -->
-                    <Border>
-                        <Border.Style>
-                            <Style TargetType="Border" BasedOn="{StaticResource Card}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasActiveErrors}" Value="True">
-                                        <Setter Property="BorderBrush" Value="#ff5b52"/>
-                                        <Setter Property="Effect">
-                                            <Setter.Value><DropShadowEffect Color="#ff5b52" BlurRadius="16" ShadowDepth="0" Opacity="0.5"/></Setter.Value>
-                                        </Setter>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Border.Style>
-                        <StackPanel>
-                            <Grid Margin="0,0,0,12">
-                                <TextBlock Text="{loc:Loc Dash_AlarmsTitle}" Style="{StaticResource CardHeader}" Margin="0"/>
-                                <!--<TextBlock Text="{Binding Alarms.Count, StringFormat={loc:Loc Dash_AlarmsCount}}" FontSize="11" FontWeight="Bold" Foreground="#ff8f88" HorizontalAlignment="Right" VerticalAlignment="Center"/>-->
-                            </Grid>
-                            <StackPanel Orientation="Horizontal">
-                                <StackPanel.Style>
-                                    <Style TargetType="StackPanel">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Alarms.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </StackPanel.Style>
-                                <Ellipse Width="10" Height="10" Fill="{StaticResource Secondary}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock Text="{loc:Loc Dash_AllNominal}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="12" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
-                                <ScrollViewer.Style>
-                                    <Style TargetType="ScrollViewer">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Alarms.Count}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ScrollViewer.Style>
-                                <ItemsControl ItemsSource="{Binding Alarms}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="0,3">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{Binding TimeText}" FontSize="10" Foreground="{StaticResource Outline}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                                <Border Grid.Column="1" CornerRadius="3" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center">
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="#243040"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Severity}" Value="Error"><Setter Property="Background" Value="#5a1512"/></DataTrigger>
-                                                                <DataTrigger Binding="{Binding Severity}" Value="Warning"><Setter Property="Background" Value="#4a3512"/></DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <TextBlock Text="{Binding Source}" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextOnSurface}"/>
-                                                </Border>
-                                                <TextBlock Grid.Column="2" Text="{Binding Message}" FontSize="11" Foreground="{StaticResource TextOnSurface}" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                        </StackPanel>
-                    </Border>
-
                 </StackPanel>
-            </ScrollViewer>
+                </StackPanel>
 
             <!-- ─── COL 1 : CAMERA FEEDS ─── -->
             <Grid Grid.Column="1">
