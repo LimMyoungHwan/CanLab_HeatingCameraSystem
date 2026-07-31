@@ -89,7 +89,11 @@ namespace HeatingCameraSystem.Master.ViewModels
             var st = AppServices.PlcStatus;
             IsConnected = st?.IsConnected ?? false;
             StatusMessage = st?.StatusMessage ?? StatusMessage;
-            if (st == null || !st.IsConnected) return;
+            if (st == null || !st.IsConnected)
+            {
+                Apply(new PlcStatusSnapshot());
+                return;
+            }
 
             Apply(s);
             await RefreshBlackBodyAsync(s);
