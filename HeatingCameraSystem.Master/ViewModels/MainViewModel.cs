@@ -1,4 +1,6 @@
 using System;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -8,6 +10,28 @@ using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
+    public sealed class AlarmFilterOption : ObservableObject
+    {
+        private string _label;
+
+        public AlarmFilterOption(string key, AlarmSeverity? severity, string label)
+        {
+            Key = key;
+            Severity = severity;
+            _label = label;
+        }
+
+        public string Key { get; }
+        public AlarmSeverity? Severity { get; }
+        public string Label
+        {
+            get => _label;
+            private set => SetProperty(ref _label, value);
+        }
+
+        public void UpdateLabel(string label) => Label = label;
+    }
+
     public partial class MainViewModel : ObservableObject
     {
         [ObservableProperty]
@@ -21,13 +45,58 @@ namespace HeatingCameraSystem.Master.ViewModels
         private StatusMonitorViewModel? _statusMonitorViewModel;
         private string _currentTitleKey = "Title_Dashboard";
 
+        [ObservableProperty]
+        private AlarmFilterOption? _selectedAlarmFilter;
+
+        public ObservableCollection<AlarmEntry> Alarms => AlarmSink.Entries;
+        public ObservableCollection<AlarmEntry> FilteredAlarms { get; } = new();
+        public ObservableCollection<AlarmFilterOption> AlarmFilters { get; } = new();
+
         public PlcStatusService? PlcStatus => AppServices.PlcStatus;
 
         public MainViewModel()
         {
-            LocalizationManager.Instance.PropertyChanged += (_, _) => UpdateTitle();
+            AlarmFilters.Add(new AlarmFilterOption("Nav_AlarmsFilterAll", null, string.Empty));
+            AlarmFilters.Add(new AlarmFilterOption("Nav_AlarmsFilterInfo", AlarmSeverity.Info, string.Empty));
+            AlarmFilters.Add(new AlarmFilterOption("Nav_AlarmsFilterWarning", AlarmSeverity.Warning, string.Empty));
+            AlarmFilters.Add(new AlarmFilterOption("Nav_AlarmsFilterError", AlarmSeverity.Error, string.Empty));
+            SelectedAlarmFilter = AlarmFilters[0];
+            UpdateAlarmFilterLabels();
+            AlarmSink.Entries.CollectionChanged += OnAlarmEntriesChanged;
+            LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+            RefreshFilteredAlarms();
             NavigateToDashboard();
         }
+
+        private void OnAlarmEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e) => RefreshFilteredAlarms();
+
+        private void OnLocalizationChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            UpdateAlarmFilterLabels();
+            UpdateTitle();
+        }
+
+        private void UpdateAlarmFilterLabels()
+        {
+            foreach (var filter in AlarmFilters)
+                filter.UpdateLabel(LocalizationManager.Instance[filter.Key]);
+        }
+
+        private void RefreshFilteredAlarms()
+        {
+            FilteredAlarms.Clear();
+            foreach (var alarm in AlarmSink.Entries)
+            {
+                if (SelectedAlarmFilter?.Severity is AlarmSeverity severity && alarm.Severity != severity)
+                    continue;
+                FilteredAlarms.Add(alarm);
+            }
+        }
+
+        partial void OnSelectedAlarmFilterChanged(AlarmFilterOption? value) => RefreshFilteredAlarms();
+
+        [RelayCommand]
+        private void DeleteAlarm(AlarmEntry? entry) => AlarmSink.Remove(entry);
 
         private void UpdateTitle() => CurrentViewTitle = LocalizationManager.Instance[_currentTitleKey];
 
@@ -47,6 +116,9 @@ namespace HeatingCameraSystem.Master.ViewModels
             await p.SetPointCoordinateAsync(1, 0f, 0f);
             await p.MoveServoToPositionAsync(1);
         }, LocalizationManager.Instance["Plc_Origin"]);
+
+        [RelayCommand]
+        private Task EmergencyStop() => TriggerAsync(p => p.TriggerEmergencyStopAsync(), "비상정지");
 
         private async Task TriggerAsync(Func<IPlcController, Task> action, string label)
         {
@@ -76,6 +148,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             _currentTitleKey = "Title_Dashboard";
             CurrentViewModel = _dashboardViewModel;
+            _dashboardViewModel.RefreshRecipesCommand.Execute(null);
             UpdateTitle();
         }
 

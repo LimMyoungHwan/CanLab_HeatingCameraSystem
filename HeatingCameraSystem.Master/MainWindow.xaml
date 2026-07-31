@@ -1,4 +1,4 @@
-﻿<Window
+<Window
     x:Class="HeatingCameraSystem.Master.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -10,7 +10,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:views="clr-namespace:HeatingCameraSystem.Master.Views"
     xmlns:vm="clr-namespace:HeatingCameraSystem.Master.ViewModels"
-    Title="{loc:Loc Window_Title}"
+    Title="{loc:Loc Window_Title}" WindowState="Maximized" WindowStartupLocation="CenterScreen"
     Width="1900"
     Height="1060"
     Background="#F5F6FA"
@@ -51,6 +51,24 @@
             x:Key="Lamp"
             OffBrush="#33404a"
             OnBrush="#4ae183" />
+        <conv:BoolToBrushConverter
+            x:Key="PlcLamp"
+            OffBrush="#ff5b52"
+            OnBrush="#4ae183" />
+        <VisualBrush x:Key="PageHeaderPattern" TileMode="Tile" Viewport="0,0,34,34" ViewportUnits="Absolute" Opacity="0.16">
+            <VisualBrush.Visual>
+                <Grid Width="34" Height="34">
+                    <Canvas Width="34" Height="34">
+                        <Path Data="M 0,27 C 8,5 15,31 24,13 S 42,14 34,3" Stroke="#47eaed" StrokeThickness="1.6" Opacity="0.95" />
+                        <Path Data="M 0,33 C 9,19 16,37 25,23 S 41,24 34,15" Stroke="#b38cff" StrokeThickness="1.2" Opacity="0.8" />
+                        <Ellipse Canvas.Left="6" Canvas.Top="5" Width="18" Height="18" Stroke="#47eaed" StrokeThickness="1.2" />
+                        <Ellipse Canvas.Left="11" Canvas.Top="10" Width="8" Height="8" Stroke="#47eaed" StrokeThickness="1.2" />
+                        <Ellipse Canvas.Left="14" Canvas.Top="13" Width="2" Height="2" Fill="#4ae183" />
+                        <Rectangle Canvas.Left="27" Canvas.Top="4" Width="1" Height="26" Fill="#47eaed" Opacity="0.55" />
+                    </Canvas>
+                </Grid>
+            </VisualBrush.Visual>
+        </VisualBrush>
     </Window.Resources>
 
     <Grid>
@@ -205,7 +223,7 @@
                 </StackPanel>
 
                 <!--  알람 처리 (모멘터리 트리거: P250 부저 OFF / P525 에러 리셋)  -->
-                <StackPanel DockPanel.Dock="Bottom">
+                <StackPanel DockPanel.Dock="Top">
                     <StackPanel.Resources>
                         <Style x:Key="AlarmBtn" TargetType="Button">
                             <Setter Property="Background" Value="#2f3444" />
@@ -238,233 +256,103 @@
                         TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
-                <StackPanel DataContext="{Binding PlcStatus}" DockPanel.Dock="Bottom">
-                    <Border
-                        Margin="0,0,0,12"
-                        BorderBrush="#3b4949"
-                        BorderThickness="0,1,0,0" />
-                    <TextBlock
-                        Margin="0,0,0,10"
-                        FontSize="13"
-                        FontWeight="Bold"
-                        Foreground="#9fb0c0"
-                        Text="{loc:Loc Nav_EquipmentStatus}" />
+                <StackPanel DataContext="{Binding PlcStatus}" DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <Border Margin="0,0,0,10" BorderBrush="#3b4949" BorderThickness="0,1,0,0" />
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding IsConnected, Converter={StaticResource PlcLamp}}" />
+                        <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                            <TextBlock FontSize="12" FontWeight="Bold" Foreground="White" Text="PLC" />
+                            <TextBlock FontSize="10" Foreground="#8fa0b0" Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
 
-                    <Border
-                        Margin="0,0,0,10"
-                        Padding="8,3"
-                        HorizontalAlignment="Left"
-                        Background="#7a2020"
-                        CornerRadius="3"
-                        Visibility="{Binding IsEmergencyStop, Converter={StaticResource BoolToVis}}">
-                        <TextBlock
-                            FontSize="12"
-                            FontWeight="Bold"
-                            Foreground="#ffd9d6"
-                            Text="{loc:Loc Equip_EStop}" />
-                    </Border>
-
-                    <StackPanel Margin="0,0,0,8" Orientation="Horizontal">
-                        <Ellipse
-                            Width="10"
-                            Height="10"
-                            VerticalAlignment="Center"
-                            Fill="{Binding IsConnected, Converter={StaticResource Lamp}}" />
-                        <TextBlock
-                            Margin="6,0,0,0"
-                            VerticalAlignment="Center"
-                            FontSize="12"
-                            FontWeight="Bold"
-                            Foreground="White"
-                            Text="PLC" />
-                        <TextBlock
-                            Margin="8,0,0,0"
-                            VerticalAlignment="Center"
-                            FontSize="10"
-                            Foreground="#8fa0b0"
-                            Text="{Binding StatusMessage}"
-                            TextTrimming="CharacterEllipsis" />
-                    </StackPanel>
-
-                    <StackPanel Margin="0,0,0,4" Orientation="Horizontal">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock
-                                Margin="0,0,4,0"
-                                FontSize="13"
-                                FontWeight="Bold"
-                                Foreground="#47eaed"
-                                Text="{loc:Loc Equip_Temperature}" />
-                            <TextBlock
-                                FontSize="13"
-                                FontWeight="Bold"
-                                Foreground="#47eaed"
-                                Text="{Binding Snapshot.CurrentTemperature, StringFormat=\'{0:0.0}℃\'}" />
+                <!-- ALARMS -->
+                <Button
+                    DockPanel.Dock="Bottom"
+                    Command="{Binding EmergencyStopCommand}"
+                    Content="{loc:Loc Equip_EStop}"
+                    Height="50"
+                    Margin="0,8,0,0"
+                    Background="#7a2020"
+                    Foreground="#ffd9d6"
+                    BorderBrush="#ff5b52"
+                    BorderThickness="1"
+                    FontSize="16"
+                    FontWeight="Bold" />
+                <StackPanel DockPanel.Dock="Bottom" Height="280">
+                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" Height="260">
+                        <StackPanel Width="210">
+                            <Border Margin="0,0,0,12" BorderBrush="#3b4949" BorderThickness="0,1,0,0" />
+                            <Grid Margin="0,0,0,10">
+                                <TextBlock FontSize="13" FontWeight="Bold" Foreground="#9fb0c0" Text="{loc:Loc Nav_AlarmsTitle}" />
+                                <TextBlock Text="{Binding Alarms.Count}" FontSize="11" FontWeight="Bold" Foreground="#ff8f88" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{loc:Loc Nav_AlarmsFilterType}" Foreground="#8fa0b0" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding AlarmFilters}" SelectedItem="{Binding SelectedAlarmFilter, Mode=TwoWay}" DisplayMemberPath="Label" Height="22" FontSize="11" />
+                            </Grid>
+                            <TextBlock Text="{loc:Loc Nav_AlarmsEmpty}" Foreground="#8fa0b0" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,4">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding FilteredAlarms.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <ScrollViewer MaxHeight="125" VerticalScrollBarVisibility="Auto">
+                                <ScrollViewer.Style>
+                                    <Style TargetType="ScrollViewer">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding FilteredAlarms.Count}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ScrollViewer.Style>
+                                <ItemsControl ItemsSource="{Binding FilteredAlarms}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#1f2430" CornerRadius="4" Padding="4" Margin="0,0,0,2">
+                                                <Grid>
+                                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                    <StackPanel Orientation="Horizontal" Grid.Row="0" Grid.Column="0">
+                                                        <Border CornerRadius="3" Padding="4,1" Margin="0,0,6,0">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="#243040"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Severity}" Value="Error"><Setter Property="Background" Value="#5a1512"/></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Severity}" Value="Warning"><Setter Property="Background" Value="#4a3512"/></DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <TextBlock Text="{Binding Source}" FontSize="9" FontWeight="Bold" Foreground="White"/>
+                                                        </Border>
+                                                        <TextBlock Text="{Binding TimeText}" FontSize="10" Foreground="#8fa0b0" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <Button Grid.Row="0" Grid.Column="1" Command="{Binding DataContext.DeleteAlarmCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" ToolTip="{loc:Loc Nav_AlarmsDeleteTooltip}" Background="Transparent" BorderThickness="0" Foreground="#ff8f88" Padding="2,0" Cursor="Hand">
+                                                        <TextBlock Text="✕" FontWeight="Bold" FontSize="10"/>
+                                                    </Button>
+                                                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Text="{Binding Message}" FontSize="11" Foreground="#bac9c9" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
                         </StackPanel>
-                        <StackPanel Margin="12,0,0,0" Orientation="Horizontal">
-                            <TextBlock
-                                Margin="0,0,4,0"
-                                FontSize="13"
-                                FontWeight="Bold"
-                                Foreground="#47eaed"
-                                Text="{loc:Loc Equip_Humidity}" />
-                            <TextBlock
-                                FontSize="13"
-                                FontWeight="Bold"
-                                Foreground="#47eaed"
-                                Text="{Binding Snapshot.CurrentHumidity, StringFormat=\'{0:0.0}%\'}" />
-                        </StackPanel>
-                    </StackPanel>
-
-                    <StackPanel Margin="0,0,0,10" Orientation="Horizontal">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock
-                                FontSize="12"
-                                Foreground="#bac9c9"
-                                Text="{loc:Loc Equip_Servo}" />
-                            <TextBlock
-                                FontSize="12"
-                                Foreground="#bac9c9"
-                                Text="{Binding Snapshot.ServoXPosition, StringFormat=\' X {0:F1}mm\'}" />
-                        </StackPanel>
-                        <TextBlock
-                            Margin="10,0,0,0"
-                            FontSize="12"
-                            Foreground="#bac9c9"
-                            Text="{Binding Snapshot.ServoYPosition, StringFormat='Y {0:F1}mm'}" />
-                    </StackPanel>
-
-                    <UniformGrid Columns="2">
-                        <StackPanel Margin="0,3,0,3" Orientation="Horizontal">
-                            <Ellipse
-                                Width="9"
-                                Height="9"
-                                VerticalAlignment="Center"
-                                Fill="{Binding Snapshot.Heater, Converter={StaticResource Lamp}}" />
-                            <TextBlock
-                                Margin="5,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                Foreground="#bac9c9"
-                                Text="{loc:Loc Equip_Heater}" />
-                        </StackPanel>
-                        <StackPanel Margin="0,3,0,3" Orientation="Horizontal">
-                            <Ellipse
-                                Width="9"
-                                Height="9"
-                                VerticalAlignment="Center"
-                                Fill="{Binding Snapshot.Cooler1st, Converter={StaticResource Lamp}}" />
-                            <TextBlock
-                                Margin="5,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                Foreground="#bac9c9"
-                                Text="{loc:Loc Equip_Cooler1}" />
-                        </StackPanel>
-                        <StackPanel Margin="0,3,0,3" Orientation="Horizontal">
-                            <Ellipse
-                                Width="9"
-                                Height="9"
-                                VerticalAlignment="Center"
-                                Fill="{Binding Snapshot.Cooler2nd, Converter={StaticResource Lamp}}" />
-                            <TextBlock
-                                Margin="5,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                Foreground="#bac9c9"
-                                Text="{loc:Loc Equip_Cooler2}" />
-                        </StackPanel>
-                        <StackPanel Margin="0,3,0,3" Orientation="Horizontal">
-                            <Ellipse
-                                Width="9"
-                                Height="9"
-                                VerticalAlignment="Center"
-                                Fill="{Binding Snapshot.CoolerRoom, Converter={StaticResource Lamp}}" />
-                            <TextBlock
-                                Margin="5,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                Foreground="#bac9c9"
-                                Text="{loc:Loc Equip_CoolerRoom}" />
-                        </StackPanel>
-                        <StackPanel Margin="0,3,0,3" Orientation="Horizontal">
-                            <Ellipse
-                                Width="9"
-                                Height="9"
-                                VerticalAlignment="Center"
-                                Fill="{Binding Snapshot.CoolerRoomBypass, Converter={StaticResource Lamp}}" />
-                            <TextBlock
-                                Margin="5,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                Foreground="#bac9c9"
-                                Text="{loc:Loc Equip_Bypass}" />
-                        </StackPanel>
-                        <StackPanel Margin="0,3,0,3" Orientation="Horizontal">
-                            <Ellipse
-                                Width="9"
-                                Height="9"
-                                VerticalAlignment="Center"
-                                Fill="{Binding Snapshot.Blower1, Converter={StaticResource Lamp}}" />
-                            <TextBlock
-                                Margin="5,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                Foreground="#bac9c9"
-                                Text="{loc:Loc Equip_Blower1}" />
-                        </StackPanel>
-                        <StackPanel Margin="0,3,0,3" Orientation="Horizontal">
-                            <Ellipse
-                                Width="9"
-                                Height="9"
-                                VerticalAlignment="Center"
-                                Fill="{Binding Snapshot.Blower2, Converter={StaticResource Lamp}}" />
-                            <TextBlock
-                                Margin="5,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                Foreground="#bac9c9"
-                                Text="{loc:Loc Equip_Blower2}" />
-                        </StackPanel>
-                        <StackPanel Margin="0,3,0,3" Orientation="Horizontal">
-                            <Ellipse
-                                Width="9"
-                                Height="9"
-                                VerticalAlignment="Center"
-                                Fill="{Binding Snapshot.Mcf, Converter={StaticResource Lamp}}" />
-                            <TextBlock
-                                Margin="5,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                Foreground="#bac9c9"
-                                Text="{loc:Loc Equip_Mcf}" />
-                        </StackPanel>
-                        <StackPanel Margin="0,3,0,3" Orientation="Horizontal">
-                            <Ellipse
-                                Width="9"
-                                Height="9"
-                                VerticalAlignment="Center"
-                                Fill="{Binding Snapshot.DoorLamp, Converter={StaticResource Lamp}}" />
-                            <TextBlock
-                                Margin="5,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                Foreground="#bac9c9"
-                                Text="{loc:Loc Equip_Door}" />
-                        </StackPanel>
-                        <StackPanel Margin="0,3,0,3" Orientation="Horizontal">
-                            <Ellipse
-                                Width="9"
-                                Height="9"
-                                VerticalAlignment="Center"
-                                Fill="{Binding Snapshot.PairGlass, Converter={StaticResource Lamp}}" />
-                            <TextBlock
-                                Margin="5,0,0,0"
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                Foreground="#bac9c9"
-                                Text="{loc:Loc Equip_PairGlass}" />
-                        </StackPanel>
-                    </UniformGrid>
+                    </Viewbox>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -476,13 +364,30 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <TextBlock
+            <Border
                 Grid.Row="0"
-                Margin="0,0,0,20"
-                FontSize="28"
-                FontWeight="SemiBold"
-                Foreground="#2f3542"
-                Text="{Binding CurrentViewTitle}" />
+                Margin="0,0,0,16"
+                Padding="18,12"
+                Background="#10192a"
+                BorderBrush="#26414d"
+                BorderThickness="1"
+                CornerRadius="10">
+                <Grid Height="42">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock
+                            FontSize="28"
+                            FontWeight="SemiBold"
+                            Foreground="#dee2f7"
+                            Text="{Binding CurrentViewTitle}" />
+                    </StackPanel>
+                    <Border
+                        Width="240"
+                        Height="42"
+                        HorizontalAlignment="Right"
+                        Background="{StaticResource PageHeaderPattern}"
+                        CornerRadius="21" />
+                </Grid>
+            </Border>
 
             <ContentControl Grid.Row="1" Content="{Binding CurrentViewModel}" />
         </Grid>

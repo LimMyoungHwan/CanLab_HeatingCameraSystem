@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Interfaces;
@@ -72,6 +73,48 @@ public class MainViewModelTests
 
         // Assert
         Assert.Contains("PLC 원점 복귀 실패: Test Failure", vm.AlarmActionMessage);
+    }
+
+    [Fact]
+    public async Task EmergencyStopCommand_WhenPlcAvailable_TriggersEmergencyStop()
+    {
+        var plc = new Mock<IPlcController>();
+        SetPlcController(plc.Object);
+        var vm = new MainViewModel();
+
+        await vm.EmergencyStopCommand.ExecuteAsync(null);
+
+        plc.Verify(p => p.TriggerEmergencyStopAsync(), Times.Once);
+    }
+
+    [Fact]
+    public void AlarmFilter_UpdatesVisibleAlarms()
+    {
+        AlarmSink.Entries.Clear();
+        var vm = new MainViewModel();
+
+        AlarmSink.Raise(AlarmSeverity.Info, "Test", "info");
+        AlarmSink.Raise(AlarmSeverity.Error, "Test", "error");
+
+        Assert.Equal(2, vm.FilteredAlarms.Count);
+        vm.SelectedAlarmFilter = vm.AlarmFilters.Single(f => f.Severity == AlarmSeverity.Error);
+
+        var alarm = Assert.Single(vm.FilteredAlarms);
+        Assert.Equal(AlarmSeverity.Error, alarm.Severity);
+    }
+
+    [Fact]
+    public void DeleteAlarmCommand_RemovesEntry()
+    {
+        AlarmSink.Entries.Clear();
+        var vm = new MainViewModel();
+        AlarmSink.Raise(AlarmSeverity.Warning, "Test", "warning");
+        var alarm = Assert.Single(AlarmSink.Entries);
+
+        vm.DeleteAlarmCommand.Execute(alarm);
+
+        Assert.Empty(AlarmSink.Entries);
+        Assert.Empty(vm.FilteredAlarms);
     }
 
     private static void SetPlcController(IPlcController? plc)
