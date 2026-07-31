@@ -26,24 +26,6 @@ namespace HeatingCameraSystem.Master.ViewModels
         public int TargetPositionIndex { get; set; }
     }
 
-    public partial class MappingSlotModel : ObservableObject
-    {
-        [ObservableProperty] private string _slotId = string.Empty;
-
-        [ObservableProperty]
-        [NotifyPropertyChangedFor(nameof(HasCamera))]
-        private string? _cameraId;
-
-        public bool HasCamera => !string.IsNullOrEmpty(CameraId);
-    }
-
-    public partial class MappingCameraModel : ObservableObject
-    {
-        [ObservableProperty] private string _id = string.Empty;
-        [ObservableProperty] private string _source = string.Empty;
-        [ObservableProperty] private bool _isAssigned;
-    }
-
     public sealed class AgentCameraOption
     {
         public string AgentId { get; init; } = string.Empty;
@@ -64,20 +46,14 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private bool _isSequentialMode = true;
 
         public ObservableCollection<RecipeStepModel> Steps { get; } = new();
-        public ObservableCollection<CameraMappingConfig> Mappings { get; } = new();
     }
 
     public partial class RecipeEditorViewModel : ObservableObject, IDisposable
     {
         public ObservableCollection<RecipeModel> Recipes { get; } = new ObservableCollection<RecipeModel>();
-        public ObservableCollection<MappingSlotModel> MappingSlots { get; } = new();
-        public ObservableCollection<MappingCameraModel> AvailableMappingCameras { get; } = new();
 
         [ObservableProperty]
         private RecipeModel? _selectedRecipe;
-
-        [ObservableProperty]
-        private MappingCameraModel? _selectedMappingCamera;
 
         public RecipeEditorViewModel()
         {
@@ -90,11 +66,6 @@ namespace HeatingCameraSystem.Master.ViewModels
                 SelectRecipe(Recipes[0]);
         }
 
-        partial void OnSelectedRecipeChanged(RecipeModel? value)
-        {
-            RebuildMappingSlots(value);
-        }
-
         [RelayCommand]
         private void SelectRecipe(RecipeModel recipe)
         {
@@ -103,13 +74,16 @@ namespace HeatingCameraSystem.Master.ViewModels
             if (SelectedRecipe != null) SelectedRecipe.IsSelected = true;
         }
 
+        public event EventHandler? RecipeAdded;
+
         [RelayCommand]
         private void AddRecipe()
         {
-            var vm = new RecipeModel { Name = "New Recipe", LastModified = DateTime.Now.ToString("g"), TargetChamberTemp = 25.0f, RampMinutes = 0, TargetChamberHumidity = 50.0f };
+            var vm = new RecipeModel { Name = "새 레시피", LastModified = DateTime.Now.ToString("g"), TargetChamberTemp = 25.0f, RampMinutes = 0, TargetChamberHumidity = 50.0f };
             Recipes.Add(vm);
             AppServices.RecipeRepo.SaveAsync(ToDomain(vm)).GetAwaiter().GetResult();
             SelectRecipe(vm);
+            RecipeAdded?.Invoke(this, EventArgs.Empty);
         }
 
         [RelayCommand]
@@ -253,75 +227,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
                     TargetChamberHumidity = s.TargetChamberHumidity
-                }).ToList(),
-                Mappings = source.Mappings.Select(m => new CameraMappingConfig
-                {
-                    SlotId = m.SlotId,
-                    CameraId = m.CameraId
                 }).ToList()
             };
-        }
-
-        [RelayCommand]
-        private void AssignCameraToSlot(MappingSlotModel? slot)
-        {
-            if (SelectedRecipe == null || SelectedMappingCamera == null || slot == null) return;
-
-            var existingSlot = MappingSlots.FirstOrDefault(s => s.CameraId == SelectedMappingCamera.Id);
-            if (existingSlot != null)
-                existingSlot.CameraId = null;
-
-            slot.CameraId = SelectedMappingCamera.Id;
-            SyncRecipeMappings();
-        }
-
-        [RelayCommand]
-        private void UnassignSlot(MappingSlotModel? slot)
-        {
-            if (SelectedRecipe == null || slot == null || !slot.HasCamera) return;
-
-            slot.CameraId = null;
-            SyncRecipeMappings();
-        }
-
-        private void RebuildMappingSlots(RecipeModel? recipe)
-        {
-            MappingSlots.Clear();
-            for (int i = 1; i <= 64; i++)
-            {
-                string slotId = $"P{i:D2}";
-                MappingSlots.Add(new MappingSlotModel
-                {
-                    SlotId = slotId,
-                    CameraId = recipe?.Mappings.FirstOrDefault(m => m.SlotId == slotId)?.CameraId
-                });
-            }
-
-            SelectedMappingCamera = null;
-            UpdateMappingCameraAssignments();
-        }
-
-        private void SyncRecipeMappings()
-        {
-            if (SelectedRecipe == null) return;
-
-            SelectedRecipe.Mappings.Clear();
-            foreach (var slot in MappingSlots.Where(s => s.HasCamera))
-            {
-                SelectedRecipe.Mappings.Add(new CameraMappingConfig
-                {
-                    SlotId = slot.SlotId,
-                    CameraId = slot.CameraId
-                });
-            }
-
-            UpdateMappingCameraAssignments();
-        }
-
-        private void UpdateMappingCameraAssignments()
-        {
-            foreach (var camera in AvailableMappingCameras)
-                camera.IsAssigned = MappingSlots.Any(s => s.CameraId == camera.Id);
         }
 
         private static Recipe ToDomain(RecipeModel vm)
@@ -332,12 +239,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 Name = vm.Name,
                 GlobalTargetTemperature = vm.TargetChamberTemp,
                 TemperatureRampMinutes = vm.RampMinutes,
-                GlobalTargetHumidity = vm.TargetChamberHumidity,
-                Mappings = vm.Mappings.Select(m => new CameraMappingConfig
-                {
-                    SlotId = m.SlotId,
-                    CameraId = m.CameraId
-                }).ToList()
+                GlobalTargetHumidity = vm.TargetChamberHumidity
             };
             foreach (var s in vm.Steps)
                 r.Steps.Add(new RecipeStep
@@ -369,12 +271,6 @@ namespace HeatingCameraSystem.Master.ViewModels
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
                     TargetChamberHumidity = s.TargetChamberHumidity
-                });
-            foreach (var mapping in r.Mappings)
-                vm.Mappings.Add(new CameraMappingConfig
-                {
-                    SlotId = mapping.SlotId,
-                    CameraId = mapping.CameraId
                 });
             return vm;
         }
@@ -421,12 +317,6 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 if (!OnlineAgentCameras.Any(a => a.AgentId == msg.AgentId && a.CameraIndex == msg.CameraIndex))
                     OnlineAgentCameras.Add(new AgentCameraOption { AgentId = msg.AgentId, CameraIndex = msg.CameraIndex });
-
-                if (!AvailableMappingCameras.Any(m => m.Id == msg.AgentId))
-                {
-                    AvailableMappingCameras.Add(new MappingCameraModel { Id = msg.AgentId, Source = $"CAM-{msg.CameraIndex:D2}" });
-                    UpdateMappingCameraAssignments();
-                }
             });
         }
 
@@ -473,7 +363,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         }
 
         [RelayCommand]
-        private async System.Threading.Tasks.Task UseCurrentXyAsync()
+        private async System.Threading.Tasks.Task UseCurrentXAsync()
         {
             if (AppServices.PlcController != null)
             {
@@ -481,6 +371,18 @@ namespace HeatingCameraSystem.Master.ViewModels
                 if (SelectedStep != null)
                 {
                     SelectedStep.PositionX = st.ServoXPosition;
+                }
+            }
+        }
+
+        [RelayCommand]
+        private async System.Threading.Tasks.Task UseCurrentYAsync()
+        {
+            if (AppServices.PlcController != null)
+            {
+                var st = await AppServices.PlcController.ReadStatusAsync();
+                if (SelectedStep != null)
+                {
                     SelectedStep.PositionY = st.ServoYPosition;
                 }
             }

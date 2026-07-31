@@ -225,22 +225,43 @@ namespace HeatingCameraSystem.AgentUI
         {
             try
             {
-                _natsConnector?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                // 종료 스텝을 UI 스레드 밖에서 총 5초 안에 실행 → 멈춘 시리얼 포트에서 hang해도
+                // 프로세스가 빠져나가 Windows가 포트를 해제. 스텝 순서는 기존과 동일.
+                var steps = new List<Func<Task>>();
+
+                if (_natsConnector is CameraNatsConnector natsConnector)
+                {
+                    steps.Add(() => natsConnector.DisposeAsync().AsTask());
+                }
 
                 if (_mainViewModel is not null)
                 {
                     foreach (CameraPanelViewModel panel in _mainViewModel.Cameras.ToList())
                     {
                         // 영상 종료: 셔터 닫기 + STOP (시리얼 포트 dispose 전에).
-                        try { panel.StopLiveAsync().GetAwaiter().GetResult(); }
-                        catch { /* best effort */ }
-                        panel.Dispose();
+                        steps.Add(() => panel.StopLiveAsync());
+                        // 시리얼 포트 닫기 — 멈춘 포트에서 hang 가능 → 반드시 timeout 안에서.
+                        steps.Add(() => { panel.Dispose(); return Task.CompletedTask; });
                     }
                 }
 
-                _manager?.Dispose();
-                _store?.Dispose();
-                _nats?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                if (_manager is CameraRuntimeManager manager)
+                {
+                    steps.Add(() => { manager.Dispose(); return Task.CompletedTask; });
+                }
+                if (_store is CaptureStore store)
+                {
+                    steps.Add(() => { store.Dispose(); return Task.CompletedTask; });
+                }
+                if (_nats is INatsCommunicationService nats)
+                {
+                    steps.Add(() => nats.DisposeAsync().AsTask());
+                }
+
+                if (!AppShutdown.Run(steps, TimeSpan.FromSeconds(5)))
+                {
+                    AgentUiLog.Logger.Warning("Shutdown exceeded {Timeout}s; forcing exit", 5);
+                }
             }
             catch
             {

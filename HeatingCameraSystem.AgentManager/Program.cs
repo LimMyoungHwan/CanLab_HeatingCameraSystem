@@ -18,7 +18,6 @@ using Microsoft.Extensions.Logging;
 [assembly: SupportedOSPlatform("windows")]
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddWindowsService(opts => opts.ServiceName = "HCS-Manager");
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 var installRoot  = args.Length > 0 ? args[0] : @"C:\HeatingCameraSystem";

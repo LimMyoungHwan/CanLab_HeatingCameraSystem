@@ -45,6 +45,9 @@ namespace HeatingCameraSystem.Master.Services
 
             // 1. DB 레코드 삭제
             await _historyRepo.DeleteOlderThanAsync(cutoff);
+            // ponytail: chamber_history pruning is TODO — this service is constructed in
+            // App.xaml.cs (out of scope here). Wire IChamberHistoryRepository through that
+            // ctor + call DeleteOlderThanAsync(cutoff) when chamber retention is needed.
 
             // 2. 이미지 파일 삭제
             if (Directory.Exists(_imageStorageRoot))

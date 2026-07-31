@@ -368,7 +368,7 @@
                                 Background="#2f3444"
                                 BorderBrush="#3b4949"
                                 Foreground="#dee2f7"
-                                Text="{Binding AbsoluteTargetX, UpdateSourceTrigger=PropertyChanged}" />
+                                Text="{Binding AbsoluteTargetX, StringFormat={}{0:F1}}" />
                             <Button
                                 Command="{Binding MoveAbsoluteCommand}"
                                 CommandParameter="X"
@@ -385,7 +385,7 @@
                                 Background="#2f3444"
                                 BorderBrush="#3b4949"
                                 Foreground="#dee2f7"
-                                Text="{Binding AbsoluteTargetY, UpdateSourceTrigger=PropertyChanged}" />
+                                Text="{Binding AbsoluteTargetY, StringFormat={}{0:F1}}" />
                             <Button
                                 Command="{Binding MoveAbsoluteCommand}"
                                 CommandParameter="Y"
@@ -407,7 +407,7 @@
                                 Background="#2f3444"
                                 BorderBrush="#3b4949"
                                 Foreground="#dee2f7"
-                                Text="{Binding RelativeStepX, UpdateSourceTrigger=PropertyChanged}" />
+                                Text="{Binding RelativeStepX, StringFormat={}{0:F1}}" />
                             <Button
                                 MinWidth="46"
                                 Command="{Binding MoveRelativeCommand}"
@@ -431,7 +431,7 @@
                                 Background="#2f3444"
                                 BorderBrush="#3b4949"
                                 Foreground="#dee2f7"
-                                Text="{Binding RelativeStepY, UpdateSourceTrigger=PropertyChanged}" />
+                                Text="{Binding RelativeStepY, StringFormat={}{0:F1}}" />
                             <Button
                                 MinWidth="46"
                                 Command="{Binding MoveRelativeCommand}"

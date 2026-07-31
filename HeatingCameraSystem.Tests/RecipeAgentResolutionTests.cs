@@ -9,29 +9,10 @@ using Xunit;
 
 namespace HeatingCameraSystem.Tests
 {
-    public class RecipeMappingResolutionTests
+    public class RecipeAgentResolutionTests
     {
         [Fact]
-        public async Task MappingWins()
-        {
-            var mockDeviceRepo = new Mock<ICameraDeviceRepository>();
-            mockDeviceRepo.Setup(r => r.GetByAliasAsync("CAM-X"))
-                          .ReturnsAsync(new CameraDevice { Alias = "CAM-X", AgentId = "Agent_X" });
-            var (engine, mockNats) = CreateEngine(mockDeviceRepo.Object);
-            var recipe = CreateRecipe(cameraIndex: 7);
-            recipe.Mappings = new List<CameraMappingConfig>
-            {
-                new CameraMappingConfig { SlotId = "P01", CameraId = "CAM-X" }
-            };
-
-            await engine.ExecuteRecipeAsync(recipe);
-
-            mockNats.Verify(n => n.PublishCaptureCommandAsync(
-                It.Is<CaptureCommandMessage>(m => m.TargetAgentId == "Agent_X")), Times.Once);
-        }
-
-        [Fact]
-        public async Task EmptyMappingsFallback()
+        public async Task CameraIndexResolvesToAgent()
         {
             var (engine, mockNats) = CreateEngine();
             var recipe = CreateRecipe(cameraIndex: 7);
@@ -43,30 +24,21 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
-        public async Task PerRecipeIsolation()
+        public async Task CameraAliasResolvesToAgent()
         {
-            var (engine, mockNats) = CreateEngine();
-            var first = CreateRecipe(cameraIndex: 7);
-            first.Mappings = new List<CameraMappingConfig>
-            {
-                new CameraMappingConfig { SlotId = "P01", CameraId = "Agent_First" }
-            };
-            var second = CreateRecipe(cameraIndex: 7);
-            second.Mappings = new List<CameraMappingConfig>
-            {
-                new CameraMappingConfig { SlotId = "P01", CameraId = "Agent_Second" }
-            };
+            var mockDeviceRepo = new Mock<ICameraDeviceRepository>();
+            mockDeviceRepo.Setup(r => r.GetByAliasAsync("CAM-X"))
+                          .ReturnsAsync(new CameraDevice { Alias = "CAM-X", AgentId = "Agent_X" });
+            var (engine, mockNats) = CreateEngine(mockDeviceRepo.Object);
+            var recipe = CreateRecipe(cameraIndex: 7, cameraAlias: "CAM-X");
 
-            await engine.ExecuteRecipeAsync(first);
-            await engine.ExecuteRecipeAsync(second);
+            await engine.ExecuteRecipeAsync(recipe);
 
             mockNats.Verify(n => n.PublishCaptureCommandAsync(
-                It.Is<CaptureCommandMessage>(m => m.TargetAgentId == "Agent_First")), Times.Once);
-            mockNats.Verify(n => n.PublishCaptureCommandAsync(
-                It.Is<CaptureCommandMessage>(m => m.TargetAgentId == "Agent_Second")), Times.Once);
+                It.Is<CaptureCommandMessage>(m => m.TargetAgentId == "Agent_X")), Times.Once);
         }
 
-        private static Recipe CreateRecipe(int cameraIndex) => new()
+        private static Recipe CreateRecipe(int cameraIndex, string? cameraAlias = null) => new()
         {
             GlobalTargetTemperature = 25.0f,
             Steps = new List<RecipeStep>
@@ -74,6 +46,7 @@ namespace HeatingCameraSystem.Tests
                 new RecipeStep
                 {
                     CameraIndex = cameraIndex,
+                    CameraAlias = cameraAlias,
                     TargetPositionIndex = 1,
                     TargetBlackBodyTemperature = 30.0f
                 }

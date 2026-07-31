@@ -48,7 +48,7 @@
 | `HeatingCameraSystem.Protocols` | `net8.0` | VagabondK LS XGT FEnet / NATS.Net / System.IO.Ports 구현체. `Simulation/` 폴더에 Fake 구현 포함 |
 | `HeatingCameraSystem.Master` | `net8.0-windows` | WPF GUI. `AppServices` 정적 서비스 로케이터 |
 | `HeatingCameraSystem.Agent` | `net8.0` | 카메라 PC 콘솔 앱 |
-| `HeatingCameraSystem.AgentManager` | `net8.0` (win-x64) | PC당 1개 Windows Service. WMI 카메라 자동 발견 + Agent 프로세스 supervisor + NDJSON 로그 수집 |
+| `HeatingCameraSystem.AgentManager` | `net8.0` (win-x64) | PC당 1개 운영자 세션 콘솔 앱(로그온 예약작업). WMI 카메라 자동 발견 + Agent 프로세스 supervisor + NDJSON 로그 수집 |
 | `HeatingCameraSystem.Tests` | `net8.0-windows` | xUnit + Moq |
 | `HeatingCameraSystem.E2EDriver` | `net8.0` | 헤드리스 캡처 roundtrip E2E 드라이버 |
 | `HeatingCameraSystem.Simulator` | `net8.0` | 외부 XGT FEnet + NATS 카메라 Agent Simulator |

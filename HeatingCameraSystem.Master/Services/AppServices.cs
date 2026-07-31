@@ -26,6 +26,7 @@ namespace HeatingCameraSystem.Master.Services
         public static IRecipeRepository RecipeRepo { get; private set; } = null!;
         public static IDashboardLayoutRepository DashboardLayoutRepo { get; private set; } = null!;
         public static ICaptureHistoryRepository HistoryRepo { get; private set; } = null!;
+        public static IChamberHistoryRepository ChamberHistoryRepo { get; private set; } = null!;
         public static ICameraSerialSettingsRepository CameraSerialSettingsRepo { get; private set; } = null!;
         public static ICameraDeviceRepository CameraDeviceRepo { get; private set; } = null!;
         public static NatsCommunicationService? NatsService { get; private set; }
@@ -38,6 +39,9 @@ namespace HeatingCameraSystem.Master.Services
         public static ILiveThermalCamera? LiveThermalCamera { get; private set; }
         public static ICameraComPairingService? CameraPairingService { get; private set; }
         public static Func<string, ICameraSerialClient>? CameraSerialClientFactory { get; private set; }
+
+        // 챔버 이력 레코더 참조 유지 (PlcStatus.Updated 구독자 — GC 방지).
+        private static ChamberHistoryRecorder? _chamberRecorder;
 
         private static string _hardwareJsonPath = string.Empty;
 
@@ -54,9 +58,29 @@ namespace HeatingCameraSystem.Master.Services
             Directory.CreateDirectory(ImageCacheDir);
 
             Db = new LiteDatabase(Path.Combine(dir, "data.db"));
-            RecipeRepo = new LiteDbRecipeRepository(Db);
+
+            // Recipes now persist as one JSON file each under <dir>/recipe (+ <dir>/recipe bak backups).
+            var fileRecipeRepo = new FileRecipeRepository(dir);
+            try
+            {
+                // One-time migration: seed files from legacy LiteDB when the recipe folder is still empty.
+                string recipeDir = Path.Combine(dir, "recipe");
+                if (Directory.GetFiles(recipeDir, "*.json").Length == 0)
+                {
+                    var legacyRecipeRepo = new LiteDbRecipeRepository(Db);
+                    foreach (var recipe in legacyRecipeRepo.GetAllAsync().GetAwaiter().GetResult())
+                        fileRecipeRepo.SaveAsync(recipe).GetAwaiter().GetResult();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AppServices] Recipe migration failed: {ex.Message}");
+            }
+            RecipeRepo = fileRecipeRepo;
+
             DashboardLayoutRepo = new LiteDbDashboardLayoutRepository(Db);
             HistoryRepo = new LiteDbCaptureHistoryRepository(Db);
+            ChamberHistoryRepo = new LiteDbChamberHistoryRepository(Db);
             CameraSerialSettingsRepo = new LiteDbCameraSerialSettingsRepository(Db);
             CameraDeviceRepo = new LiteDbCameraDeviceRepository(Db);
 
@@ -95,6 +119,8 @@ namespace HeatingCameraSystem.Master.Services
 
             PlcStatus = new PlcStatusService(PlcController, Settings.BlackBody.Enabled ? BlackBodyController : null);
             PlcStatus.Start();
+
+            _chamberRecorder = new ChamberHistoryRecorder(ChamberHistoryRepo, PlcStatus);
         }
 
         public static IBlackBodyController CreateBlackBodyController(HardwareSettings settings, IPlcController plc)
@@ -184,6 +210,7 @@ namespace HeatingCameraSystem.Master.Services
 
         public static async Task DisposeAsync()
         {
+            _chamberRecorder?.Dispose();
             PlcStatus?.Stop();
             ConnectionMonitor?.Dispose();
             ShutterController?.Dispose();

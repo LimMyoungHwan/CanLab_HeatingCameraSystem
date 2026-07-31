@@ -162,6 +162,26 @@
                             <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Mcf, Converter={StaticResource Lamp}}"/><TextBlock Text=" MCF" Style="{StaticResource Lbl}"/></StackPanel>
                             <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Blower1, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_Blower1Short}" Style="{StaticResource Lbl}"/></StackPanel>
                             <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Blower2, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_Blower2Short}" Style="{StaticResource Lbl}"/></StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <TextBlock Style="{StaticResource Lbl}">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="BB1  {0:F1} / {1:F1} °C">
+                                            <Binding Path="BlackBody1Pv"/>
+                                            <Binding Path="BlackBody1Sv"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <TextBlock Style="{StaticResource Lbl}">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="BB2  {0:F1} / {1:F1} °C">
+                                            <Binding Path="BlackBody2Pv"/>
+                                            <Binding Path="BlackBody2Sv"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </StackPanel>
                         </WrapPanel>
                     </StackPanel>
                 </Border>

@@ -14,6 +14,50 @@ namespace HeatingCameraSystem.Master.Views
         public RecipeEditorView()
         {
             InitializeComponent();
+            this.DataContextChanged += RecipeEditorView_DataContextChanged;
+        }
+
+        private void RecipeEditorView_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            if (e.OldValue is RecipeEditorViewModel oldVm)
+            {
+                oldVm.RecipeAdded -= Vm_RecipeAdded;
+            }
+            if (e.NewValue is RecipeEditorViewModel newVm)
+            {
+                newVm.RecipeAdded += Vm_RecipeAdded;
+            }
+        }
+
+        private void Vm_RecipeAdded(object? sender, EventArgs e)
+        {
+            // Find the active text box in the list of recipes
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var vm = DataContext as RecipeEditorViewModel;
+                if (vm?.SelectedRecipe == null) return;
+                
+                // Very basic focus logic - rely on standard keyboard focus
+                FocusNameTextBox(this);
+            }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        private void FocusNameTextBox(DependencyObject parent)
+        {
+            for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+                if (child is TextBox tb && tb.Name == "RecipeNameTextBox")
+                {
+                    if (tb.DataContext == ((RecipeEditorViewModel)DataContext).SelectedRecipe)
+                    {
+                        tb.Focus();
+                        tb.SelectAll();
+                        return;
+                    }
+                }
+                FocusNameTextBox(child);
+            }
         }
 
         private void Step_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)

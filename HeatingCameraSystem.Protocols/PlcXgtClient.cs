@@ -142,6 +142,8 @@ namespace HeatingCameraSystem.Protocols
         {
             await WriteWordAsync(_s.ServoPointXBase, ToScaled(x, 10));
             await WriteWordAsync(_s.ServoPointYBase, ToScaled(y, 10));
+            // 서보가 목표 워드를 래치한 뒤 이동 트리거가 상승엣지로 잡히도록 지연.
+            if (_s.CoordinateMoveDelayMs > 0) await Task.Delay(_s.CoordinateMoveDelayMs);
             await WriteBitAsync(_s.ServoPointMoveBase, true);
         }
 

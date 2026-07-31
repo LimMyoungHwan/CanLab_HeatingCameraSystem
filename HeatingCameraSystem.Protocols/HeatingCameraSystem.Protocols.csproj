@@ -5,6 +5,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="HeatingCameraSystem.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="NATS.Net" Version="2.8.1" />
     <PackageReference Include="VagabondK.Protocols.LSElectric" Version="1.1.21" />
     <PackageReference Include="VagabondK.Protocols.Channels" Version="1.1.22" />

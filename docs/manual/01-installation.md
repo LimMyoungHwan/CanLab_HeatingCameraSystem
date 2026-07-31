@@ -177,7 +177,7 @@ New-NetFirewallRule -DisplayName "NATS 4222" -Direction Inbound -LocalPort 4222 
 
 ## 8. Agent Manager 설치 (선택)
 
-> §4 Agent 설치는 운영자가 PC마다 `agent.json`/CLI 인수로 Agent 를 직접 띄우는 **수동 방식**이다. Agent Manager 는 PC당 1개 Windows Service 로 돌면서 **USB 카메라를 WMI 로 자동 발견 → Master 에서 승인 → Agent.exe 프로세스를 자동 spawn·감독·재시작**한다. 카메라 대수가 많거나 무인 운영이 필요할 때 사용.
+> §4 Agent 설치는 운영자가 PC마다 `agent.json`/CLI 인수로 Agent 를 직접 띄우는 **수동 방식**이다. Agent Manager 는 PC당 1개 운영자 세션 콘솔 앱(로그온 예약작업으로 기동)으로 돌면서 **USB 카메라를 WMI 로 자동 발견 → Master 에서 승인 → Agent.exe 프로세스를 자동 spawn·감독·재시작**한다. 카메라 대수가 많거나 무인 운영이 필요할 때 사용.
 
 수동 Agent(§4) 와 Manager(§8) 는 **택일**이다. Manager 를 쓰면 Agent 는 Manager 가 자동으로 띄우므로 §4 의 수동 기동은 하지 않는다.
 
@@ -210,7 +210,7 @@ dotnet publish HeatingCameraSystem.Agent        -c Release -o publish\Agent
 
 ### 8-3. 설치 스크립트 실행 (Manager PC, 관리자 권한)
 
-저장소의 `docs/deployment/install.ps1` 이 디렉터리 생성·서비스 등록·방화벽·설정파일까지 한번에 처리한다.
+저장소의 `docs/deployment/install.ps1` 이 디렉터리 생성·설정파일·방화벽을 준비하고, Manager 자동 시작(로그온 예약작업)은 `install-manager-task.ps1` 로 등록한다.
 
 ```powershell
 # 관리자 PowerShell 에서
@@ -226,7 +226,7 @@ dotnet publish HeatingCameraSystem.Agent        -c Release -o publish\Agent
 | 1 | `C:\HeatingCameraSystem\{Manager, Agent, logs}` 디렉터리 생성 |
 | 2 | NATS URL 입력 (인수 미지정 시 프롬프트) |
 | 3 | `Manager\manager-settings.json` 생성 (설정 필드는 매뉴얼 02 §9.1) |
-| 4 | Windows Service `HCS-Manager` 등록 (자동시작, LocalSystem) + 복구정책 (3회 재시작, 5초 간격) |
+| 4 | Manager 자동 시작 안내 — `install-manager-task.ps1` 로그온 예약작업 실행 지시 (session-0 서비스 아님) |
 | 5 | 방화벽 아웃바운드 규칙 `HCS-NATS-Outbound` (4222/tcp) 추가 |
 
 ### 8-4. 빌드 산출물 복사
@@ -240,16 +240,18 @@ Copy-Item publish\Agent\*   C:\HeatingCameraSystem\Agent\   -Recurse -Force
 
 > `manager-settings.json` 의 `AgentExePath` 기본값은 `C:\HeatingCameraSystem\Agent\HeatingCameraSystem.Agent.exe` 이므로 Agent 빌드는 이 경로에 있어야 Manager 가 spawn 할 수 있다.
 
-### 8-5. 서비스 시작 및 검증
+### 8-5. Manager 자동 시작 등록 및 검증
 
 ```powershell
-Start-Service HCS-Manager
-Get-Service  HCS-Manager        # Status: Running 확인
+# 로그온 예약작업 등록 (관리자 PowerShell). 등록 후 로그온 시 자동 기동.
+.\docs\deployment\install-manager-task.ps1 -InstallRoot C:\HeatingCameraSystem
+Start-ScheduledTask -TaskName HCS-Manager        # 로그온 대기 없이 즉시 실행
+Get-ScheduledTask   -TaskName HCS-Manager        # State: Ready/Running 확인
 ```
 
 | # | 확인 항목 | 방법 |
 |---|---|---|
-| 1 | 서비스 기동 | `Get-Service HCS-Manager` → `Running` |
+| 1 | 예약작업 등록·기동 | `Get-ScheduledTask HCS-Manager` → `Ready`/`Running` |
 | 2 | 카메라 발견 | `C:\HeatingCameraSystem\Manager\manager-state.json` 에 카메라 엔트리 생성 |
 | 3 | 인벤토리 수신 | Master **Devices** 탭에 카메라 목록 표시 (미승인 상태) |
 | 4 | 승인 → Agent 기동 | Devices 탭에서 "승인" → `C:\HeatingCameraSystem\logs\{AgentId}\` 에 로그 생성 |
@@ -257,10 +259,9 @@ Get-Service  HCS-Manager        # Status: Running 확인
 
 승인·운영 워크플로 상세는 [03-usage.md §8](./03-usage.md#8-agent-manager-운영-카메라-승인). 설정 파일 필드는 [02-configuration.md §9](./02-configuration.md#9-agent-manager-설정).
 
-### 8-6. 서비스 제거
+### 8-6. Manager 예약작업 제거
 
 ```powershell
-Stop-Service HCS-Manager
-sc.exe delete HCS-Manager
+Unregister-ScheduledTask -TaskName HCS-Manager -Confirm:$false
 Remove-NetFirewallRule -DisplayName "HCS-NATS-Outbound"   # 선택
 ```

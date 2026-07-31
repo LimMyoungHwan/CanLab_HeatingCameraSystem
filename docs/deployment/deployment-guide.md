@@ -84,6 +84,10 @@ docker compose -f docs/deployment/docker-compose.yml up -d
    → 로그온 시 AgentUI 자동 실행(실패 시 3회 재시작) 예약작업 등록. 무인 운영은 **자동 로그인** 필요
    (Sysinternals Autologon 권장 — 스크립트 `.DESCRIPTION` 참고). 창 없이 서빙만 하려면 `-Headless`.
 
+> **Manager 감독(선택)**: 카메라 승인/인벤토리 + 런타임 감독(S7)을 쓰면 Manager 도 로그온 예약작업으로 등록한다 —
+> `./docs/deployment/install-manager-task.ps1 -InstallRoot C:\HeatingCameraSystem` (AgentUI 와 나란히). Manager 는
+> session-0 Windows Service 가 아니라 AgentUI 와 같은 운영자 세션에서 로그온 시 기동하는 콘솔 앱이다.
+
 ### 5b. Agent (헤드리스 콘솔 버전 — 진단/폴백용)
 
 > AgentUI(5a)가 기본 배포 경로다. 콘솔 Agent 는 은퇴하지 않고 **단일 카메라 진단·폴백**용으로 유지된다

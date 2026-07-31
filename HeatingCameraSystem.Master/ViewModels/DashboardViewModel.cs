@@ -165,6 +165,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private readonly Dictionary<int, List<DashboardLayoutSlot>> _persistedLayout = new();
         private readonly Queue<(float Temperature, float Humidity)> _samples = new();
         private bool _recipeRunning;
+        private bool _plcErrorLatched;
         private int _activeRecipeStepIndex = -1;
         private CancellationTokenSource? _recipeCts;
         private System.Windows.Threading.DispatcherTimer? _offlineCheckTimer;
@@ -472,8 +473,44 @@ namespace HeatingCameraSystem.Master.ViewModels
             Blower2 = s.Blower2;
 
             UpdateActiveErrors(s.ErrorBits);
-            IsEmergencyStop = s.ErrorBits.Length > 0 && s.ErrorBits[0];
+            HandlePlcErrors(s.ErrorBits);
             AddTrendSample(CurrentTemperature, CurrentHumidity);
+        }
+
+        // PLC 에러 감지 → 전체 정지 + 알람. 엣지 검출 + 래치: 폴링(~1s)마다 재발동하지 않으며 자동 재개도 없다.
+        internal void HandlePlcErrors(bool[] errorBits)
+        {
+            bool anyError = errorBits.Any(b => b);
+            IsEmergencyStop = anyError;
+
+            if (anyError && !_plcErrorLatched)
+            {
+                _plcErrorLatched = true;
+
+                var names = PlcDeviceCatalog.ErrorNames;
+                var fired = new List<string>();
+                for (int i = 0; i < errorBits.Length && i < names.Length; i++)
+                    if (errorBits[i] && !string.IsNullOrEmpty(names[i]))
+                        fired.Add(names[i]);
+                string message = fired.Count > 0
+                    ? $"PLC 에러 감지 — 전체 정지: {string.Join(", ", fired)}"
+                    : "PLC 에러 감지 — 전체 정지";
+                AlarmSink.Raise(AlarmSeverity.Error, "PLC", message);
+
+                // ponytail: TriggerEmergencyStopAsync는 BitEmergencyStop(=M2000)을 쓰는데 이는 HardwareSettings의
+                // 문서화된 PLACEHOLDER 주소다 — 소프트웨어 stop-all + 알람은 올바르나 실제 PLC estop 비트는 하드웨어
+                // 확인이 필요하다(주소는 변경하지 말 것).
+                if (_plcController != null)
+                {
+                    _ = _plcController.TriggerEmergencyStopAsync();
+                    _ = _plcController.StopChamberAsync();
+                }
+            }
+            else if (!anyError && _plcErrorLatched)
+            {
+                _plcErrorLatched = false;
+                AlarmSink.Raise(AlarmSeverity.Info, "PLC", "PLC 에러 해제");
+            }
         }
 
         private async Task RefreshBlackBodyAsync(PlcStatusSnapshot s)

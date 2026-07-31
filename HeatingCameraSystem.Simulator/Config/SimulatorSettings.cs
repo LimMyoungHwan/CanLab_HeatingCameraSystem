@@ -25,7 +25,9 @@ public sealed record DynamicsSettings(
     double BlackbodyRatePerSecond = 30.0,
     int ServoBusyMs = 500,
     int HeartbeatSeconds = 5,
-    int LiveFrameIntervalMs = 100);
+    int LiveFrameIntervalMs = 100,
+    // Jog ramp rate (mm/s). Last so existing positional constructions stay valid.
+    double JogRatePerSecond = 50.0);
 
 /// <summary>Simulated live-frame geometry. Width/height must be positive AND even.</summary>
 public sealed record FrameSettings(int Width = 640, int Height = 480);
@@ -135,6 +137,7 @@ public sealed record SimulatorSettings(
         RequirePositive(Dynamics.TemperatureRatePerSecond, nameof(Dynamics.TemperatureRatePerSecond));
         RequirePositive(Dynamics.HumidityRatePerSecond, nameof(Dynamics.HumidityRatePerSecond));
         RequirePositive(Dynamics.BlackbodyRatePerSecond, nameof(Dynamics.BlackbodyRatePerSecond));
+        RequirePositive(Dynamics.JogRatePerSecond, nameof(Dynamics.JogRatePerSecond));
         RequirePositive(Dynamics.ServoBusyMs, nameof(Dynamics.ServoBusyMs));
         RequirePositive(Dynamics.HeartbeatSeconds, nameof(Dynamics.HeartbeatSeconds));
         RequirePositive(Dynamics.LiveFrameIntervalMs, nameof(Dynamics.LiveFrameIntervalMs));

@@ -25,12 +25,7 @@ public class RecipeCopyTests
                 PositionY = i * 200,
                 TargetChamberTemperature = 30 + i,
                 TargetChamberHumidity = 40 + i
-            }).ToList(),
-            Mappings =
-            [
-                new CameraMappingConfig { SlotId = "P01", CameraId = "CAM-01" },
-                new CameraMappingConfig { SlotId = "P02", CameraId = "CAM-02" }
-            ]
+            }).ToList()
         };
 
         Recipe clone = RecipeEditorViewModel.CloneRecipe(source);
@@ -38,7 +33,6 @@ public class RecipeCopyTests
         Assert.NotEqual(source.Id, clone.Id);
         Assert.Equal("원본 (복사)", clone.Name);
         Assert.Equal(3, clone.Steps.Count);
-        Assert.Equal(2, clone.Mappings.Count);
         Assert.All(source.Steps.Zip(clone.Steps), pair =>
         {
             Assert.NotSame(pair.First, pair.Second);
@@ -52,18 +46,10 @@ public class RecipeCopyTests
             Assert.Equal(pair.First.TargetChamberTemperature, pair.Second.TargetChamberTemperature);
             Assert.Equal(pair.First.TargetChamberHumidity, pair.Second.TargetChamberHumidity);
         });
-        Assert.All(source.Mappings.Zip(clone.Mappings), pair =>
-        {
-            Assert.NotSame(pair.First, pair.Second);
-            Assert.Equal(pair.First.SlotId, pair.Second.SlotId);
-            Assert.Equal(pair.First.CameraId, pair.Second.CameraId);
-        });
 
         clone.Steps[0].CameraIndex = 64;
-        clone.Mappings[0].CameraId = "CAM-64";
 
         Assert.Equal(1, source.Steps[0].CameraIndex);
-        Assert.Equal("CAM-01", source.Mappings[0].CameraId);
     }
 
     [Fact]
@@ -76,6 +62,5 @@ public class RecipeCopyTests
         Assert.NotEqual(source.Id, clone.Id);
         Assert.Equal("빈 레시피 (복사)", clone.Name);
         Assert.Empty(clone.Steps);
-        Assert.Empty(clone.Mappings);
     }
 }

@@ -106,6 +106,10 @@ namespace HeatingCameraSystem.Core.Config
         public int ServoPointStride { get; set; } = 10;
         public int ServoPointCount { get; set; } = 20;
 
+        // 좌표 직접이동(MoveToCoordinateAsync)에서 X/Y 목표 워드 쓰기와 이동 트리거 사이 지연(ms).
+        // 서보가 이동 트리거 전에 목표 워드를 확실히 래치하도록 둔다. 0이면 지연 없음.
+        public int CoordinateMoveDelayMs { get; set; } = 1000;
+
         // 조그/원점 비트 (X: 문서값 / Y: 문서 미기재 → placeholder)
         public string BitJogXPlus { get; set; } = "P745";
         public string BitJogXMinus { get; set; } = "P746";

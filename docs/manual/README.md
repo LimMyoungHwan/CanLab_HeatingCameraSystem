@@ -7,7 +7,7 @@
 | 번호 | 매뉴얼 | 무엇을 |
 |---|---|---|
 | 00 | [개요](./00-overview.md) | 시스템 구조, 컴포넌트, NATS 토픽 맵 |
-| 01 | [설치](./01-installation.md) | NATS / Master / Agent 설치 및 검증, Agent Manager Windows Service(§8) |
+| 01 | [설치](./01-installation.md) | NATS / Master / Agent 설치 및 검증, Agent Manager 로그온 예약작업(§8) |
 | 02 | [설정](./02-configuration.md) | `hardware.json` / `agent.json` 필드 레퍼런스, SimulationMode, 매핑 규칙, 셔터 프로토콜, LiteDB, `manager-settings.json` / `manager-state.json`(§9) |
 | 03 | [사용법](./03-usage.md) | Master UI, Recipe 워크플로, Agent 운영, 시뮬, History, 트러블슈팅, Agent Manager 카메라 승인(§8) |
 

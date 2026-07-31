@@ -1,13 +1,14 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    HeatingCameraSystem Agent Manager Windows Service 설치 스크립트.
+    HeatingCameraSystem Agent Manager 설치 스크립트 (운영자 세션 앱).
 .DESCRIPTION
+    Manager 는 session-0 Windows Service 가 아니라 운영자 로그인 세션에서 도는 콘솔 앱이다.
+    이 스크립트는 디렉터리·설정·방화벽만 준비하고, 자동 시작(로그온)은 install-manager-task.ps1 이 담당한다.
     1. 설치 디렉터리 생성 (C:\HeatingCameraSystem\Manager, Agent, logs)
-    2. sc.exe 로 Windows Service 등록 (HCS-Manager)
-    3. 서비스 실패 복구 정책 설정 (3회 재시작, 5초 간격)
-    4. 방화벽 아웃바운드 규칙 추가 (NATS 4222/tcp)
-    5. manager-settings.json 생성 (NATS URL 대화형 입력)
+    2. manager-settings.json 생성 (NATS URL 대화형 입력)
+    3. 방화벽 아웃바운드 규칙 추가 (NATS 4222/tcp)
+    4. Manager 자동 시작: install-manager-task.ps1 로 로그온 예약작업 등록 (AgentUI 와 동일 방식)
 #>
 
 param(
@@ -56,23 +57,9 @@ $settings = @{
 Set-Content -Path $settingsPath -Value $settings -Encoding UTF8
 Write-Host "  Settings: $settingsPath" -ForegroundColor Green
 
-# 4. 서비스 등록
-$exePath = Join-Path $managerDir "HeatingCameraSystem.AgentManager.exe"
-$serviceName = "HCS-Manager"
-
-$existing = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-if ($existing) {
-    Write-Host "  Service '$serviceName' already exists. Stopping..." -ForegroundColor Yellow
-    Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
-    & sc.exe delete $serviceName | Out-Null
-    Start-Sleep -Seconds 2
-}
-
-& sc.exe create $serviceName binPath= "`"$exePath`" `"$InstallRoot`"" start= auto obj= LocalSystem displayname= "HCS Agent Manager"
-& sc.exe description $serviceName "HeatingCameraSystem Agent Manager - camera approval/inventory + AgentUI runtime supervisor over NATS (S7)"
-& sc.exe failure $serviceName reset= 0 actions= restart/5000/restart/5000/restart/5000
-
-Write-Host "  Service '$serviceName' registered." -ForegroundColor Green
+# 4. Manager 자동 시작 — 로그온 예약작업 (install-manager-task.ps1 이 단일 소스)
+# session-0 Windows Service 제거됨. Manager 는 운영자 로그인 세션의 콘솔 앱으로 로그온 시 기동한다.
+Write-Host "  Manager autostart: run install-manager-task.ps1 to register the HCS-Manager logon task." -ForegroundColor Yellow
 
 # 5. 방화벽 규칙
 $ruleName = "HCS-NATS-Outbound"
@@ -92,6 +79,6 @@ Write-Host "Next steps:"
 Write-Host "  1. Copy Manager build output to:  $managerDir"
 Write-Host "  2. Copy AgentUI build output to:  $agentUiDir  (primary camera app)"
 Write-Host "  3. Register AgentUI logon task:   ./docs/deployment/install-agentui-task.ps1 -InstallRoot $InstallRoot"
-Write-Host "  4. Start service: Start-Service $serviceName"
-Write-Host "  5. Verify: Get-Service $serviceName"
+Write-Host "  4. Register Manager logon task:   ./docs/deployment/install-manager-task.ps1 -InstallRoot $InstallRoot"
+Write-Host "  5. Verify: Get-ScheduledTask HCS-Manager"
 Write-Host "  (console Agent at $agentDir is optional - diagnostic/fallback only)"

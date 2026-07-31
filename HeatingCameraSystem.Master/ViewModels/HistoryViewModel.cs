@@ -32,6 +32,24 @@ namespace HeatingCameraSystem.Master.ViewModels
         private string _thumbnailUrl = string.Empty;
     }
 
+    public partial class ChamberHistoryLogItem : ObservableObject
+    {
+        [ObservableProperty]
+        private DateTime _timestamp;
+
+        [ObservableProperty]
+        private float _temperature;
+
+        [ObservableProperty]
+        private float _humidity;
+
+        [ObservableProperty]
+        private float _blackBody1;
+
+        [ObservableProperty]
+        private float _blackBody2;
+    }
+
     public partial class HistoryViewModel : ObservableObject
     {
         // Filter properties
@@ -98,6 +116,14 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public ObservableCollection<HistoryLogItem> LogItems { get; } = new ObservableCollection<HistoryLogItem>();
 
+        public ObservableCollection<ChamberHistoryLogItem> ChamberItems { get; } = new ObservableCollection<ChamberHistoryLogItem>();
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(IsCaptureMode))]
+        private bool _isChamberMode;
+
+        public bool IsCaptureMode => !IsChamberMode;
+
         public HistoryViewModel()
         {
             FromDateTime = DateTime.Today.AddDays(-2);
@@ -107,6 +133,12 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private void LoadPage()
         {
+            if (IsChamberMode)
+            {
+                LoadChamberPage();
+                return;
+            }
+
             LogItems.Clear();
 
             var allRecords = AppServices.HistoryRepo
@@ -148,9 +180,55 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        private void LoadChamberPage()
+        {
+            ChamberItems.Clear();
+
+            var allRecords = AppServices.ChamberHistoryRepo
+                .QueryAsync(FromDateTime, ToDateTime, 1, int.MaxValue)
+                .GetAwaiter().GetResult()
+                .ToList();
+
+            TotalRecords = allRecords.Count;
+            TotalPages = (int)Math.Ceiling((double)TotalRecords / PageSize);
+            if (TotalPages == 0) TotalPages = 1;
+            if (CurrentPage > TotalPages) CurrentPage = TotalPages;
+            if (CurrentPage < 1) CurrentPage = 1;
+
+            foreach (var r in allRecords.Skip((CurrentPage - 1) * PageSize).Take(PageSize))
+            {
+                ChamberItems.Add(new ChamberHistoryLogItem
+                {
+                    Timestamp = r.Timestamp,
+                    Temperature = r.Temperature,
+                    Humidity = r.Humidity,
+                    BlackBody1 = r.BlackBody1,
+                    BlackBody2 = r.BlackBody2
+                });
+            }
+        }
+
         [RelayCommand]
         private void Search()
         {
+            CurrentPage = 1;
+            LoadPage();
+        }
+
+        [RelayCommand]
+        private void ShowCaptureMode()
+        {
+            if (!IsChamberMode) return;
+            IsChamberMode = false;
+            CurrentPage = 1;
+            LoadPage();
+        }
+
+        [RelayCommand]
+        private void ShowChamberMode()
+        {
+            if (IsChamberMode) return;
+            IsChamberMode = true;
             CurrentPage = 1;
             LoadPage();
         }

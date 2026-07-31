@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Interfaces;
@@ -12,6 +14,11 @@ namespace HeatingCameraSystem.Protocols
     {
         private INatsConnection? _connection;
         private readonly NatsOpts _baseOpts;
+
+        // Subscription lifetime: cancelled on dispose so every self-healing retry loop stops cleanly.
+        private readonly CancellationTokenSource _subscriptionCts = new();
+        private readonly List<Task> _subscriptionTasks = new();
+        private readonly object _subscriptionLock = new();
 
         public NatsCommunicationService()
         {
@@ -188,28 +195,78 @@ namespace HeatingCameraSystem.Protocols
 
         private void RunSubscriptionLoop<T>(string subject, Action<T> onMessageReceived)
         {
-            _ = Task.Run(async () =>
+            CancellationToken ct = _subscriptionCts.Token;
+            Task task = Task.Run(() => RunSubscribeWithRetryAsync<T>(
+                token => UnwrapAsync(_connection!.SubscribeAsync<T>(subject, cancellationToken: token), token),
+                onMessageReceived,
+                attempt => TimeSpan.FromMilliseconds(Math.Min(500 * (1 << Math.Min(attempt, 4)), 8000)),
+                ct));
+
+            lock (_subscriptionLock)
+            {
+                _subscriptionTasks.Add(task);
+            }
+        }
+
+        // Self-healing subscription loop. A thrown enumerator (transient NATS disconnect) or a natural
+        // enumerator completion (connection drop) is NOT auto-re-issued by NATS.Net, so we re-issue it here
+        // with backoff and keep delivering until ct is cancelled (service disposed). attempt resets to 0 after
+        // any delivered message so unrelated later blips restart backoff from the bottom instead of compounding.
+        internal static async Task RunSubscribeWithRetryAsync<T>(
+            Func<CancellationToken, IAsyncEnumerable<T>> subscribeFactory,
+            Action<T> onMessage,
+            Func<int, TimeSpan> backoff,
+            CancellationToken ct)
+        {
+            int attempt = 0;
+            while (!ct.IsCancellationRequested)
             {
                 try
                 {
-                    await foreach (var msg in _connection!.SubscribeAsync<T>(subject))
+                    await foreach (T item in subscribeFactory(ct).WithCancellation(ct).ConfigureAwait(false))
                     {
-                        if (msg.Data == null) continue;
                         try
                         {
-                            onMessageReceived(msg.Data);
+                            onMessage(item);
                         }
                         catch (Exception cbEx)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[NATS] subscriber callback threw on {subject}: {cbEx.GetType().Name}: {cbEx.Message}");
+                            System.Diagnostics.Debug.WriteLine($"[NATS] subscriber callback threw: {cbEx.GetType().Name}: {cbEx.Message}");
                         }
+                        attempt = 0;
                     }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    return;
                 }
                 catch (Exception loopEx)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[NATS] subscription loop ended on {subject}: {loopEx.GetType().Name}: {loopEx.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[NATS] subscription attempt failed, will re-subscribe: {loopEx.GetType().Name}: {loopEx.Message}");
                 }
-            });
+
+                try
+                {
+                    await Task.Delay(backoff(attempt), ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                attempt++;
+            }
+        }
+
+        private static async IAsyncEnumerable<T> UnwrapAsync<T>(
+            IAsyncEnumerable<NatsMsg<T>> src,
+            [EnumeratorCancellation] CancellationToken ct)
+        {
+            await foreach (NatsMsg<T> msg in src.WithCancellation(ct).ConfigureAwait(false))
+            {
+                T? data = msg.Data;
+                if (data is null) continue;
+                yield return data;
+            }
         }
 
         private void CheckConnection()
@@ -287,11 +344,31 @@ namespace HeatingCameraSystem.Protocols
 
         public async ValueTask DisposeAsync()
         {
+            _subscriptionCts.Cancel();
+
+            Task[] pending;
+            lock (_subscriptionLock)
+            {
+                pending = _subscriptionTasks.ToArray();
+            }
+
+            try
+            {
+                await Task.WhenAll(pending).WaitAsync(TimeSpan.FromSeconds(3));
+            }
+            catch
+            {
+                // Best-effort: a loop may exceed the bound or surface a stray error on shutdown;
+                // dispose the connection regardless so we never hang or leak on exit.
+            }
+
             if (_connection != null)
             {
                 await _connection.DisposeAsync();
                 _connection = null;
             }
+
+            _subscriptionCts.Dispose();
         }
     }
 }

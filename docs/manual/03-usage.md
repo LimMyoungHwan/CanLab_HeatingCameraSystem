@@ -242,7 +242,7 @@ dotnet test --no-build
 
 ## 8. Agent Manager 운영 (카메라 승인)
 
-> Agent Manager(`HCS-Manager` 서비스)를 설치([01-installation.md §8](./01-installation.md#8-agent-manager-설치-선택))한 경우의 일상 운영. Manager 가 USB 카메라를 자동 발견하면 Master **Devices** 탭에서 승인해야 Agent 가 기동된다. Manager 를 안 쓰고 Agent 를 직접 띄우는 운영(§3)은 이 섹션과 무관.
+> Agent Manager(운영자 세션 앱, 로그온 예약작업 `HCS-Manager`)를 설치([01-installation.md §8](./01-installation.md#8-agent-manager-설치-선택))한 경우의 일상 운영. Manager 가 USB 카메라를 자동 발견하면 Master **Devices** 탭에서 승인해야 Agent 가 기동된다. Manager 를 안 쓰고 Agent 를 직접 띄우는 운영(§3)은 이 섹션과 무관.
 
 ### 8.1 Devices 탭 둘러보기
 
@@ -296,7 +296,7 @@ Agent 프로세스가 크래시하면 Manager 가 지수 백오프(`1→2→5→
 
 | 증상 | 점검 |
 |---|---|
-| Devices 탭에 카메라 안 뜸 | `HCS-Manager` 서비스 Running? (`Get-Service HCS-Manager`). NATS URL(`manager-settings.json`) 이 Master 와 같은 서버인지. `manager-state.json` 에 엔트리 생겼는지 |
+| Devices 탭에 카메라 안 뜸 | `HCS-Manager` 예약작업 실행 중? (`Get-ScheduledTask HCS-Manager` → `Running`). NATS URL(`manager-settings.json`) 이 Master 와 같은 서버인지. `manager-state.json` 에 엔트리 생겼는지 |
 | 승인했는데 Agent 안 뜸 | `AgentExePath`(매뉴얼 02 §9.1) 경로에 Agent.exe 있나? `<InstallRoot>\logs\{AgentId}\` 로그 확인. SimulationMode=true 면 실제 spawn 안함(매뉴얼 02 §9.3) |
 | 카메라가 계속 사라졌다 나타남 | Agent 반복 크래시 → 백오프 재시작 중. 로그 가져오기로 원인 확인. 5회 초과 시 영구 드롭 |
 | "로그 가져오기" 30초 초과 | 해당 Agent 가 죽었거나 NATS 연결 끊김. Dashboard 점 색 확인 |

@@ -54,6 +54,7 @@ public sealed class PlcDynamicsEngine : IDisposable
             // 흑체 워드는 ×100 스케일(PlcXgtClient와 일치).
             StepScaled(_plc.Bb1Pv, _plc.Bb1Sv, _dynamics.BlackbodyRatePerSecond, scale: 100);
             StepScaled(_plc.Bb2Pv, _plc.Bb2Sv, _dynamics.BlackbodyRatePerSecond, scale: 100);
+            JogStep(_memory, _plc, _dynamics.JogRatePerSecond, _dynamics.TickMs);
             MirrorEquipmentStatus();
         }
     }
@@ -85,6 +86,25 @@ public sealed class PlcDynamicsEngine : IDisposable
         if (delta == 0) return;
         int step = Math.Clamp(delta, -maxStep, maxStep);
         _memory.WriteWordToken(pvToken, (short)(pv + step));
+    }
+
+    // 조그 비트가 눌려있는(held) 동안 매 틱 서보 위치 워드를 램프한다. 위치 워드는 0.1mm(×10 스케일)이므로
+    // step = rate(mm/s) × 10 × TickMs / 1000. internal: PlcDynamicsEngineTests가 한 스텝을 직접 검증.
+    internal static void JogStep(FEnetDeviceMemory memory, PlcSettings plc, double jogRatePerSecond, int tickMs)
+    {
+        int step = Math.Max(1, (int)Math.Round(jogRatePerSecond * 10 * tickMs / 1000.0));
+        JogAxis(memory, plc.ServoXPos, memory.ReadBitToken(plc.BitJogXPlus), memory.ReadBitToken(plc.BitJogXMinus), step);
+        JogAxis(memory, plc.ServoYPos, memory.ReadBitToken(plc.BitJogYPlus), memory.ReadBitToken(plc.BitJogYMinus), step);
+    }
+
+    private static void JogAxis(FEnetDeviceMemory memory, string posToken, bool plus, bool minus, int step)
+    {
+        if (plus == minus) return; // 둘 다 ON(모순) 또는 둘 다 OFF → 이동 없음
+        short pos = memory.ReadWordToken(posToken);
+        int next = plus ? pos + step : pos - step;
+        // ponytail: 실제 스테이지는 원점(0) 아래로 못 감 — 시뮬은 0에서 클램프
+        if (next < 0) next = 0;
+        memory.WriteWordToken(posToken, (short)next);
     }
 
     private void DetectPointMoves()

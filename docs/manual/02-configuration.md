@@ -259,12 +259,12 @@ Remove-Item "$env:LOCALAPPDATA\HeatingCameraSystem\data.db"
 
 ## 9. Agent Manager 설정
 
-> Agent Manager(Windows Service `HCS-Manager`, 설치는 [01-installation.md §8](./01-installation.md#8-agent-manager-설치-선택))를 쓸 때만 해당. 두 개의 JSON 파일을 `C:\HeatingCameraSystem\Manager\` 에 둔다. 둘 다 없으면 기본값으로 동작하며, `manager-settings.json` 은 `install.ps1` 이 생성한다.
+> Agent Manager(운영자 세션 콘솔 앱, 로그온 예약작업 `HCS-Manager`, 설치는 [01-installation.md §8](./01-installation.md#8-agent-manager-설치-선택))를 쓸 때만 해당. 두 개의 JSON 파일을 `C:\HeatingCameraSystem\Manager\` 에 둔다. 둘 다 없으면 기본값으로 동작하며, `manager-settings.json` 은 `install.ps1` 이 생성한다.
 
 | 파일 | 위치 | 사용 주체 | 자동 생성 |
 |---|---|---|---|
-| `manager-settings.json` | `<InstallRoot>\Manager\` | AgentManager 서비스 | ✅ `install.ps1` 이 생성 |
-| `manager-state.json` | `<InstallRoot>\Manager\` | AgentManager 서비스 | ✅ 카메라 발견 시 생성·갱신 |
+| `manager-settings.json` | `<InstallRoot>\Manager\` | AgentManager 앱 | ✅ `install.ps1` 이 생성 |
+| `manager-state.json` | `<InstallRoot>\Manager\` | AgentManager 앱 | ✅ 카메라 발견 시 생성·갱신 |
 
 ### 9.1 manager-settings.json (서비스 설정)
 
