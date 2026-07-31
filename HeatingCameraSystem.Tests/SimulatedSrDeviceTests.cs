@@ -65,7 +65,7 @@ public class SimulatedSrDeviceTests
     [Fact]
     public void SimulatedDevice_GetCurrentTemperature_ReturnsFloatFrame()
     {
-        var device = new SimulatedSrDevice(Sim());
+        var device = new SimulatedSrDevice(Sim(ramp: 1_000_000_000));
         device.Open();
 
         device.Write(SrProtocol.SetTemperature(30f));
