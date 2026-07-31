@@ -50,6 +50,21 @@ namespace HeatingCameraSystem.Master.ViewModels
         private float _blackBody2;
     }
 
+    public partial class AlarmHistoryLogItem : ObservableObject
+    {
+        [ObservableProperty]
+        private DateTime _timestamp;
+
+        [ObservableProperty]
+        private string _severity = string.Empty;
+
+        [ObservableProperty]
+        private string _source = string.Empty;
+
+        [ObservableProperty]
+        private string _message = string.Empty;
+    }
+
     public partial class HistoryViewModel : ObservableObject
     {
         // Filter properties
@@ -118,11 +133,28 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public ObservableCollection<ChamberHistoryLogItem> ChamberItems { get; } = new ObservableCollection<ChamberHistoryLogItem>();
 
+        public ObservableCollection<AlarmHistoryLogItem> AlarmItems { get; } = new ObservableCollection<AlarmHistoryLogItem>();
+
+        public ObservableCollection<string> SeverityOptions { get; } = new ObservableCollection<string>
+        {
+            "전체",
+            "정보 이상",
+            "경고 이상",
+            "오류만"
+        };
+
+        [ObservableProperty]
+        private string _selectedMinimumSeverity = "전체";
+
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(IsCaptureMode))]
         private bool _isChamberMode;
 
-        public bool IsCaptureMode => !IsChamberMode;
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(IsCaptureMode))]
+        private bool _isAlarmMode;
+
+        public bool IsCaptureMode => !IsChamberMode && !IsAlarmMode;
 
         public HistoryViewModel()
         {
@@ -133,6 +165,12 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private void LoadPage()
         {
+            if (IsAlarmMode)
+            {
+                LoadAlarmPage();
+                return;
+            }
+
             if (IsChamberMode)
             {
                 LoadChamberPage();
@@ -208,6 +246,53 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        private void LoadAlarmPage()
+        {
+            AlarmItems.Clear();
+            var repository = AppServices.AlarmHistoryRepo;
+            if (repository == null)
+            {
+                TotalRecords = 0;
+                TotalPages = 1;
+                return;
+            }
+
+            AlarmSeverity? minimumSeverity = SelectedMinimumSeverity switch
+            {
+                "정보 이상" => AlarmSeverity.Info,
+                "경고 이상" => AlarmSeverity.Warning,
+                "오류만" => AlarmSeverity.Error,
+                _ => null
+            };
+
+            var allRecords = repository
+                .QueryAsync(FromDateTime, ToDateTime, minimumSeverity, 1, int.MaxValue)
+                .GetAwaiter().GetResult()
+                .ToList();
+
+            TotalRecords = allRecords.Count;
+            TotalPages = (int)Math.Ceiling((double)TotalRecords / PageSize);
+            if (TotalPages == 0) TotalPages = 1;
+            if (CurrentPage > TotalPages) CurrentPage = TotalPages;
+            if (CurrentPage < 1) CurrentPage = 1;
+
+            foreach (var record in allRecords.Skip((CurrentPage - 1) * PageSize).Take(PageSize))
+            {
+                AlarmItems.Add(new AlarmHistoryLogItem
+                {
+                    Timestamp = record.Timestamp,
+                    Severity = record.Severity switch
+                    {
+                        AlarmSeverity.Error => "오류",
+                        AlarmSeverity.Warning => "경고",
+                        _ => "정보"
+                    },
+                    Source = record.Source,
+                    Message = record.Message
+                });
+            }
+        }
+
         [RelayCommand]
         private void Search()
         {
@@ -218,8 +303,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand]
         private void ShowCaptureMode()
         {
-            if (!IsChamberMode) return;
+            if (IsCaptureMode) return;
             IsChamberMode = false;
+            IsAlarmMode = false;
             CurrentPage = 1;
             LoadPage();
         }
@@ -228,7 +314,18 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void ShowChamberMode()
         {
             if (IsChamberMode) return;
+            IsAlarmMode = false;
             IsChamberMode = true;
+            CurrentPage = 1;
+            LoadPage();
+        }
+
+        [RelayCommand]
+        private void ShowAlarmMode()
+        {
+            if (IsAlarmMode) return;
+            IsChamberMode = false;
+            IsAlarmMode = true;
             CurrentPage = 1;
             LoadPage();
         }
@@ -271,27 +368,6 @@ namespace HeatingCameraSystem.Master.ViewModels
                     break;
             }
             LoadPage();
-        }
-
-        [RelayCommand]
-        private async Task EmergencyStop()
-        {
-            var plc = AppServices.PlcController;
-            if (plc == null)
-            {
-                SystemStatusText = "System Status: PLC OFFLINE — E-STOP UNAVAILABLE";
-                return;
-            }
-            try
-            {
-                await plc.TriggerEmergencyStopAsync();
-                SystemStatusText = "System Status: EMERGENCY STOPPED";
-            }
-            catch (Exception ex)
-            {
-                SystemStatusText = $"System Status: E-STOP FAILED — {ex.Message}";
-                System.Diagnostics.Debug.WriteLine($"[History] emergency stop: {ex.Message}");
-            }
         }
 
         [RelayCommand]
