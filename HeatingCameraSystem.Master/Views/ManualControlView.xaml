@@ -319,40 +319,44 @@
                                 Foreground="#47eaed"
                                 Text="{Binding CurrentPoint}" />
                         </StackPanel>
-                        <WrapPanel Margin="0,6,0,0">
-                            <Button
-                                Content="{loc:Loc Manual_XJogMinus}"
-                                PreviewMouseLeftButtonDown="JogDown"
-                                PreviewMouseLeftButtonUp="JogUp"
-                                Style="{StaticResource Btn}"
-                                Tag="X-" />
-                            <Button
-                                Content="{loc:Loc Manual_XJogPlus}"
-                                PreviewMouseLeftButtonDown="JogDown"
-                                PreviewMouseLeftButtonUp="JogUp"
-                                Style="{StaticResource Btn}"
-                                Tag="X+" />
-                            <Button
-                                Content="{loc:Loc Manual_YJogMinus}"
-                                PreviewMouseLeftButtonDown="JogDown"
-                                PreviewMouseLeftButtonUp="JogUp"
-                                Style="{StaticResource Btn}"
-                                Tag="Y-" />
-                            <Button
-                                Content="{loc:Loc Manual_YJogPlus}"
-                                PreviewMouseLeftButtonDown="JogDown"
-                                PreviewMouseLeftButtonUp="JogUp"
-                                Style="{StaticResource Btn}"
-                                Tag="Y+" />
-                            <Button
-                                Command="{Binding HomeXCommand}"
-                                Content="{loc:Loc Manual_HomeX}"
-                                Style="{StaticResource Btn}" />
-                            <Button
-                                Command="{Binding HomeYCommand}"
-                                Content="{loc:Loc Manual_HomeY}"
-                                Style="{StaticResource Btn}" />
-                        </WrapPanel>
+                        <StackPanel Margin="0,6,0,0">
+                            <WrapPanel>
+                                <Button
+                                    Content="{loc:Loc Manual_XJogMinus}"
+                                    PreviewMouseLeftButtonDown="JogDown"
+                                    PreviewMouseLeftButtonUp="JogUp"
+                                    Style="{StaticResource Btn}"
+                                    Tag="X-" />
+                                <Button
+                                    Content="{loc:Loc Manual_XJogPlus}"
+                                    PreviewMouseLeftButtonDown="JogDown"
+                                    PreviewMouseLeftButtonUp="JogUp"
+                                    Style="{StaticResource Btn}"
+                                    Tag="X+" />
+                                <Button
+                                    Command="{Binding HomeXCommand}"
+                                    Content="{loc:Loc Manual_HomeX}"
+                                    Style="{StaticResource Btn}" />
+                            </WrapPanel>
+                            <WrapPanel>
+                                <Button
+                                    Content="{loc:Loc Manual_YJogMinus}"
+                                    PreviewMouseLeftButtonDown="JogDown"
+                                    PreviewMouseLeftButtonUp="JogUp"
+                                    Style="{StaticResource Btn}"
+                                    Tag="Y-" />
+                                <Button
+                                    Content="{loc:Loc Manual_YJogPlus}"
+                                    PreviewMouseLeftButtonDown="JogDown"
+                                    PreviewMouseLeftButtonUp="JogUp"
+                                    Style="{StaticResource Btn}"
+                                    Tag="Y+" />
+                                <Button
+                                    Command="{Binding HomeYCommand}"
+                                    Content="{loc:Loc Manual_HomeY}"
+                                    Style="{StaticResource Btn}" />
+                            </WrapPanel>
+                        </StackPanel>
 
                         <TextBlock
                             Margin="0,12,0,6"
