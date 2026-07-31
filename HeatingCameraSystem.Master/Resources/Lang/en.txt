@@ -142,6 +142,16 @@ Plc_MfcMax=MFC Max Output (%RH)
 Plc_PairGlassBoundary=Pair Glass Boundary (℃)
 Plc_ServoPointsTitle=Servo Point Coordinates (20)
 Plc_Point=Point
+Plc_ErrorTitle=PLC Error
+Plc_ErrorStop=PLC error detected — stop all: {0}
+Plc_ErrorStopNoDetails=PLC error detected — stop all
+Plc_ErrorCleared=PLC error cleared
+Plc_EmergencyStopFailed=Emergency stop failed: {0}
+Plc_ChamberStopFailed=Chamber stop failed: {0}
+Plc_Origin=PLC Origin Return
+Plc_NotInitialized=PLC not initialized
+Plc_ActionCompleted={0} completed {1}
+Plc_ActionFailed={0} failed: {1}
 
 # Manual
 Manual_TempStart=Start Temp Control
@@ -266,3 +276,5 @@ Dev_ColApproved=Approved
 Dev_ColCvIdx=CV Idx
 Manual_BlackBody=Black Body
 Hist_AgentId=Agent Id
+
+Nav_PlcOrigin=PLC Origin

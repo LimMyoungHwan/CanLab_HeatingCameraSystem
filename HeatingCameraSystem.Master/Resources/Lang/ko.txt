@@ -142,6 +142,16 @@ Plc_MfcMax=MFC 최대출력 (%RH)
 Plc_PairGlassBoundary=페어글라스 경계 (℃)
 Plc_ServoPointsTitle=서보 포인트 좌표 (20)
 Plc_Point=포인트
+Plc_ErrorTitle=PLC 오류
+Plc_ErrorStop=PLC 오류 감지 — 전체 정지: {0}
+Plc_ErrorStopNoDetails=PLC 오류 감지 — 전체 정지
+Plc_ErrorCleared=PLC 오류 해제
+Plc_EmergencyStopFailed=비상 정지 실패: {0}
+Plc_ChamberStopFailed=챔버 정지 실패: {0}
+Plc_Origin=PLC 원점 복귀
+Plc_NotInitialized=PLC 미초기화
+Plc_ActionCompleted={0} 완료 {1}
+Plc_ActionFailed={0} 실패: {1}
 
 # Manual
 Manual_TempStart=온도제어 시작
@@ -266,3 +276,5 @@ Dev_ColApproved=Approved
 Dev_ColCvIdx=CV Idx
 Manual_BlackBody=흥체
 Hist_AgentId=에이전트 ID
+
+Nav_PlcOrigin=PLC 원점 복귀
