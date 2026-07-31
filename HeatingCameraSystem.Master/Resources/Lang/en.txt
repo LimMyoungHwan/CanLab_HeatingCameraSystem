@@ -278,3 +278,11 @@ Manual_BlackBody=Black Body
 Hist_AgentId=Agent Id
 
 Nav_PlcOrigin=PLC Origin
+Nav_AlarmsTitle=ALARMS · Alarms
+Nav_AlarmsFilterType=Type
+Nav_AlarmsFilterAll=All
+Nav_AlarmsFilterInfo=Info
+Nav_AlarmsFilterWarning=Warning
+Nav_AlarmsFilterError=Error
+Nav_AlarmsDeleteTooltip=Delete alarm
+Nav_AlarmsEmpty=No alarms

@@ -278,3 +278,11 @@ Manual_BlackBody=흥체
 Hist_AgentId=에이전트 ID
 
 Nav_PlcOrigin=PLC 원점 복귀
+Nav_AlarmsTitle=ALARMS · 알람
+Nav_AlarmsFilterType=종류
+Nav_AlarmsFilterAll=전체
+Nav_AlarmsFilterInfo=정보
+Nav_AlarmsFilterWarning=경고
+Nav_AlarmsFilterError=오류
+Nav_AlarmsDeleteTooltip=알람 삭제
+Nav_AlarmsEmpty=알람 없음
