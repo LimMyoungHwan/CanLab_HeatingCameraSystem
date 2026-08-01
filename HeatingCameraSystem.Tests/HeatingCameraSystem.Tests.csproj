@@ -22,6 +22,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\HeatingCameraSystem.Master\Resources\Lang\*.txt"
+          Link="Resources\Lang\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\HeatingCameraSystem.Core\HeatingCameraSystem.Core.csproj" />
     <ProjectReference Include="..\HeatingCameraSystem.Protocols\HeatingCameraSystem.Protocols.csproj" />
     <ProjectReference Include="..\HeatingCameraSystem.Master\HeatingCameraSystem.Master.csproj" />
