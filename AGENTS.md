@@ -5,24 +5,38 @@
 열화상 카메라 모니터링 시스템. WPF Master PC ↔ NATS ↔ 다수의 Agent (카메라 PC) 구조.
 
 ```
-Core (.NET 8)          ← 인터페이스 + 모델 + 설정만. 외부 의존성 없음.
-Protocols (.NET 8)     ← Core 구현체. VagabondK.Protocols(LS XGT FEnet), NATS.Net, System.IO.Ports.
-Master (.NET 8-windows)← WPF 운영자 UI. AppServices 정적 서비스 로케이터.
-Agent (.NET 8)         ← 카메라 PC 콘솔 앱. OpenCvSharp4 + NATS.
-Tests (.NET 8-windows) ← xUnit + Moq. 4개 프로젝트 모두 참조.
+Core (.NET 8)              ← 인터페이스 + 모델 + 설정만. 외부 의존성 없음.
+Protocols (.NET 8)         ← Core 구현체. XGT FEnet, NATS, Serial, 카메라 프로토콜.
+Master (.NET 8-windows)    ← WPF 운영자 UI. AppServices 정적 서비스 로케이터.
+Agent (.NET 8)             ← 카메라 PC 콘솔 앱. OpenCvSharp4 + NATS.
+AgentUI (.NET 8-windows)   ← 카메라 런타임 WPF UI.
+AgentManager (.NET 8)      ← Agent 승인·감독 호스트.
+Simulator (.NET 8)         ← XGT FEnet + NATS 외부 시뮬레이터.
+E2EDriver (.NET 8)         ← 외부 시뮬레이터 E2E 드라이버.
+ManagerE2EDriver (.NET 8)  ← AgentManager E2E 드라이버.
+Tests (.NET 8-windows)     ← xUnit + Moq 통합 테스트 프로젝트.
 ```
 
 ## 빌드 / 테스트 명령
 
 ```powershell
 dotnet build                                             # 솔루션 전체 빌드
-dotnet test --no-build                                   # 테스트 (현재 61개)
+dotnet test --no-build                                   # 테스트 (현재 254개)
 dotnet run --project HeatingCameraSystem.Master          # WPF Master 실행
 dotnet run --project HeatingCameraSystem.Agent           # Agent 실행 (agent.json 기준)
 dotnet run --project HeatingCameraSystem.Agent -- Bay1 nats://192.168.1.10:4222  # 인수 오버라이드
 ```
 
 테스트 프로젝트가 `net8.0-windows` 타겟인 이유: Master(WPF) 프로젝트를 직접 참조하기 때문.
+
+테스트는 `HeatingCameraSystem.Tests/TestAssembly.cs`의 설정에 따라 전역 병렬 실행을 끈다. 정적
+`AppServices`와 WPF 상태를 공유하므로 테스트를 병렬화하지 말고, 외부 NATS/PLC가 필요한 테스트는
+시뮬레이터 또는 별도 실행 스크립트의 전제조건을 확인한다. 테스트 출력에서 Master 리소스를 읽는
+경우 `HeatingCameraSystem.Tests.csproj`의 `Resources/Lang` 복사 설정을 유지한다.
+
+프로젝트별 세부 규칙:
+- `HeatingCameraSystem.Master/AGENTS.md` — WPF 시작·서비스 로케이터·ViewModel 규칙.
+- `HeatingCameraSystem.Protocols/AGENTS.md` — XGT·시리얼 셔터·NATS 구현 규칙.
 
 ## 런타임 설정 파일 (저장소 외부)
 
