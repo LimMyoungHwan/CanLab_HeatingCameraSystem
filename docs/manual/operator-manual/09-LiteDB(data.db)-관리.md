@@ -1,10 +1,35 @@
 # 9. LiteDB(data.db) 관리
 
-- 위치: %LOCALAPPDATA%\HeatingCameraSystem\data.db (촬영/챔버/알람 이력, 대시보드 레이아웃, 카메라 시리얼/디바이스)
-- 백업(Master 종료 후): data.db 복사
-- 초기화: Master 종료 후 data.db 삭제 → 다음 기동 시 빈 DB 재생성(백업 먼저!)
-- 레시피는 recipe 폴더 JSON으로 별도 저장 → 폴더 백업/복사로 이전
+- 위치: `%LOCALAPPDATA%\HeatingCameraSystem\data.db` (사용자 계정별 경로)
+- 저장 항목: 촬영·챔버·알람 이력, 대시보드 레이아웃, 카메라 시리얼 설정 및 디바이스 정보
+- 탐색기에서는 `%LOCALAPPDATA%`, PowerShell에서는 `$env:LOCALAPPDATA`를 사용
+- 백업·복원·초기화 전 Master를 완전히 종료하고 프로세스 종료까지 확인
+- 레시피는 `%LOCALAPPDATA%\HeatingCameraSystem\recipe\*.json`으로 별도 저장되므로 `recipe` 폴더도 별도 백업
 
+## 백업
+
+```powershell
+New-Item -ItemType Directory -Path "D:\backup" -Force
+Copy-Item "$env:LOCALAPPDATA\HeatingCameraSystem\data.db" "D:\backup\data_$(Get-Date -Format yyyyMMdd_HHmmss).db"
+Copy-Item "$env:LOCALAPPDATA\HeatingCameraSystem\recipe" "D:\backup\recipe_$(Get-Date -Format yyyyMMdd_HHmmss)" -Recurse
 ```
-Copy-Item "$env:LOCALAPPDATA\HeatingCameraSystem\data.db" "D:\backup\data_$(Get-Date -Format yyyyMMdd_HHmm).db"
+
+## 복원
+
+1. Master를 완전히 종료하고 프로세스 종료까지 확인합니다.
+2. 현재 DB를 별도 이름으로 보관합니다.
+3. 백업본을 `data.db`로 복사합니다.
+4. Master를 다시 실행하고 데이터를 확인합니다.
+
+```powershell
+Rename-Item "$env:LOCALAPPDATA\HeatingCameraSystem\data.db" "data_before_restore_$(Get-Date -Format yyyyMMdd_HHmmss).db"
+Copy-Item "D:\backup\data_백업시각.db" "$env:LOCALAPPDATA\HeatingCameraSystem\data.db"
+```
+
+## 초기화
+
+초기화하면 촬영·챔버·알람 이력, 대시보드 레이아웃, 카메라 시리얼 설정 및 디바이스 정보가 사라집니다. Master를 완전히 종료하고 프로세스 종료까지 확인한 후 기존 DB의 이름을 변경해 보관합니다. 다음 기동 시 빈 `data.db`가 자동 생성됩니다.
+
+```powershell
+Rename-Item "$env:LOCALAPPDATA\HeatingCameraSystem\data.db" "data_before_reset_$(Get-Date -Format yyyyMMdd_HHmmss).db"
 ```
