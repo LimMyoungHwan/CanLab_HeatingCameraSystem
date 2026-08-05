@@ -1,0 +1,136 @@
+You are an expert technical-documentation reviewer in a multi-AI review council.
+You review ONE chapter of a Korean operations manual for "HeatingCameraSystem" — a thermal-camera chamber system (WPF Master PC + NATS message bus + camera Agent PCs + LS XGT FEnet PLC + serial shutter + recipe-driven automatic capture).
+
+TARGET READER OF THIS CHAPTER: 설치·설정·유지보수 관리자
+CHAPTER ID: 03-설치   ROUND: 1
+
+TASK — critically review the chapter markdown under "=== CHAPTER CONTENT ===" for:
+1. 정확성 — procedures, terminology, field names correct & self-consistent
+2. 완결성 — missing steps, missing warnings, unclear points, gaps
+3. 명확성 — readability for the target reader
+4. 구성/일관성 — structure, heading flow, wording consistency
+5. 이미지 자리(📷 [그림 N] blocks) — each placement useful & clearly described?
+
+OUTPUT — write your review in KOREAN, EXACTLY this structure:
+
+# 03-설치 — {AI_NAME} 검토 (Round 1)
+
+## 종합 평가
+- 수정 필요도: 상 / 중 / 하   (택1)
+- 한 줄 요약: ...
+
+## 수정 필요 항목
+1. [위치/섹션] 문제: ... -> 제안: ...
+2. ...
+(문제 없으면 "없음")
+
+## 누락/추가 제안
+- ...   (없으면 "없음")
+
+## 이미지 자리 검토
+- [그림 N] 적절/부적절 — 사유
+
+## (선택) 수정 제안 전문
+(수정량 많을 때만, 수정 반영한 챕터 markdown 전문)
+
+RULES:
+- 반드시 실제 챕터 내용에 근거. 없는 기능/화면 지어내지 말 것.
+- 이미 좋으면 솔직히 "하"로, 항목 최소화.
+- 구체적·실행가능·간결. 한국어.
+- {AI_NAME} 은 본인 이름(codex/kimi/agy/claude)으로 대체.
+
+
+=== CHAPTER CONTENT (review target) ===
+
+# 3. 설치
+
+
+## 3.1 사전 요구사항
+
+| 항목 | 필수 | 비고 |
+| --- | --- | --- |
+| Windows 10/11 64-bit | 예 | Master(WPF)·Agent(OpenCvSharp) 모두 Windows |
+| .NET 8 (SDK/Runtime) | 예 | Master=Desktop Runtime, Agent=Runtime |
+| NATS 서버 | 예 | Docker 권장 |
+| PLC(LS XGT FEnet) | 시뮬 시 불필요 | XGT 전용 TCP, 기본 포트 2004 |
+| 카메라 + USB 가상 시리얼 | 시뮬 시 불필요 | 웹캠으로도 검증 가능 |
+
+
+## 3.2 방화벽
+
+| 포트 | 방향 | 용도 | 대상 PC |
+| --- | --- | --- | --- |
+| 4222/tcp | 아웃바운드 | NATS 클라이언트 | Master, Agent |
+| 4222/tcp | 인바운드 | NATS 수신 | NATS 호스트 |
+| 8222/tcp | 인바운드 | NATS 모니터링(선택) | NATS 호스트 |
+| 2004/tcp | 아웃바운드 | LS XGT FEnet | Master |
+
+
+## 3.3 NATS 서버
+
+```
+docker compose -f docs/deployment/docker-compose.yml up -d
+docker ps | Select-String nats
+Test-NetConnection -ComputerName 127.0.0.1 -Port 4222 | Select TcpTestSucceeded
+```
+
+> 📷 **[그림 2] NATS 서버 기동 확인**
+> - **캡처 대상:** docker ps 또는 NATS 콘솔에서 서버가 떠 있는 상태
+> - **화면/상태:** NATS 컨테이너/프로세스가 실행 중인 화면
+
+
+## 3.4 Master 설치
+
+```
+dotnet publish HeatingCameraSystem.Master -c Release -o publish\Master
+# publish\Master 폴더를 운영 PC로 복사 후 HeatingCameraSystem.Master.exe 실행
+```
+
+최초 실행 시 %LOCALAPPDATA%\HeatingCameraSystem\ 에 hardware.json(기본값)과 data.db(빈 LiteDB)가 생성된다. hardware.json을 실제 환경(PLC IP/NATS URL 등)으로 수정 후 재시작한다.
+
+> 📷 **[그림 3] hardware.json 생성 위치**
+> - **캡처 대상:** %LOCALAPPDATA%\HeatingCameraSystem\ 폴더에 hardware.json·data.db가 생성된 탐색기 화면
+> - **화면/상태:** 탐색기 주소창에 경로가 보이도록
+
+
+## 3.5 Agent 설치
+
+```
+dotnet publish HeatingCameraSystem.Agent -c Release -o publish\Agent
+# 단일 인스턴스: agent.json 자동 생성 후 편집
+# 다중 인스턴스(CLI): Agent.exe <AgentId> <NatsUrl> [CameraIndex] [StoragePath] [SimulationMode]
+```
+
+> **[참고]** CLI 인수를 모두 넘기면 agent.json을 읽지 않으므로 같은 폴더에서 여러 인스턴스를 동시 기동해도 안전하다(테스트·시뮬용).
+
+
+## 3.6 카메라·시리얼 셔터 확인
+
+- USB 비디오 장치 → 장치관리자 '이미징 장치'에서 인덱스 확인(보통 0/1) → agent.json CameraIndex
+- 가상 시리얼 포트(셔터) → 장치관리자 '포트(COM & LPT)'에서 COM 번호 확인
+
+> 📷 **[그림 4] 장치관리자 카메라·COM 확인**
+> - **캡처 대상:** 장치관리자에서 이미징 장치와 포트(COM & LPT)가 함께 보이는 화면
+> - **화면/상태:** 카메라·COM 포트가 인식된 상태
+
+
+## 3.7 설치 검증 체크리스트
+
+| # | 확인 | 방법 |
+| --- | --- | --- |
+| 1 | .NET 런타임 | dotnet --info 8.x |
+| 2 | NATS | Test-NetConnection 127.0.0.1 -Port 4222 → True |
+| 3 | Master 기동 | 실행 시 대시보드 표시 |
+| 4 | hardware.json 생성 | %LOCALAPPDATA%\HeatingCameraSystem\hardware.json 존재 |
+| 5 | Agent 기동 | 콘솔에 'Connected to NATS' |
+| 6 | Master 인식 | 대시보드에 초록 점(5초 내) |
+| 7 | (실PLC) 온습도 | 대시보드 값 갱신 |
+
+> 📷 **[그림 5] Agent 콘솔 로그**
+> - **캡처 대상:** Agent 콘솔의 'Camera ready' 및 'Connected to NATS' 로그
+> - **화면/상태:** Agent 정상 기동 로그
+
+> 📷 **[그림 6] Master Agent 인식**
+> - **캡처 대상:** 대시보드 카메라/Agent 패널에 초록 점이 표시된 상태
+> - **화면/상태:** Agent 기동 후 5초 이내
+> - **표시 영역:** 창 오른쪽
