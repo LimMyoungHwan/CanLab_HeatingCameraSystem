@@ -204,6 +204,16 @@
                               RowBackground="#1a1f2e" AlternatingRowBackground="#161b2a"
                               GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#3b4949"
                               Height="200" Margin="0,0,0,18">
+                        <DataGrid.ColumnHeaderStyle>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="#252a39"/>
+                                <Setter Property="Foreground" Value="#bac9c9"/>
+                                <Setter Property="Padding"    Value="8,6"/>
+                                <Setter Property="FontSize"   Value="11"/>
+                                <Setter Property="BorderBrush" Value="#3b4949"/>
+                                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                            </Style>
+                        </DataGrid.ColumnHeaderStyle>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="{loc:Loc Agent_ColAgentId}" Width="*" Binding="{Binding AgentId, Mode=TwoWay}"/>
                             <DataGridTextColumn Header="{loc:Loc Agent_ColOpenCvIdx}" Width="90" Binding="{Binding OpenCvIndex, Mode=TwoWay}"/>
