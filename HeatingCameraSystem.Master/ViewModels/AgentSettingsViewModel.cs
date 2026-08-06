@@ -83,6 +83,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     {
                         OnlineAgents.Add(msg.AgentId);
                         SelectedAgent ??= msg.AgentId;
+                        EnsureConfigSubscriptions(msg.AgentId);
                     }
                 });
             });
