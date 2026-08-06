@@ -654,7 +654,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 return;
             }
 
-            dispatcher.Invoke(action);
+            dispatcher?.Invoke(action);
         }
 
         private void UpdateOnlineAgentCount() => OnlineAgentCount = Agents.Count(a => a.IsOnline);
