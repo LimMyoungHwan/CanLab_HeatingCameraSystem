@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -32,6 +33,13 @@ namespace HeatingCameraSystem.AgentUI
         private CaptureStore? _store;
         private INatsCommunicationService? _nats;
         private CameraNatsConnector? _natsConnector;
+        private AgentUiConfig? _config;
+        private ICameraComPairingService? _pairing;
+        private Func<CameraDescriptor, ICameraSerialClient?>? _serialFactory;
+        private Dictionary<string, ThermalNucCorrector>? _nucs;
+        private ICameraEnumerator? _cameraWatcher;
+        private int _rebuildInFlight;
+        private int _rebuildDirty;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -56,6 +64,20 @@ namespace HeatingCameraSystem.AgentUI
             }
 
             AgentUiConfig config = AgentUiConfig.LoadOrCreate();
+
+            if (!config.SimulationMode)
+            {
+                // Namespace each AgentId by host so N PCs' "Agent_1"s don't collide on shared NATS topics.
+                string host = Environment.MachineName;
+                for (int i = 0; i < config.Cameras.Count; i++)
+                {
+                    CameraDescriptor cam = config.Cameras[i];
+                    if (!cam.AgentId.StartsWith(host + "_", StringComparison.OrdinalIgnoreCase))
+                    {
+                        config.Cameras[i] = cam with { AgentId = $"{host}_{cam.AgentId}" };
+                    }
+                }
+            }
 
             Func<CameraDescriptor, ICameraRuntime> sourceFactory = config.SimulationMode
                 ? (d => new CameraRuntime(d.OpenCvIndex, new FakeThermalFrameSource()))
@@ -82,49 +104,18 @@ namespace HeatingCameraSystem.AgentUI
 
             Dispatcher dispatcher = Dispatcher;
             var nucs = new Dictionary<string, ThermalNucCorrector>();
-            foreach (CameraDescriptor cam in config.Cameras)
+
+            _config = config;
+            _pairing = pairing;
+            _serialFactory = serialFactory;
+            _nucs = nucs;
+
+            if (!config.SimulationMode)
             {
-                ICameraRuntime runtime = _manager.Add(cam);
-                string agentId = cam.AgentId;
-                int cameraIndex = cam.OpenCvIndex;
-                runtime.StatusChanged += (_, status) =>
-                {
-                    if (status == CameraRuntimeStatus.Faulted)
-                    {
-                        AgentUiLog.Logger.Error("Camera {AgentId} (index {Index}) faulted", agentId, cameraIndex);
-                    }
-                };
-
-                ICameraSerialClient? serial = serialFactory(cam);
-                if (serial is not null)
-                {
-                    try
-                    {
-                        _ = serial.InitializeAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        AgentUiLog.Logger.Warning(ex, "Camera {AgentId} serial {Port} open failed", agentId, cam.SerialPortName);
-                        serial.Dispose();
-                        serial = null;
-                    }
-                }
-
-                var nuc = new ThermalNucCorrector();
-                nucs[cam.AgentId] = nuc;
-
-                var panel = new CameraPanelViewModel(cam.Alias, cam.AgentId, runtime, dispatcher, nuc, _store, config.CaptureBurstCount, serial);
-                _mainViewModel.Cameras.Add(panel);
-
-                // 영상 ON: 카메라 RUN + 셔터 열기 (기본 셔터 닫힘 → 흰 화면 방지). 카메라별 격리.
-                if (serial is not null)
-                {
-                    _ = panel.StartLiveAsync();
-                }
+                ReconcileSerialPortsFromPairing(config, pairing);
             }
 
-            // Fire-and-forget: per-camera start failures are isolated inside the manager.
-            _ = _manager.StartAllAsync();
+            RebuildCameraPanels();
 
             _nats = new NatsCommunicationService();
             _natsConnector = new CameraNatsConnector(_nats, _manager, _store, config.Cameras, config.HeartbeatSeconds, nucs, config.CaptureBurstCount,
@@ -203,6 +194,14 @@ namespace HeatingCameraSystem.AgentUI
                 });
             _natsConnector.Start(config.NatsUrl);
 
+            if (!config.SimulationMode)
+            {
+                var watcher = new WmiCameraEnumerator();
+                watcher.Changed += OnCameraHotplug;
+                watcher.StartWatching();
+                _cameraWatcher = watcher;
+            }
+
             AgentUiLog.Logger.Information(
                 "AgentUI started: {CameraCount} cameras, simulation={Simulation}, nats={NatsUrl}",
                 config.Cameras.Count, config.SimulationMode, config.NatsUrl);
@@ -222,8 +221,171 @@ namespace HeatingCameraSystem.AgentUI
             window.Show();
         }
 
+        private static void ReconcileSerialPortsFromPairing(AgentUiConfig config, ICameraComPairingService pairing)
+        {
+            IReadOnlyList<CameraComPair> pairs;
+            try
+            {
+                // ponytail: blocks the UI thread on serial S/N reads (~sub-second per camera).
+                // Fine for a bench launch; if 8-camera startup drags, hoist to an async post-show reconcile.
+                pairs = Task.Run(() => pairing.GetPairsAsync()).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                AgentUiLog.Logger.Warning(ex, "Startup serial pairing failed; keeping configured COM ports");
+                return;
+            }
+
+            for (int i = 0; i < config.Cameras.Count; i++)
+            {
+                CameraDescriptor cam = config.Cameras[i];
+                CameraComPair? pair = ResolveConfidentPair(pairs, cam);
+                if (pair?.SerialPort is null)
+                {
+                    continue;
+                }
+
+                string newPort = pair.SerialPort.PortName;
+                config.Cameras[i] = cam with
+                {
+                    SerialPortName = newPort,
+                    CameraSerialNumber = IsUsableSerial(pair.CameraSerialNumber) ? pair.CameraSerialNumber : cam.CameraSerialNumber,
+                    UsbContainerId = string.IsNullOrWhiteSpace(pair.Camera.UsbParentId) ? cam.UsbContainerId : pair.Camera.UsbParentId,
+                };
+
+                if (!string.Equals(cam.SerialPortName, newPort, StringComparison.OrdinalIgnoreCase))
+                {
+                    AgentUiLog.Logger.Information(
+                        "Camera {AgentId}: serial {Old} -> {New} (matched by pairing)",
+                        cam.AgentId, cam.SerialPortName ?? "(none)", newPort);
+                }
+            }
+        }
+
+        private static CameraComPair? ResolveConfidentPair(IReadOnlyList<CameraComPair> pairs, CameraDescriptor cam)
+        {
+            if (IsUsableSerial(cam.CameraSerialNumber))
+            {
+                var bySerial = pairs
+                    .Where(p => string.Equals(p.CameraSerialNumber, cam.CameraSerialNumber, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (bySerial.Count == 1)
+                {
+                    return bySerial[0];
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(cam.UsbContainerId))
+            {
+                return pairs.FirstOrDefault(
+                    p => string.Equals(p.Camera.UsbParentId, cam.UsbContainerId, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return null;
+        }
+
+        private static bool IsUsableSerial([NotNullWhen(true)] string? serial) =>
+            !string.IsNullOrWhiteSpace(serial) && serial.Any(c => c is >= '1' and <= '9');
+
+        private void RebuildCameraPanels()
+        {
+            if (_manager is null || _mainViewModel is null || _config is null || _serialFactory is null || _nucs is null || _store is null)
+            {
+                return;
+            }
+
+            foreach (CameraPanelViewModel existing in _mainViewModel.Cameras.ToList())
+            {
+                existing.Dispose();
+            }
+            _mainViewModel.Cameras.Clear();
+
+            foreach (CameraDescriptor cam in _config.Cameras)
+            {
+                ICameraRuntime runtime = _manager.Add(cam);
+                string agentId = cam.AgentId;
+                int cameraIndex = cam.OpenCvIndex;
+                runtime.StatusChanged += (_, status) =>
+                {
+                    if (status == CameraRuntimeStatus.Faulted)
+                    {
+                        AgentUiLog.Logger.Error("Camera {AgentId} (index {Index}) faulted", agentId, cameraIndex);
+                    }
+                };
+
+                ICameraSerialClient? serial = _serialFactory(cam);
+                if (serial is not null)
+                {
+                    try
+                    {
+                        _ = serial.InitializeAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        AgentUiLog.Logger.Warning(ex, "Camera {AgentId} serial {Port} open failed", agentId, cam.SerialPortName);
+                        serial.Dispose();
+                        serial = null;
+                    }
+                }
+
+                ThermalNucCorrector nuc = _nucs.TryGetValue(cam.AgentId, out ThermalNucCorrector? existingNuc)
+                    ? existingNuc
+                    : new ThermalNucCorrector();
+                _nucs[cam.AgentId] = nuc;
+
+                var panel = new CameraPanelViewModel(cam.Alias, cam.AgentId, runtime, Dispatcher, nuc, _store, _config.CaptureBurstCount, serial);
+                _mainViewModel.Cameras.Add(panel);
+
+                if (serial is not null)
+                {
+                    _ = panel.StartLiveAsync();
+                }
+            }
+
+            _ = _manager.StartAllAsync();
+        }
+
+        private void OnCameraHotplug(PnpChange change)
+        {
+            Interlocked.Exchange(ref _rebuildDirty, 1);
+            if (Interlocked.CompareExchange(ref _rebuildInFlight, 1, 0) != 0)
+            {
+                return;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // ponytail: dirty-flag coalescing — a rebuild in flight re-runs once if another event
+                    // landed. Residual loop-exit/release race is harmless: 1s WMI debounce spaces real
+                    // hotplug events seconds apart, and the next plug re-triggers a rebuild anyway.
+                    while (Interlocked.Exchange(ref _rebuildDirty, 0) == 1)
+                    {
+                        if (_config is not null && !_config.SimulationMode && _pairing is not null)
+                        {
+                            ReconcileSerialPortsFromPairing(_config, _pairing);
+                        }
+
+                        await Dispatcher.InvokeAsync(RebuildCameraPanels).Task.ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AgentUiLog.Logger.Warning(ex, "Camera hotplug reconcile failed");
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _rebuildInFlight, 0);
+                }
+            });
+        }
+
         protected override void OnExit(ExitEventArgs e)
         {
+            _cameraWatcher?.StopWatching();
+            _cameraWatcher?.Dispose();
+
             // 워치독: 아래 종료 정리가 네이티브 카메라(OpenCV DSHOW Read)/시리얼(SerialPort.Dispose)
             // 콜에 걸리면 CLR이 그 스레드를 abort할 수 없어 프로세스가 잔존한다. best-effort 정리가
             // wedge되면 OS가 카메라+COM을 해제하도록 강제 종료. 정상 종료 시엔 프로세스가 먼저 빠져나가

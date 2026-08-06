@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -27,6 +28,12 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         [ObservableProperty]
         private string _deviceName = string.Empty;
 
+        [ObservableProperty]
+        private string _cameraSerialNumber = string.Empty;
+
+        [ObservableProperty]
+        private string _usbContainerId = string.Empty;
+
         public CameraRow(CameraDescriptor descriptor)
         {
             _agentId = descriptor.AgentId;
@@ -34,6 +41,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _alias = descriptor.Alias;
             _serialPortName = descriptor.SerialPortName ?? string.Empty;
             _deviceName = descriptor.DeviceName ?? string.Empty;
+            _cameraSerialNumber = descriptor.CameraSerialNumber ?? string.Empty;
+            _usbContainerId = descriptor.UsbContainerId ?? string.Empty;
         }
 
         public CameraRow()
@@ -46,7 +55,9 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         public CameraDescriptor ToDescriptor() =>
             new(AgentId, OpenCvIndex, Alias,
                 string.IsNullOrWhiteSpace(SerialPortName) ? null : SerialPortName,
-                string.IsNullOrWhiteSpace(DeviceName) ? null : DeviceName);
+                string.IsNullOrWhiteSpace(DeviceName) ? null : DeviceName,
+                string.IsNullOrWhiteSpace(CameraSerialNumber) ? null : CameraSerialNumber,
+                string.IsNullOrWhiteSpace(UsbContainerId) ? null : UsbContainerId);
     }
 
     public partial class SettingsViewModel : ObservableObject
@@ -146,20 +157,21 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 int matched = 0;
                 foreach (CameraRow row in Cameras)
                 {
-                    var pair = !string.IsNullOrWhiteSpace(row.DeviceName)
-                        ? pairs.FirstOrDefault(p => p.Camera.FriendlyName.Contains(row.DeviceName, StringComparison.OrdinalIgnoreCase))
-                        : pairs.FirstOrDefault(p => p.Camera.OpenCvIndex == row.OpenCvIndex);
-
+                    CameraComPair? pair = FindPairForRow(pairs, row);
                     if (pair?.SerialPort is not null)
                     {
                         row.SerialPortName = pair.SerialPort.PortName;
+                        if (IsUsableSerial(pair.CameraSerialNumber))
+                            row.CameraSerialNumber = pair.CameraSerialNumber;
+                        if (!string.IsNullOrWhiteSpace(pair.Camera.UsbParentId))
+                            row.UsbContainerId = pair.Camera.UsbParentId;
                         matched++;
                     }
                 }
 
                 string detected = pairs.Count == 0
                     ? "없음"
-                    : string.Join(", ", pairs.Select(p => $"{p.Camera.FriendlyName}→{p.SerialPort?.PortName ?? p.Status.ToString()}"));
+                    : string.Join(", ", pairs.Select(p => $"{p.Camera.FriendlyName}[{p.CameraSerialNumber ?? "?"}]→{p.SerialPort?.PortName ?? p.Status.ToString()}"));
 
                 StatusText = matched > 0
                     ? $"자동 감지 {matched}/{Cameras.Count} 매칭. 감지: {detected}. Save 후 재시작."
@@ -170,5 +182,35 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 StatusText = $"자동 감지 실패: {ex.Message}";
             }
         }
+
+        private static CameraComPair? FindPairForRow(IReadOnlyList<CameraComPair> pairs, CameraRow row)
+        {
+            if (IsUsableSerial(row.CameraSerialNumber))
+            {
+                var bySerial = pairs
+                    .Where(p => string.Equals(p.CameraSerialNumber, row.CameraSerialNumber, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (bySerial.Count == 1)
+                    return bySerial[0];
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.UsbContainerId))
+            {
+                CameraComPair? byContainer = pairs.FirstOrDefault(
+                    p => string.Equals(p.Camera.UsbParentId, row.UsbContainerId, StringComparison.OrdinalIgnoreCase));
+                if (byContainer is not null)
+                    return byContainer;
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.DeviceName))
+                return pairs.FirstOrDefault(
+                    p => p.Camera.FriendlyName.Contains(row.DeviceName, StringComparison.OrdinalIgnoreCase));
+
+            return pairs.FirstOrDefault(p => p.Camera.OpenCvIndex == row.OpenCvIndex);
+        }
+
+        // A blank or all-zeros S/N is an unprogrammed test camera — not a real identity key; fall back to ContainerID.
+        private static bool IsUsableSerial([NotNullWhen(true)] string? serial) =>
+            !string.IsNullOrWhiteSpace(serial) && serial.Any(c => c is >= '1' and <= '9');
     }
 }

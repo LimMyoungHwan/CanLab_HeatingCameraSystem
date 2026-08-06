@@ -367,6 +367,7 @@
                                 <DataGridTextColumn Header="{loc:Loc Set_ColAlias}" Width="*" Binding="{Binding Alias}"/>
                                 <DataGridTextColumn Header="{loc:Loc Set_ColDeviceName}" Width="*" Binding="{Binding DeviceName}"/>
                                 <DataGridTextColumn Header="{loc:Loc Set_ColSerialCom}" Width="100" Binding="{Binding SerialPortName}"/>
+                                <DataGridTextColumn Header="S/N" Width="100" Binding="{Binding CameraSerialNumber}" IsReadOnly="True"/>
                                 <DataGridTemplateColumn Header="" Width="80">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
