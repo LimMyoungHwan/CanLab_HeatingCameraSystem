@@ -68,6 +68,8 @@ namespace HeatingCameraSystem.Master.ViewModels
     public partial class HistoryViewModel : ObservableObject
     {
         // Filter properties
+        public const string AllCamerasFilter = "전체";
+
         [ObservableProperty]
         private DateTime _fromDateTime;
 
@@ -75,14 +77,18 @@ namespace HeatingCameraSystem.Master.ViewModels
         private DateTime _toDateTime;
 
         [ObservableProperty]
-        private string _selectedCameraGroup = "All Units";
+        private string _selectedCameraGroup = AllCamerasFilter;
 
-        public ObservableCollection<string> CameraGroups { get; } = new ObservableCollection<string>
+        public ObservableCollection<string> CameraGroups { get; } = new ObservableCollection<string> { AllCamerasFilter };
+
+        public const string AllSourcesFilter = "전체";
+
+        [ObservableProperty]
+        private string _selectedSourceFilter = AllSourcesFilter;
+
+        public ObservableCollection<string> SourceOptions { get; } = new ObservableCollection<string>
         {
-            "All Units",
-            "Agent-PC-01 (CAM-01 to CAM-16)",
-            "Agent-PC-02 (CAM-17 to CAM-32)",
-            "Agent-PC-03 (CAM-33 to CAM-64)"
+            AllSourcesFilter, "레시피", "수동", "AgentUI"
         };
 
         // Pagination properties
@@ -92,11 +98,11 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(ShowingRecordsText))]
-        private int _totalPages = 125;
+        private int _totalPages = 1;
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(ShowingRecordsText))]
-        private int _totalRecords = 1248;
+        private int _totalRecords;
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(ShowingRecordsText))]
@@ -184,20 +190,20 @@ namespace HeatingCameraSystem.Master.ViewModels
                 .GetAwaiter().GetResult()
                 .ToList();
 
-            if (SelectedCameraGroup != "All Units")
-            {
-                int min = 1, max = 64;
-                if (SelectedCameraGroup.Contains("Agent-PC-01")) { min = 1; max = 16; }
-                else if (SelectedCameraGroup.Contains("Agent-PC-02")) { min = 17; max = 32; }
-                else if (SelectedCameraGroup.Contains("Agent-PC-03")) { min = 33; max = 64; }
+            RefreshCameraFilterOptions(allRecords);
 
-                allRecords = allRecords.Where(r =>
-                {
-                    if (int.TryParse(r.CameraId.Replace("CAM-", ""), out int n))
-                        return n >= min && n <= max;
-                    return false;
-                }).ToList();
-            }
+            if (SelectedCameraGroup != AllCamerasFilter)
+                allRecords = allRecords.Where(r => r.CameraId == SelectedCameraGroup).ToList();
+
+            CaptureSource? sourceFilter = SelectedSourceFilter switch
+            {
+                "레시피" => CaptureSource.Recipe,
+                "수동" => CaptureSource.Manual,
+                "AgentUI" => CaptureSource.AgentUi,
+                _ => null
+            };
+            if (sourceFilter.HasValue)
+                allRecords = allRecords.Where(r => r.Source == sourceFilter.Value).ToList();
 
             TotalRecords = allRecords.Count;
             TotalPages = (int)Math.Ceiling((double)TotalRecords / PageSize);
@@ -293,6 +299,24 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        // 집합이 바뀔 때만 갱신 — ObservableCollection 재구축 시 바인딩된 ComboBox 선택 리셋 방지.
+        private void RefreshCameraFilterOptions(IEnumerable<CaptureHistoryRecord> records)
+        {
+            var desired = new List<string> { AllCamerasFilter };
+            desired.AddRange(records
+                .Select(r => r.CameraId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct()
+                .OrderBy(id => id, StringComparer.OrdinalIgnoreCase));
+
+            if (CameraGroups.SequenceEqual(desired)) return;
+
+            string previous = SelectedCameraGroup;
+            CameraGroups.Clear();
+            foreach (string id in desired) CameraGroups.Add(id);
+            SelectedCameraGroup = desired.Contains(previous) ? previous : AllCamerasFilter;
+        }
+
         [RelayCommand]
         private void Search()
         {
@@ -386,17 +410,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                 .GetAwaiter().GetResult()
                 .ToList();
 
-            if (SelectedCameraGroup != "All Units")
-            {
-                int min = 1, max = 64;
-                if (SelectedCameraGroup.Contains("Agent-PC-01")) { min = 1;  max = 16; }
-                else if (SelectedCameraGroup.Contains("Agent-PC-02")) { min = 17; max = 32; }
-                else if (SelectedCameraGroup.Contains("Agent-PC-03")) { min = 33; max = 64; }
-
-                records = records.Where(r =>
-                    int.TryParse(r.CameraId.Replace("CAM-", ""), out int n) && n >= min && n <= max
-                ).ToList();
-            }
+            if (SelectedCameraGroup != AllCamerasFilter)
+                records = records.Where(r => r.CameraId == SelectedCameraGroup).ToList();
 
             using var writer = new StreamWriter(dlg.FileName, false, new UTF8Encoding(true));
             writer.WriteLine("Timestamp,CameraId,Temperature,Humidity,RecipeStepId,ImagePath");

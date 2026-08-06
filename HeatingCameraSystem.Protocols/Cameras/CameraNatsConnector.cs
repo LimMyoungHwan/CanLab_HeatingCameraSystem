@@ -180,7 +180,13 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 await _nats.PublishCaptureResultAsync(new CaptureResultMessage
                 {
                     AgentId = descriptor.AgentId,
+                    Alias = descriptor.Alias,
+                    CameraIndex = descriptor.OpenCvIndex,
                     RecipeStepId = cmd.RecipeStepId,
+                    Source = cmd.Source != CaptureSource.Unknown
+                        ? cmd.Source
+                        : (string.IsNullOrEmpty(cmd.RecipeStepId) ? CaptureSource.Manual : CaptureSource.Recipe),
+                    CaptureId = Guid.NewGuid().ToString(),
                     IsSuccess = success,
                     ImagePath = imagePath,
                     ImageBytes = bytes,

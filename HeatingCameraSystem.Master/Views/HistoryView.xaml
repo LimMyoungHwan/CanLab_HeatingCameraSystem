@@ -235,6 +235,12 @@
                     <ComboBox ItemsSource="{Binding CameraGroups}" SelectedItem="{Binding SelectedCameraGroup, Mode=TwoWay}" Width="250" Background="{StaticResource BgSurfaceContainerLowest}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                 </StackPanel>
 
+                <!-- Source filter (capture mode) -->
+                <StackPanel Margin="0,0,24,0" Visibility="{Binding IsCaptureMode, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="촬영 구분" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                    <ComboBox ItemsSource="{Binding SourceOptions}" SelectedItem="{Binding SelectedSourceFilter, Mode=TwoWay}" Width="130" Background="{StaticResource BgSurfaceContainerLowest}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                </StackPanel>
+
                 <!-- Alarm severity filter -->
                 <StackPanel Margin="0,0,24,0" Visibility="{Binding IsAlarmMode, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="알람 수준" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,6" FontWeight="SemiBold"/>

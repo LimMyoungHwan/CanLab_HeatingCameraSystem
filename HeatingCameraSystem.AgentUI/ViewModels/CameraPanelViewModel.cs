@@ -20,6 +20,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private readonly CaptureStore _store;
         private readonly string _agentId;
         private readonly int _captureBurstCount;
+        private readonly Func<CaptureResultMessage, Task>? _publishResult;
 
         [ObservableProperty]
         private string _title;
@@ -48,7 +49,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
         public int CameraIndex => _runtime.CameraIndex;
 
-        public CameraPanelViewModel(string title, string agentId, ICameraRuntime runtime, Dispatcher dispatcher, ThermalNucCorrector nuc, CaptureStore store, int captureBurstCount = 1, ICameraSerialClient? serial = null)
+        public CameraPanelViewModel(string title, string agentId, ICameraRuntime runtime, Dispatcher dispatcher, ThermalNucCorrector nuc, CaptureStore store, int captureBurstCount = 1, ICameraSerialClient? serial = null, Func<CaptureResultMessage, Task>? publishResult = null)
         {
             _title = title;
             _agentId = agentId;
@@ -58,6 +59,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _store = store;
             _captureBurstCount = captureBurstCount > 0 ? captureBurstCount : 1;
             _serial = serial;
+            _publishResult = publishResult;
             _status = runtime.Status.ToString();
 
             _runtime.FrameReady += OnFrameReady;
@@ -117,6 +119,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private async Task CaptureSaveAsync()
         {
             int saved = 0;
+            ThermalFrame? lastFrame = null;
+            CaptureRecord? lastRecord = null;
             try
             {
                 for (int i = 0; i < _captureBurstCount; i++)
@@ -128,7 +132,9 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
                     if (snap is not null)
                     {
-                        _store.Save(_nuc.Apply(snap), _agentId, _runtime.CameraIndex);
+                        ThermalFrame corrected = _nuc.Apply(snap);
+                        lastRecord = _store.Save(corrected, _agentId, _runtime.CameraIndex);
+                        lastFrame = corrected;
                         saved++;
                     }
                 }
@@ -136,10 +142,37 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 CaptureStatus = saved > 0
                     ? $"{saved}/{_captureBurstCount}장 저장됨 {DateTime.Now:HH:mm:ss}"
                     : "저장 실패: 프레임 없음";
+
+                if (saved > 0 && lastFrame is not null && lastRecord is not null)
+                    await PublishCaptureResultAsync(lastFrame, lastRecord);
             }
             catch (Exception ex)
             {
                 CaptureStatus = $"저장 오류: {ex.Message}";
+            }
+        }
+
+        private async Task PublishCaptureResultAsync(ThermalFrame frame, CaptureRecord record)
+        {
+            if (_publishResult is null) return;
+            try
+            {
+                await _publishResult(new CaptureResultMessage
+                {
+                    AgentId = _agentId,
+                    Alias = Title,
+                    CameraIndex = _runtime.CameraIndex,
+                    Source = CaptureSource.AgentUi,
+                    CaptureId = Guid.NewGuid().ToString(),
+                    IsSuccess = true,
+                    ImagePath = record.Y16Path,
+                    ImageBytes = ThermalPreviewEncoder.EncodeJpeg(frame),
+                    Timestamp = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CameraPanel] capture result publish failed: {ex.Message}");
             }
         }
 

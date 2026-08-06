@@ -345,7 +345,27 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand] private Task SendStop(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Stop);
         [RelayCommand] private Task SendShutterOpen(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.ShutterOpen);
         [RelayCommand] private Task SendShutterClose(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.ShutterClose);
-        [RelayCommand] private Task SendCapture(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Capture);
+        [RelayCommand]
+        private async Task SendCapture(CameraTileModel tile)
+        {
+            if (tile == null || AppServices.NatsService == null) return;
+            tile.LastAckStatus = "⏳ 캡처 요청…";
+            try
+            {
+                await AppServices.NatsService.PublishCaptureCommandAsync(new CaptureCommandMessage
+                {
+                    TargetAgentId = tile.AgentId,
+                    Source = CaptureSource.Manual,
+                    RecipeStepId = string.Empty,
+                    Timestamp = DateTime.UtcNow
+                });
+                tile.LastAckStatus = "캡처 명령 전송됨";
+            }
+            catch (Exception ex)
+            {
+                tile.LastAckStatus = $"✘ 캡처 전송 실패: {ex.Message}";
+            }
+        }
         [RelayCommand] private Task SendNuc(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Nuc);
         [RelayCommand] private Task SendSaveConfig(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.SaveConfig);
         [RelayCommand] private Task SendRefreshInfo(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.RefreshInfo);

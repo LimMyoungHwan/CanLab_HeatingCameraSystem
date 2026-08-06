@@ -363,7 +363,8 @@ namespace HeatingCameraSystem.AgentUI
                     : new ThermalNucCorrector();
                 _nucs[cam.AgentId] = nuc;
 
-                var panel = new CameraPanelViewModel(cam.Alias, cam.AgentId, runtime, Dispatcher, nuc, _store, _config.CaptureBurstCount, serial);
+                var panel = new CameraPanelViewModel(cam.Alias, cam.AgentId, runtime, Dispatcher, nuc, _store, _config.CaptureBurstCount, serial,
+                    publishResult: msg => _nats is { } n ? n.PublishCaptureResultAsync(msg) : Task.CompletedTask);
                 _mainViewModel.Cameras.Add(panel);
 
                 if (serial is not null)

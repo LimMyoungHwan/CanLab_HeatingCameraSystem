@@ -109,6 +109,7 @@ namespace HeatingCameraSystem.Master.Services
                 {
                     TargetAgentId = targetAgentId,
                     RecipeStepId  = step.StepId,
+                    Source        = CaptureSource.Recipe,
                     Timestamp     = DateTime.UtcNow
                 });
 
@@ -129,11 +130,20 @@ namespace HeatingCameraSystem.Master.Services
                             System.Diagnostics.Debug.WriteLine($"[RecipeEngine] PLC read failed: {ex.Message}");
                         }
 
-                        string storedImagePath = TryStoreImageLocally(captureResult) ?? captureResult.ImagePath;
+                        string storedImagePath = CaptureResultImageCache.Store(captureResult, _imageCacheDir) ?? captureResult.ImagePath;
+
+                        string cameraId = !string.IsNullOrWhiteSpace(captureResult.Alias) ? captureResult.Alias
+                            : !string.IsNullOrWhiteSpace(step.CameraAlias) ? step.CameraAlias
+                            : captureResult.AgentId;
 
                         await _historyRepo.InsertAsync(new CaptureHistoryRecord
                         {
-                            CameraId     = $"CAM-{step.CameraIndex:D2}",
+                            Id           = string.IsNullOrEmpty(captureResult.CaptureId) ? Guid.NewGuid().ToString() : captureResult.CaptureId,
+                            CameraId     = cameraId,
+                            AgentId      = captureResult.AgentId,
+                            CameraAlias  = captureResult.Alias,
+                            CameraIndex  = step.CameraIndex,
+                            Source       = CaptureSource.Recipe,
                             ImagePath    = storedImagePath,
                             RecipeStepId = captureResult.RecipeStepId,
                             Timestamp    = captureResult.Timestamp,
@@ -206,27 +216,5 @@ namespace HeatingCameraSystem.Master.Services
             return $"Agent_{step.CameraIndex}";
         }
 
-        private string? TryStoreImageLocally(CaptureResultMessage result)
-        {
-            if (result.ImageBytes == null || result.ImageBytes.Length == 0) return null;
-            if (string.IsNullOrEmpty(_imageCacheDir)) return null;
-            try
-            {
-                System.IO.Directory.CreateDirectory(_imageCacheDir);
-                string ext = System.IO.Path.GetExtension(result.ImagePath);
-                if (string.IsNullOrEmpty(ext)) ext = ".jpg";
-                string filename = $"{result.AgentId}_{result.Timestamp:yyyyMMdd_HHmmss_fff}_{result.RecipeStepId}{ext}";
-                foreach (char c in System.IO.Path.GetInvalidFileNameChars())
-                    filename = filename.Replace(c, '_');
-                string fullPath = System.IO.Path.Combine(_imageCacheDir, filename);
-                System.IO.File.WriteAllBytes(fullPath, result.ImageBytes);
-                return fullPath;
-            }
-            catch (System.Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[RecipeEngine] cache image write failed: {ex.Message}");
-                return null;
-            }
-        }
     }
 }

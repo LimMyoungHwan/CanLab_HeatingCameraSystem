@@ -48,6 +48,7 @@ namespace HeatingCameraSystem.Master.Services
 
         // 챔버 이력 레코더 참조 유지 (PlcStatus.Updated 구독자 — GC 방지).
         private static ChamberHistoryRecorder? _chamberRecorder;
+        private static CaptureResultHistoryRecorder? _captureRecorder;
 
         // 종료 1회 보장 가드 — DisposeAsync 재진입 시 재-종료 방지.
         private static bool _disposed;
@@ -126,6 +127,7 @@ namespace HeatingCameraSystem.Master.Services
             PlcStatus.Start();
 
             _chamberRecorder = new ChamberHistoryRecorder(ChamberHistoryRepo, PlcStatus);
+            _captureRecorder = new CaptureResultHistoryRecorder(HistoryRepo, ImageCacheDir, () => PlcStatus?.Snapshot);
         }
 
         public static IBlackBodyController CreateBlackBodyController(HardwareSettings settings, IPlcController plc)
@@ -141,6 +143,7 @@ namespace HeatingCameraSystem.Master.Services
                 await NatsService!.ConnectAsync(Settings.Nats.Url);
                 System.Diagnostics.Debug.WriteLine("[AppServices] NATS connected.");
                 await NatsService.SubscribeAgentStatusAsync(msg => AgentDirectory.Note(msg));
+                await NatsService.SubscribeCaptureResultAsync(msg => _ = _captureRecorder!.RecordAsync(msg));
             }
             catch (Exception ex)
             {
@@ -187,6 +190,7 @@ namespace HeatingCameraSystem.Master.Services
                 new (string Name, Func<Task> Dispose)[]
                 {
                     (nameof(_chamberRecorder),    () => { _chamberRecorder?.Dispose(); return Task.CompletedTask; }),
+                    (nameof(_captureRecorder),    () => { _captureRecorder?.Dispose(); return Task.CompletedTask; }),
                     (nameof(PlcStatus),           () => { PlcStatus?.Stop(); return Task.CompletedTask; }),
                     (nameof(ConnectionMonitor),   () => { ConnectionMonitor?.Dispose(); return Task.CompletedTask; }),
                     (nameof(BlackBodyController), () => { BlackBodyController?.Dispose(); return Task.CompletedTask; }),

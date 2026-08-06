@@ -47,6 +47,10 @@ namespace HeatingCameraSystem.Tests
                 Assert.True(published!.IsSuccess);
                 Assert.Equal("cam0", published.AgentId);
                 Assert.Equal("s1", published.RecipeStepId);
+                Assert.Equal("Camera 0", published.Alias);
+                Assert.Equal(0, published.CameraIndex);
+                Assert.Equal(CaptureSource.Recipe, published.Source);
+                Assert.False(string.IsNullOrWhiteSpace(published.CaptureId));
                 Assert.NotNull(published.ImageBytes);
                 Assert.True(published.ImageBytes!.Length > 0);
                 Assert.True(File.Exists(published.ImagePath));
