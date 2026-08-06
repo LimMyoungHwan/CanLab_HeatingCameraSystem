@@ -153,6 +153,7 @@ namespace HeatingCameraSystem.AgentUI
                         if (op == CameraControlOps.RuntimeUnload)
                         {
                             _manager!.Remove(descriptor.AgentId);
+                            RebindPanelRuntime(descriptor.AgentId, null);
                             return (true, "runtime unloaded");
                         }
                         if (op == CameraControlOps.RuntimeLoad)
@@ -160,6 +161,7 @@ namespace HeatingCameraSystem.AgentUI
                             _manager!.Remove(descriptor.AgentId);
                             ICameraRuntime runtime = _manager.Add(descriptor);
                             await runtime.StartAsync();
+                            RebindPanelRuntime(descriptor.AgentId, runtime);
                             return (true, "runtime loaded");
                         }
 
@@ -371,6 +373,21 @@ namespace HeatingCameraSystem.AgentUI
             }
 
             _ = _manager.StartAllAsync();
+        }
+
+        // [S7] After a per-camera runtimeLoad/Unload, point the existing panel at the new video runtime
+        // (or clear it on unload) so its live view follows the reloaded handle instead of freezing on the
+        // stale one. Marshalled to the UI thread; the panel's serial client + NUC are untouched.
+        private void RebindPanelRuntime(string agentId, ICameraRuntime? runtime)
+        {
+            CameraPanelViewModel? panel = _mainViewModel?.Cameras
+                .FirstOrDefault(candidate => candidate.AgentId == agentId);
+            if (panel is null)
+            {
+                return;
+            }
+
+            _ = Dispatcher.InvokeAsync(() => panel.RebindRuntime(runtime));
         }
 
         private void OnCameraHotplug(PnpChange change)

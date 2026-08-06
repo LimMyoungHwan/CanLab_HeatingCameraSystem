@@ -13,7 +13,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 {
     public partial class CameraPanelViewModel : ObservableObject, IDisposable
     {
-        private readonly ICameraRuntime _runtime;
+        private ICameraRuntime _runtime;
         private readonly Dispatcher _dispatcher;
         private readonly ICameraSerialClient? _serial;
         private readonly ThermalNucCorrector _nuc;
@@ -82,6 +82,28 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private void OnStatusChanged(object? sender, CameraRuntimeStatus status)
         {
             _dispatcher.InvokeAsync(() => Status = status.ToString());
+        }
+
+        // [S7] Point the panel at a reloaded video runtime (Manager runtimeLoad), or clear it on
+        // runtimeUnload (runtime = null). Only the video runtime swaps — the serial client + NUC stay,
+        // so a per-camera unload/reload never churns the COM port. Call on the UI thread so the field
+        // swap is serialized with the capture commands that read _runtime.
+        public void RebindRuntime(ICameraRuntime? runtime)
+        {
+            _runtime.FrameReady -= OnFrameReady;
+            _runtime.StatusChanged -= OnStatusChanged;
+
+            if (runtime is null)
+            {
+                LiveImage = null;
+                Status = CameraRuntimeStatus.Stopped.ToString();
+                return;
+            }
+
+            _runtime = runtime;
+            _runtime.FrameReady += OnFrameReady;
+            _runtime.StatusChanged += OnStatusChanged;
+            Status = _runtime.Status.ToString();
         }
 
         [RelayCommand]
