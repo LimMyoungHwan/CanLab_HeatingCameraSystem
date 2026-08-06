@@ -38,6 +38,44 @@ namespace HeatingCameraSystem.Tests
                 It.Is<CaptureCommandMessage>(m => m.TargetAgentId == "Agent_X")), Times.Once);
         }
 
+        [Fact]
+        public async Task LiveDirectoryAliasWinsOverDeviceRepo()
+        {
+            var mockDeviceRepo = new Mock<ICameraDeviceRepository>();
+            mockDeviceRepo.Setup(r => r.GetByAliasAsync("CAM-X"))
+                          .ReturnsAsync(new CameraDevice { Alias = "CAM-X", AgentId = "Stale_Agent" });
+
+            var directory = new AgentDirectory();
+            directory.Note(new AgentStatusMessage { Alias = "CAM-X", AgentId = "PC1_Agent_3" });
+
+            var (engine, mockNats) = CreateEngine(mockDeviceRepo.Object, directory);
+            var recipe = CreateRecipe(cameraIndex: 7, cameraAlias: "CAM-X");
+
+            await engine.ExecuteRecipeAsync(recipe);
+
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(
+                It.Is<CaptureCommandMessage>(m => m.TargetAgentId == "PC1_Agent_3")), Times.Once);
+        }
+
+        [Fact]
+        public async Task LiveDirectoryMissFallsBackToDeviceRepo()
+        {
+            var mockDeviceRepo = new Mock<ICameraDeviceRepository>();
+            mockDeviceRepo.Setup(r => r.GetByAliasAsync("CAM-X"))
+                          .ReturnsAsync(new CameraDevice { Alias = "CAM-X", AgentId = "Agent_X" });
+
+            var directory = new AgentDirectory();
+            directory.Note(new AgentStatusMessage { Alias = "OTHER", AgentId = "PC1_Agent_9" });
+
+            var (engine, mockNats) = CreateEngine(mockDeviceRepo.Object, directory);
+            var recipe = CreateRecipe(cameraIndex: 7, cameraAlias: "CAM-X");
+
+            await engine.ExecuteRecipeAsync(recipe);
+
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(
+                It.Is<CaptureCommandMessage>(m => m.TargetAgentId == "Agent_X")), Times.Once);
+        }
+
         private static Recipe CreateRecipe(int cameraIndex, string? cameraAlias = null) => new()
         {
             GlobalTargetTemperature = 25.0f,
@@ -54,7 +92,8 @@ namespace HeatingCameraSystem.Tests
         };
 
         private static (RecipeEngine Engine, Mock<INatsCommunicationService> Nats) CreateEngine(
-            ICameraDeviceRepository? deviceRepo = null)
+            ICameraDeviceRepository? deviceRepo = null,
+            AgentDirectory? directory = null)
         {
             var mockPlc = new Mock<IPlcController>();
             var mockNats = new Mock<INatsCommunicationService>();
@@ -82,7 +121,8 @@ namespace HeatingCameraSystem.Tests
                 mockPlc.Object,
                 mockNats.Object,
                 mockHistory.Object,
-                deviceRepo: deviceRepo);
+                deviceRepo: deviceRepo,
+                agentDirectory: directory);
             return (engine, mockNats);
         }
     }

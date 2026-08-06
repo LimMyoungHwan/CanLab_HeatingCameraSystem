@@ -296,6 +296,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 await _nats.PublishAgentStatusAsync(new AgentStatusMessage
                 {
                     AgentId = cam.AgentId,
+                    Alias = cam.Alias,
                     HostName = Environment.MachineName,
                     CameraIndex = cam.OpenCvIndex,
                     CameraStatus = status,

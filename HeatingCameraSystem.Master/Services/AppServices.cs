@@ -32,6 +32,7 @@ namespace HeatingCameraSystem.Master.Services
         public static IAlarmHistoryRepository? AlarmHistoryRepo { get; private set; }
         public static ICameraSerialSettingsRepository CameraSerialSettingsRepo { get; private set; } = null!;
         public static ICameraDeviceRepository CameraDeviceRepo { get; private set; } = null!;
+        public static AgentDirectory AgentDirectory { get; private set; } = null!;
         public static NatsCommunicationService? NatsService { get; private set; }
         public static IPlcController? PlcController { get; private set; }
         public static IBlackBodyController? BlackBodyController { get; private set; }
@@ -116,7 +117,8 @@ namespace HeatingCameraSystem.Master.Services
 
             BlackBodyController = CreateBlackBodyController(Settings, PlcController);
 
-            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController);
+            AgentDirectory = new AgentDirectory();
+            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController, AgentDirectory);
             ConnectionMonitor = new ConnectionMonitorService(PlcController, Settings);
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
 
@@ -138,6 +140,7 @@ namespace HeatingCameraSystem.Master.Services
             {
                 await NatsService!.ConnectAsync(Settings.Nats.Url);
                 System.Diagnostics.Debug.WriteLine("[AppServices] NATS connected.");
+                await NatsService.SubscribeAgentStatusAsync(msg => AgentDirectory.Note(msg));
             }
             catch (Exception ex)
             {

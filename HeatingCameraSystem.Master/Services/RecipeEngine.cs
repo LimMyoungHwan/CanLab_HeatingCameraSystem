@@ -19,6 +19,7 @@ namespace HeatingCameraSystem.Master.Services
         private readonly string? _imageCacheDir;
         private readonly ICameraDeviceRepository? _deviceRepo;
         private readonly IBlackBodyController _blackBody;
+        private readonly AgentDirectory? _agentDirectory;
 
         public RecipeEngine(
             IPlcController plcController,
@@ -27,7 +28,8 @@ namespace HeatingCameraSystem.Master.Services
             RecipeEngineSettings? settings = null,
             string? imageCacheDir = null,
             ICameraDeviceRepository? deviceRepo = null,
-            IBlackBodyController? blackBody = null)
+            IBlackBodyController? blackBody = null,
+            AgentDirectory? agentDirectory = null)
         {
             _plcController = plcController;
             _natsService = natsService;
@@ -39,6 +41,7 @@ namespace HeatingCameraSystem.Master.Services
             _imageCacheDir  = imageCacheDir;
             _deviceRepo     = deviceRepo;
             _blackBody      = blackBody ?? new HeatingCameraSystem.Protocols.PlcBlackBodyAdapter(plcController);
+            _agentDirectory = agentDirectory;
         }
 
         public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null)
@@ -184,13 +187,20 @@ namespace HeatingCameraSystem.Master.Services
 
         private async Task<string> ResolveAgentIdAsync(RecipeStep step)
         {
-            if (!string.IsNullOrEmpty(step.CameraAlias) && _deviceRepo != null)
+            if (!string.IsNullOrEmpty(step.CameraAlias))
             {
-                var device = await _deviceRepo.GetByAliasAsync(step.CameraAlias);
-                if (device != null && !string.IsNullOrEmpty(device.AgentId))
-                    return device.AgentId;
+                string? liveAgentId = _agentDirectory?.ResolveByAlias(step.CameraAlias);
+                if (!string.IsNullOrEmpty(liveAgentId))
+                    return liveAgentId;
 
-                Console.WriteLine($"[RecipeEngine] Alias '{step.CameraAlias}' not found, falling back to CameraIndex");
+                if (_deviceRepo != null)
+                {
+                    var device = await _deviceRepo.GetByAliasAsync(step.CameraAlias);
+                    if (device != null && !string.IsNullOrEmpty(device.AgentId))
+                        return device.AgentId;
+                }
+
+                Console.WriteLine($"[RecipeEngine] Alias '{step.CameraAlias}' not resolved (no live heartbeat / no device); falling back to CameraIndex");
             }
 
             return $"Agent_{step.CameraIndex}";
