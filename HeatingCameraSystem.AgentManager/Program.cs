@@ -148,7 +148,15 @@ public class ManagerWorker : BackgroundService
         // Publish initial inventory
         await _inventory.PublishAsync();
 
-        await Task.Delay(Timeout.Infinite, stoppingToken);
+        // 주기적 재방송: core NATS는 발행 시점의 활성 구독자에게만 전달하므로, Master가 이 초기 방송
+        // 이후 시작/재시작하면 인벤토리를 못 받아 장치 목록이 빈 채로 남는다. 현재 상태를 주기적으로
+        // 다시 흘려 늦게 붙은 구독자도 다음 주기에 채워지게 한다. 변경 시 즉시 발행 경로는 그대로 유지.
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try { await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken); }
+            catch (OperationCanceledException) { break; }
+            await _inventory.PublishAsync();
+        }
     }
 
     private void OnPnpChanged(PnpChange change)
