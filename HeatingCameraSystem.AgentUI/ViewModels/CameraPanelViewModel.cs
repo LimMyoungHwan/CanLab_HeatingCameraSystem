@@ -106,7 +106,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
                     if (snap is not null)
                     {
-                        _store.Save(snap, _agentId, _runtime.CameraIndex);
+                        _store.Save(_nuc.Apply(snap), _agentId, _runtime.CameraIndex);
                         saved++;
                     }
                 }

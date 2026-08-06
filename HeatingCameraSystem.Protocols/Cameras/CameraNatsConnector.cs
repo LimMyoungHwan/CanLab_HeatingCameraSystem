@@ -156,9 +156,14 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
                         if (snap is not null)
                         {
-                            CaptureRecord record = _store.Save(snap, descriptor.AgentId, descriptor.OpenCvIndex, cmd.RecipeStepId);
+                            ThermalFrame frame = snap;
+                            if (_nucs is not null && _nucs.TryGetValue(descriptor.AgentId, out ThermalNucCorrector? nuc) && nuc is not null)
+                            {
+                                frame = nuc.Apply(frame);
+                            }
+                            CaptureRecord record = _store.Save(frame, descriptor.AgentId, descriptor.OpenCvIndex, cmd.RecipeStepId);
                             imagePath = record.Y16Path;
-                            bytes = ThermalPreviewEncoder.EncodeJpeg(snap);
+                            bytes = ThermalPreviewEncoder.EncodeJpeg(frame);
                             success = true;
                         }
                     }
