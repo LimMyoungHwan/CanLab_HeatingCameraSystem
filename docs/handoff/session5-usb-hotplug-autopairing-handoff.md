@@ -11,6 +11,30 @@ USB-C 열화상 카메라의 **가상 시리얼 포트를 자동으로 찾아 �
 
 **결론(설계 결정)**: `agentui.json`이 **카메라 SET + OpenCvIndex(영상)의 기준**으로 남는다. 자동 갱신 대상은 **시리얼 COM + 연결여부**뿐. 영상 인덱스 자동 발견은 범위 밖(OpenCV 한계).
 
+## 🎯 완전 포트독립 요구 (확장 범위 — 사용자 확인됨)
+
+목표 확장: **Agent_1의 카메라를 아무 USB 포트에 꽂아도 영상+시리얼 모두 Agent_1로** AgentUI·Master에 정상 표시.
+
+- **Master 측 = 이미 OK**: Agent_1은 논리 식별자(NATS `agent.status.Agent_1`), 포트 무관.
+- **AgentUI 측 = 위 4단계 계획(시리얼만)으로는 불충분**. 두 제약:
+  1. **ContainerID 포트 안정성 미보장**: 이 카메라 HardwareId `USB\...\8&1554E7B4&0&0000` 는 **포트기반 인스턴스 ID로 추정**(USB 디스크립터 고유 시리얼 없음). → 다른 포트면 ContainerID가 바뀔 수 있어 저장 키와 불일치 → 자동 인식 실패 가능.
+  2. **영상 OpenCV 인덱스 포트 종속**: 포트 바꾸면 DShow/OpenCV 열거 순서 변동 → config 고정 인덱스가 엉뚱한 카메라에 붙을 수 있음.
+- **견고한 해법 = 카메라 앱 S/N 기반 식별**: `545308020`(Agent_1)·`545308059`(Agent_2) — 시리얼로 읽는 포트무관 고유값. 이걸 안정 키로:
+  - config에 Agent별 **CameraSerialNumber** 저장.
+  - 시작/핫플러그 시: 현재 카메라 UVC↔CDC를 ContainerID로 그룹핑(현재 포트 기준은 유효) → 각 CDC 열어 S/N 읽기 → **S/N으로 Agent 매칭** → 그 카메라의 현재 COM + 영상 인덱스 확정.
+  - 영상 인덱스 매핑은 **네이티브 DShow 장치 열거**(DirectShowLib/COM) 필요: DShow DevicePath(USB 인스턴스/컨테이너 포함)로 물리카메라↔OpenCV 인덱스 매핑. OpenCvSharp만으론 불가 → 추가 의존성/네이티브 코드.
+
+### ⚠️ 착수 전 필수 실측 (이걸로 접근 확정)
+
+카메라를 **다른 USB 포트에 꽂고** 다음이 어떻게 바뀌는지 먼저 측정:
+1. **ContainerID** (`UsbTopology.DeriveContainerId` / 레지스트리 `Enum\{pnp}\ContainerID`) — 유지되면 ContainerID 키 가능, 바뀌면 S/N 키 필수.
+2. **OpenCV VideoCapture 인덱스** (temp 프로브: 각 인덱스 열어 Y16/프레임 변산 확인).
+3. **COM 번호**.
+
+측정 결과에 따라:
+- ContainerID 유지 → 4단계 계획 + 영상 인덱스만 DShow 매핑 추가.
+- ContainerID 변동 → **S/N 기반 식별로 전면 전환** + DShow 영상 매핑.
+
 ## 구현 계획 (4단계)
 
 1. **Core 모델**: `HeatingCameraSystem.Core/Models/CameraDescriptor.cs` (record) 끝에 `string? UsbContainerId = null` 추가 → 기존 호출부 무손상(default). 
