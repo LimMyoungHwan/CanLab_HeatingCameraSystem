@@ -41,8 +41,6 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public ObservableCollection<string> OnlineAgents { get; } = new();
 
-        public DevicesViewModel DevicesVm { get; } = new();
-
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(LoadCommand))]
         private string? _selectedAgent;

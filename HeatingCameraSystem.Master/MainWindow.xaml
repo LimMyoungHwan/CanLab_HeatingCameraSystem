@@ -31,9 +31,6 @@
         <DataTemplate DataType="{x:Type vm:HistoryViewModel}">
             <views:HistoryView />
         </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:DevicesViewModel}">
-            <views:DevicesView />
-        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:AgentSettingsViewModel}">
             <views:AgentSettingsView />
         </DataTemplate>

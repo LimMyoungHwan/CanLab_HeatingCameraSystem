@@ -192,8 +192,6 @@ Agent_CaptureFormat=Capture Image Format
 Agent_CaptureCount=Capture Count (Per Save)
 Agent_Cameras=Cameras
 Agent_SendConfig=Send Config
-Agent_DeviceManagement=Device Management
-Agent_TabRemote=Agent Remote Settings
 
 # Recipe
 Recipe_NewRecipe=New Recipe
@@ -204,14 +202,6 @@ Recipe_AvailableCameras=Available Cameras
 Recipe_MappingInstruction=Select a camera and click on a slot.
 Recipe_UnmapTooltip=Unmap
 Recipe_OnlineAgentCameras=Online Agent Cameras
-
-# Dev
-Dev_ManagementTitle=Device Management (Devices)
-Dev_Action=Action
-Dev_SaveName=Save Name
-Dev_GetLogs=Get Logs
-Dev_SerialSettingsAuth=Serial Settings (Approved Cameras)
-Dev_SendSerial=Send Serial
 
 # Hist
 Hist_From=From
@@ -268,12 +258,6 @@ Agent_ColAlias=Alias
 Agent_ColDeviceName=Device Name
 Agent_ColSerialCOM=Serial COM
 
-# Dev Headers
-Dev_ColStatus=Status
-Dev_ColPCId=PCId
-Dev_ColHardwareId=HardwareId
-Dev_ColApproved=Approved
-Dev_ColCvIdx=CV Idx
 Manual_BlackBody=Black Body
 Hist_AgentId=Agent Id
 

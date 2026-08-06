@@ -192,8 +192,6 @@ Agent_CaptureFormat=Capture 이미지 포맷
 Agent_CaptureCount=Capture 장수 (Save 1회당)
 Agent_Cameras=카메라
 Agent_SendConfig=설정 전송
-Agent_DeviceManagement=디바이스 관리
-Agent_TabRemote=에이전트 원격설정
 
 # Recipe
 Recipe_NewRecipe=새 레시피
@@ -204,14 +202,6 @@ Recipe_AvailableCameras=사용 가능한 카메라
 Recipe_MappingInstruction=카메라를 선택한 뒤 슬롯을 클릭하세요.
 Recipe_UnmapTooltip=맵핑 해제
 Recipe_OnlineAgentCameras=온라인 Agent 카메라
-
-# Dev
-Dev_ManagementTitle=디바이스 관리 (Devices)
-Dev_Action=액션
-Dev_SaveName=이름 저장
-Dev_GetLogs=로그 가져오기
-Dev_SerialSettingsAuth=시리얼 설정 (승인된 카메라)
-Dev_SendSerial=시리얼 전송
 
 # Hist
 Hist_From=시작
@@ -268,12 +258,6 @@ Agent_ColAlias=Alias
 Agent_ColDeviceName=Device Name
 Agent_ColSerialCOM=Serial COM
 
-# Dev Headers
-Dev_ColStatus=Status
-Dev_ColPCId=PCId
-Dev_ColHardwareId=HardwareId
-Dev_ColApproved=Approved
-Dev_ColCvIdx=CV Idx
 Manual_BlackBody=흥체
 Hist_AgentId=에이전트 ID
 
