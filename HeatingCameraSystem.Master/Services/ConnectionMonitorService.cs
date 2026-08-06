@@ -16,7 +16,6 @@ namespace HeatingCameraSystem.Master.Services
         private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(5);
 
         private readonly IPlcController _plc;
-        private readonly ISerialShutterController? _shutter;
         private readonly HardwareSettings _settings;
         private readonly TimeSpan _interval;
         private Timer? _timer;
@@ -24,17 +23,13 @@ namespace HeatingCameraSystem.Master.Services
 
         private int _plcFails;
         private DateTime _plcNextAttemptUtc = DateTime.MinValue;
-        private int _shutterFails;
-        private DateTime _shutterNextAttemptUtc = DateTime.MinValue;
 
         public ConnectionMonitorService(
             IPlcController plc,
-            ISerialShutterController? shutter,
             HardwareSettings settings,
             TimeSpan? interval = null)
         {
             _plc = plc;
-            _shutter = shutter;
             _settings = settings;
             _interval = interval ?? TimeSpan.FromSeconds(30);
         }
@@ -71,27 +66,6 @@ namespace HeatingCameraSystem.Master.Services
                         _plcNextAttemptUtc = now + wait;
                         System.Diagnostics.Debug.WriteLine(
                             $"[ConnMon] PLC reconnect failed ({_plcFails}x, next in {wait.TotalSeconds:0}s): {ex.Message}");
-                    }
-                }
-
-                if (_shutter != null && !_shutter.IsConnected && now >= _shutterNextAttemptUtc)
-                {
-                    try
-                    {
-                        await _shutter.ConnectAsync();
-                        if (_shutterFails > 0) AlarmSink.Raise(AlarmSeverity.Info, "시리얼", "재연결 성공");
-                        _shutterFails = 0;
-                        _shutterNextAttemptUtc = DateTime.MinValue;
-                        System.Diagnostics.Debug.WriteLine("[ConnMon] Serial reconnected.");
-                    }
-                    catch (Exception ex)
-                    {
-                        _shutterFails++;
-                        if (_shutterFails == 1) AlarmSink.Raise(AlarmSeverity.Warning, "시리얼", $"재연결 실패: {ex.Message}");
-                        var wait = ComputeBackoff(_shutterFails);
-                        _shutterNextAttemptUtc = now + wait;
-                        System.Diagnostics.Debug.WriteLine(
-                            $"[ConnMon] Serial reconnect failed ({_shutterFails}x, next in {wait.TotalSeconds:0}s): {ex.Message}");
                     }
                 }
             }

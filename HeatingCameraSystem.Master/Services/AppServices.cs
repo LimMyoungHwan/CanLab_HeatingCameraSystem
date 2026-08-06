@@ -35,7 +35,6 @@ namespace HeatingCameraSystem.Master.Services
         public static NatsCommunicationService? NatsService { get; private set; }
         public static IPlcController? PlcController { get; private set; }
         public static IBlackBodyController? BlackBodyController { get; private set; }
-        public static ISerialShutterController? ShutterController { get; private set; }
         public static RecipeEngine? RecipeEngine { get; private set; }
         public static ConnectionMonitorService? ConnectionMonitor { get; private set; }
         public static PlcStatusService? PlcStatus { get; private set; }
@@ -99,16 +98,14 @@ namespace HeatingCameraSystem.Master.Services
             if (Settings.SimulationMode)
             {
                 PlcController     = new FakePlcController();
-                ShutterController = new FakeSerialShutterController();
                 CameraSerialClientFactory = portName => new FakeCameraSerialClient(portName);
                 LiveThermalCamera         = new FakeLiveThermalCamera();
                 CameraPairingService      = new FakeCameraComPairingService();
-                System.Diagnostics.Debug.WriteLine("[AppServices] SimulationMode=true -> using Fake PLC + Fake Shutter + Fake Camera/Pairing");
+                System.Diagnostics.Debug.WriteLine("[AppServices] SimulationMode=true -> using Fake PLC + Fake Camera/Pairing");
             }
             else
             {
                 PlcController     = new PlcXgtClient(Settings.Plc);
-                ShutterController = new SerialShutterController(Settings.Serial);
                 CameraSerialClientFactory = portName => new ClSerialCameraClient(portName);
                 LiveThermalCamera         = new CltcLiveThermalCamera();
                 var cameraEnumerator      = new WmiCameraEnumerator();
@@ -120,7 +117,7 @@ namespace HeatingCameraSystem.Master.Services
             BlackBodyController = CreateBlackBodyController(Settings, PlcController);
 
             RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController);
-            ConnectionMonitor = new ConnectionMonitorService(PlcController, ShutterController, Settings);
+            ConnectionMonitor = new ConnectionMonitorService(PlcController, Settings);
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
 
             PlcStatus = new PlcStatusService(PlcController, Settings.BlackBody.Enabled ? BlackBodyController : null);
@@ -169,49 +166,6 @@ namespace HeatingCameraSystem.Master.Services
                 AlarmSink.Raise(AlarmSeverity.Warning, "흑체", $"연결 실패: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"[AppServices] BlackBody connect failed: {ex.Message}");
             }
-
-            if (Settings.SimulationMode && ShutterController is { IsConnected: false })
-            {
-                try
-                {
-                    await ShutterController.ConnectAsync();
-                    System.Diagnostics.Debug.WriteLine("[AppServices] Fake shutter connected.");
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[AppServices] Fake shutter connect failed: {ex.Message}");
-                }
-            }
-        }
-
-        public static async Task ApplySerialSettingsLocallyAsync(Core.Models.CameraSerialSettings s)
-        {
-            ShutterController?.Dispose();
-
-            if (Settings.SimulationMode)
-            {
-                ShutterController = new FakeSerialShutterController();
-            }
-            else
-            {
-                ShutterController = new SerialShutterController(new Core.Config.SerialSettings
-                {
-                    PortName = s.PortName,
-                    BaudRate = s.BaudRate,
-                    DataBits = s.DataBits,
-                    Parity   = s.Parity,
-                    StopBits = s.StopBits
-                });
-            }
-
-            try
-            {
-                await ShutterController.ConnectAsync();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[AppServices] Local shutter reconnect failed: {ex.Message}");
-            }
         }
 
         public static async Task DisposeAsync()
@@ -232,7 +186,6 @@ namespace HeatingCameraSystem.Master.Services
                     (nameof(_chamberRecorder),    () => { _chamberRecorder?.Dispose(); return Task.CompletedTask; }),
                     (nameof(PlcStatus),           () => { PlcStatus?.Stop(); return Task.CompletedTask; }),
                     (nameof(ConnectionMonitor),   () => { ConnectionMonitor?.Dispose(); return Task.CompletedTask; }),
-                    (nameof(ShutterController),   () => { ShutterController?.Dispose(); return Task.CompletedTask; }),
                     (nameof(BlackBodyController), () => { BlackBodyController?.Dispose(); return Task.CompletedTask; }),
                     (nameof(NatsService),         () => NatsService is { } nats ? nats.DisposeAsync().AsTask() : Task.CompletedTask),
                     (nameof(PlcController),       () => { (PlcController as IDisposable)?.Dispose(); return Task.CompletedTask; }),
