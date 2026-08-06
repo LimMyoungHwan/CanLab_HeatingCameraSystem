@@ -38,6 +38,7 @@ namespace HeatingCameraSystem.AgentUI
         private Func<CameraDescriptor, ICameraSerialClient?>? _serialFactory;
         private Dictionary<string, ThermalNucCorrector>? _nucs;
         private ICameraEnumerator? _cameraWatcher;
+        private IVideoDeviceEnumerator? _videoEnumerator;
         private int _rebuildInFlight;
         private int _rebuildDirty;
 
@@ -109,10 +110,12 @@ namespace HeatingCameraSystem.AgentUI
             _pairing = pairing;
             _serialFactory = serialFactory;
             _nucs = nucs;
+            _videoEnumerator = config.SimulationMode ? null : new DirectShowVideoDeviceEnumerator();
 
             if (!config.SimulationMode)
             {
                 ReconcileSerialPortsFromPairing(config, pairing);
+                ReconcileVideoIndicesFromEnumeration(config);
             }
 
             RebuildCameraPanels();
@@ -262,6 +265,31 @@ namespace HeatingCameraSystem.AgentUI
             }
         }
 
+        private void ReconcileVideoIndicesFromEnumeration(AgentUiConfig config)
+        {
+            if (_videoEnumerator is null)
+            {
+                return;
+            }
+
+            IReadOnlyList<VideoDevice> devices;
+            try
+            {
+                devices = _videoEnumerator.Enumerate();
+            }
+            catch (Exception ex)
+            {
+                AgentUiLog.Logger.Warning(ex, "Video device enumeration failed; keeping configured OpenCvIndex");
+                return;
+            }
+
+            int changed = VideoIndexReconciler.Reconcile(config.Cameras, devices);
+            if (changed > 0)
+            {
+                AgentUiLog.Logger.Information("Rebound {Count} camera OpenCvIndex value(s) by ContainerId", changed);
+            }
+        }
+
         private static CameraComPair? ResolveConfidentPair(IReadOnlyList<CameraComPair> pairs, CameraDescriptor cam)
         {
             if (IsUsableSerial(cam.CameraSerialNumber))
@@ -365,6 +393,7 @@ namespace HeatingCameraSystem.AgentUI
                         if (_config is not null && !_config.SimulationMode && _pairing is not null)
                         {
                             ReconcileSerialPortsFromPairing(_config, _pairing);
+                            ReconcileVideoIndicesFromEnumeration(_config);
                         }
 
                         await Dispatcher.InvokeAsync(RebuildCameraPanels).Task.ConfigureAwait(false);

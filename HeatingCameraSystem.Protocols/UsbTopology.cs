@@ -63,5 +63,22 @@ namespace HeatingCameraSystem.Protocols
             int lastSlash = noMi.LastIndexOf('\\');
             return lastSlash <= 0 ? noMi : noMi.Substring(0, lastSlash);
         }
+
+        // Converts a DirectShow moniker DevicePath to the PnP instance id used as the Enum registry key.
+        // Real DShow paths carry an "@device:pnp:" prefix, so take the segment after "\\?\":
+        // @device:pnp:\\?\usb#vid_xxxx&pid_yyyy&mi_00#<instance>#{iface-guid}\...  ->  USB\VID_XXXX&PID_YYYY&MI_00\<instance>
+        public static string DevicePathToInstanceId(string devicePath)
+        {
+            if (string.IsNullOrEmpty(devicePath)) return string.Empty;
+
+            string s = devicePath;
+            int root = s.IndexOf(@"\\?\", StringComparison.Ordinal);
+            if (root >= 0) s = s[(root + 4)..];
+
+            int iface = s.IndexOf("#{", StringComparison.Ordinal);
+            if (iface >= 0) s = s[..iface];
+
+            return s.Replace('#', '\\').ToUpperInvariant();
+        }
     }
 }

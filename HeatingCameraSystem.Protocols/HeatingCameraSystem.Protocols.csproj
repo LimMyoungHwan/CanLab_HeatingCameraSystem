@@ -17,6 +17,7 @@
     <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
     <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+    <PackageReference Include="DirectShowLib.Standard" Version="2.1.0" />
     <PackageReference Include="LiteDB" Version="5.0.21" />
   </ItemGroup>
 
