@@ -18,7 +18,7 @@ public partial class App : Application
         _ = AppServices.TryConnectServicesAsync();
 
         _cleanupService = new BackgroundDataCleanupService(
-            AppServices.HistoryRepo, AppServices.ImageCacheDir, retentionDays: AppServices.Settings.DataRetentionDays);
+            AppServices.HistoryRepo, AppServices.ChamberHistoryRepo, AppServices.ImageCacheDir, retentionDays: AppServices.Settings.DataRetentionDays);
         _cleanupService.Start();
     }
 
