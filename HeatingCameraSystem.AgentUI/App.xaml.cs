@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -223,6 +224,16 @@ namespace HeatingCameraSystem.AgentUI
 
         protected override void OnExit(ExitEventArgs e)
         {
+            // 워치독: 아래 종료 정리가 네이티브 카메라(OpenCV DSHOW Read)/시리얼(SerialPort.Dispose)
+            // 콜에 걸리면 CLR이 그 스레드를 abort할 수 없어 프로세스가 잔존한다. best-effort 정리가
+            // wedge되면 OS가 카메라+COM을 해제하도록 강제 종료. 정상 종료 시엔 프로세스가 먼저 빠져나가
+            // 이 백그라운드 타이머는 그냥 버려진다. (AgentUI 프로세스는 로그온 예약작업이 재기동 — S8)
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(6)).ConfigureAwait(false);
+                Process.GetCurrentProcess().Kill();
+            });
+
             try
             {
                 // 종료 스텝을 UI 스레드 밖에서 총 5초 안에 실행 → 멈춘 시리얼 포트에서 hang해도
