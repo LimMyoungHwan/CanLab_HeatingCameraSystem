@@ -94,6 +94,24 @@ namespace HeatingCameraSystem.Protocols
             {
                 await client.InitializeAsync(ct);
                 string serialNumber = await client.ReadSerialNumberAsync(ct);
+
+                // The CL detector boots STOPPED and reports an all-zero S/N (and black video) until it
+                // is started; pairing runs before the camera runtime starts, so issue START and re-read
+                // to recover the port-independent S/N key. Verified on real r200/r150 units:
+                // 0 -> 545308059 / 545308020 after START (plain re-read alone never recovers).
+                if (IsZeroSerial(serialNumber))
+                {
+                    await client.SetCameraRunningAsync(true, ct);
+
+                    // ponytail: fixed 10x250ms poll (~2.5s) after START — enough on the measured units;
+                    // hoist to HardwareSettings if a slower detector needs a longer warmup.
+                    for (int i = 0; i < 10 && IsZeroSerial(serialNumber); i++)
+                    {
+                        await Task.Delay(250, ct).ConfigureAwait(false);
+                        serialNumber = await client.ReadSerialNumberAsync(ct);
+                    }
+                }
+
                 return (serialNumber, PairingStatus.Paired);
             }
             catch (OperationCanceledException)
@@ -105,5 +123,8 @@ namespace HeatingCameraSystem.Protocols
                 return (null, PairingStatus.DetectedButUnverified);
             }
         }
+
+        private static bool IsZeroSerial(string? serial) =>
+            string.IsNullOrEmpty(serial) || serial.All(c => c == '0');
     }
 }
