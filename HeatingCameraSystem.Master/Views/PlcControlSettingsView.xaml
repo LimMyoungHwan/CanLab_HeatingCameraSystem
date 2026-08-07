@@ -109,10 +109,10 @@
 
                 <Border Width="340" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource Head}" Text="흑체 연결 설정" />
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Plc_BlackBodyConnTitle}" />
                         <CheckBox
                             Margin="0,0,0,10"
-                            Content="직접 제어 사용"
+                            Content="{loc:Loc Plc_BlackBodyDirectControl}"
                             Foreground="#dee2f7"
                             IsChecked="{Binding BlackBodyEnabled}" />
 
@@ -120,7 +120,7 @@
                             Margin="0,0,0,6"
                             FontWeight="Bold"
                             Style="{StaticResource Lbl}"
-                            Text="흑체 1" />
+                            Text="{loc:Loc Plc_BlackBody1}" />
                         <ComboBox
                             Margin="0,0,0,8"
                             ItemsSource="{Binding BlackBodyConnectionTypes}"
@@ -140,7 +140,7 @@
                                 <TextBlock
                                     Width="110"
                                     Style="{StaticResource Lbl}"
-                                    Text="COM 포트" />
+                                    Text="{loc:Loc Plc_ComPort}" />
                                 <TextBox Text="{Binding BlackBody1.PortName}" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource FieldRow}">
@@ -166,14 +166,14 @@
                                 <TextBlock
                                     Width="110"
                                     Style="{StaticResource Lbl}"
-                                    Text="IP 주소" />
+                                    Text="{loc:Loc Plc_IpAddress}" />
                                 <TextBox Width="150" Text="{Binding BlackBody1.IpAddress}" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource FieldRow}">
                                 <TextBlock
                                     Width="110"
                                     Style="{StaticResource Lbl}"
-                                    Text="포트" />
+                                    Text="{loc:Loc Plc_Port}" />
                                 <TextBox Text="{Binding BlackBody1.Port}" />
                             </StackPanel>
                         </StackPanel>
@@ -182,7 +182,7 @@
                             Margin="0,8,0,6"
                             FontWeight="Bold"
                             Style="{StaticResource Lbl}"
-                            Text="흑체 2" />
+                            Text="{loc:Loc Plc_BlackBody2}" />
                         <ComboBox
                             Margin="0,0,0,8"
                             ItemsSource="{Binding BlackBodyConnectionTypes}"
@@ -202,7 +202,7 @@
                                 <TextBlock
                                     Width="110"
                                     Style="{StaticResource Lbl}"
-                                    Text="COM 포트" />
+                                    Text="{loc:Loc Plc_ComPort}" />
                                 <TextBox Text="{Binding BlackBody2.PortName}" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource FieldRow}">
@@ -228,14 +228,14 @@
                                 <TextBlock
                                     Width="110"
                                     Style="{StaticResource Lbl}"
-                                    Text="IP 주소" />
+                                    Text="{loc:Loc Plc_IpAddress}" />
                                 <TextBox Width="150" Text="{Binding BlackBody2.IpAddress}" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource FieldRow}">
                                 <TextBlock
                                     Width="110"
                                     Style="{StaticResource Lbl}"
-                                    Text="포트" />
+                                    Text="{loc:Loc Plc_Port}" />
                                 <TextBox Text="{Binding BlackBody2.Port}" />
                             </StackPanel>
                         </StackPanel>

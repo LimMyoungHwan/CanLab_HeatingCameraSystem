@@ -58,6 +58,18 @@ namespace HeatingCameraSystem.Master.Localization
             }
         }
 
+        /// <summary>
+        /// Like the indexer, but returns <paramref name="fallback"/> (not the key) when the key is
+        /// undefined. Used for data-layer labels (e.g. PlcDeviceCatalog bit names) that live outside
+        /// the resource files: only the entries that need translating get a key; the rest fall back.
+        /// </summary>
+        public string GetOrDefault(string key, string fallback)
+        {
+            if (_current.TryGetValue(key, out string? v)) return v;
+            if (_fallback.TryGetValue(key, out string? f)) return f;
+            return fallback;
+        }
+
         public string CurrentLanguage
         {
             get => _currentCode;

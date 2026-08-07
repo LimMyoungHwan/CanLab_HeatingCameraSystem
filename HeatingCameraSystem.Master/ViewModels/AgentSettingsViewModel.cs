@@ -6,6 +6,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Master.Localization;
 using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
@@ -62,7 +63,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [NotifyCanExecuteChangedFor(nameof(RemoveCameraCommand))]
         private bool _isLoaded;
 
-        [ObservableProperty] private string _statusMessage = "에이전트를 선택하고 조회하세요.";
+        [ObservableProperty] private string _statusMessage = LocalizationManager.Instance["Agent_SelectAndLoad"];
 
         public AgentSettingsViewModel()
         {
@@ -94,7 +95,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             string agentId = SelectedAgent;
             EnsureConfigSubscriptions(agentId);
-            StatusMessage = $"{agentId} 설정 조회 중…";
+            StatusMessage = string.Format(LocalizationManager.Instance["Agent_Loading"], agentId);
 
             await AppServices.NatsService.PublishAgentConfigRequestAsync(new AgentConfigRequestMessage
             {
@@ -130,7 +131,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 Cameras.Add(new AgentCameraRow(cam));
 
             IsLoaded = true;
-            StatusMessage = $"{msg.AgentId} 설정 로드됨 (카메라 {Cameras.Count}대). 편집 후 전송하세요.";
+            StatusMessage = string.Format(LocalizationManager.Instance["Agent_Loaded"], msg.AgentId, Cameras.Count);
         }
 
         [RelayCommand(CanExecute = nameof(IsLoaded))]
@@ -159,7 +160,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 Cameras = Cameras.Select(r => r.ToDescriptor()).ToList()
             };
 
-            StatusMessage = $"{agentId} 설정 전송 중…";
+            StatusMessage = string.Format(LocalizationManager.Instance["Agent_Sending"], agentId);
             await AppServices.NatsService.PublishAgentConfigApplyAsync(new AgentConfigApplyMessage
             {
                 AgentId = agentId,

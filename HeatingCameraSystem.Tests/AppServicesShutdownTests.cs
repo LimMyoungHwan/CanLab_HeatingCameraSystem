@@ -72,7 +72,7 @@ namespace HeatingCameraSystem.Tests
 
             Assert.Contains("dispose", log);
             Assert.Contains(AlarmSink.Entries,
-                e => e.Severity == AlarmSeverity.Error && e.Source == "PLC" && e.Message.Contains("챔버 정지 실패"));
+                e => e.Severity == AlarmSeverity.Error && e.Source == "PLC" && e.Message.Contains("chamber boom"));
         }
 
         [Fact]
@@ -108,7 +108,7 @@ namespace HeatingCameraSystem.Tests
                 TimeSpan.FromSeconds(2));
 
             Assert.Contains("plc", log);
-            Assert.DoesNotContain(AlarmSink.Entries, e => e.Message.Contains("챔버 정지 실패"));
+            Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Error && e.Source == "PLC");
         }
     }
 }

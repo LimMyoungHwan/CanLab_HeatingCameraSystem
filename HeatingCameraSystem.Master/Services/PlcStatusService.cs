@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Master.Localization;
 
 namespace HeatingCameraSystem.Master.Services
 {
@@ -19,7 +20,7 @@ namespace HeatingCameraSystem.Master.Services
         [ObservableProperty] private PlcStatusSnapshot _snapshot = new();
         [ObservableProperty] private bool _isConnected;
         [ObservableProperty] private bool _isEmergencyStop;
-        [ObservableProperty] private string _statusMessage = "PLC 대기";
+        [ObservableProperty] private string _statusMessage = LocalizationManager.Instance["Plc_StatusWaiting"];
 
         public event EventHandler<PlcStatusSnapshot>? Updated;
 
@@ -57,17 +58,17 @@ namespace HeatingCameraSystem.Master.Services
                 IsEmergencyStop = s.ErrorBits.Length > 0 && s.ErrorBits[0];
                 RaiseErrorEdges(s.ErrorBits);
 
-                if (!_wasConnected) AlarmSink.Raise(AlarmSeverity.Info, "PLC", "연결 복구");
+                if (!_wasConnected) AlarmSink.Raise(AlarmSeverity.Info, "PLC", LocalizationManager.Instance["Plc_ConnRestored"]);
                 _wasConnected = true;
                 IsConnected = true;
-                StatusMessage = $"갱신 {DateTime.Now:HH:mm:ss}";
+                StatusMessage = string.Format(LocalizationManager.Instance["Dash_Refreshed"], DateTime.Now.ToString("HH:mm:ss"));
             }
             catch (Exception ex)
             {
-                if (_wasConnected) AlarmSink.Raise(AlarmSeverity.Error, "PLC", $"연결 끊김: {ex.Message}");
+                if (_wasConnected) AlarmSink.Raise(AlarmSeverity.Error, "PLC", string.Format(LocalizationManager.Instance["Plc_ConnLost"], ex.Message));
                 _wasConnected = false;
                 IsConnected = false;
-                StatusMessage = $"읽기 실패: {ex.Message}";
+                StatusMessage = string.Format(LocalizationManager.Instance["Dash_ReadFailed"], ex.Message);
                 System.Diagnostics.Debug.WriteLine($"[PlcStatus] poll failed: {ex.Message}");
             }
             finally
@@ -86,7 +87,7 @@ namespace HeatingCameraSystem.Master.Services
             {
                 bool was = _prevErrorBits != null && i < _prevErrorBits.Length && _prevErrorBits[i];
                 if (bits[i] && !was && !string.IsNullOrEmpty(names[i]))
-                    AlarmSink.Raise(AlarmSeverity.Error, "PLC", names[i]);
+                    AlarmSink.Raise(AlarmSeverity.Error, "PLC", LocalizationManager.Instance.GetOrDefault("PlcErr_" + i, names[i]));
             }
             _prevErrorBits = (bool[])bits.Clone();
         }

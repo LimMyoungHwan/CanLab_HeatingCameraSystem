@@ -12,6 +12,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Master.Localization;
 using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
@@ -45,7 +46,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         // 0=컬러(iron), 1=그레이스케일 — XAML 콤보 아이템 순서와 일치.
         [ObservableProperty] private int _colorMapIndex = LivePreviewColorMode.Grayscale ? 1 : 0;
 
-        [ObservableProperty] private string _statusMessage = "대기";
+        [ObservableProperty] private string _statusMessage = LocalizationManager.Instance["Common_Idle"];
         [ObservableProperty] private float _servoXPosition;
         [ObservableProperty] private float _servoYPosition;
         [ObservableProperty] private int _currentPoint;
@@ -215,30 +216,30 @@ namespace HeatingCameraSystem.Master.ViewModels
         partial void OnLightingChanged(bool value) => _ = EquipmentAsync(PlcEquipment.Lighting, value);
         partial void OnPairGlassChanged(bool value) => _ = EquipmentAsync(PlcEquipment.PairGlass, value);
 
-        partial void OnHumidityControlChanged(bool value) => _ = RunAsync(p => p.SetHumidityControlAsync(value), "습도제어");
+        partial void OnHumidityControlChanged(bool value) => _ = RunAsync(p => p.SetHumidityControlAsync(value), LocalizationManager.Instance["Manual_HumidityControlLabel"]);
 
         [RelayCommand]
-        private Task StartChamber() => RunAsync(p => p.StartChamberAsync(), "챔버 시작");
+        private Task StartChamber() => RunAsync(p => p.StartChamberAsync(), LocalizationManager.Instance["Manual_StartChamber"]);
 
         [RelayCommand]
-        private Task StopChamber() => RunAsync(p => p.StopChamberAsync(), "챔버 정지");
+        private Task StopChamber() => RunAsync(p => p.StopChamberAsync(), LocalizationManager.Instance["Manual_StopChamber"]);
 
         [RelayCommand]
-        private Task EmergencyStop() => RunAsync(p => p.TriggerEmergencyStopAsync(), "비상정지");
+        private Task EmergencyStop() => RunAsync(p => p.TriggerEmergencyStopAsync(), LocalizationManager.Instance["Equip_EStop"]);
 
         [RelayCommand]
-        private Task HomeX() => RunAsync(p => p.HomeAsync(ServoAxis.X), "X축 원점");
+        private Task HomeX() => RunAsync(p => p.HomeAsync(ServoAxis.X), LocalizationManager.Instance["Manual_HomeXLabel"]);
 
         [RelayCommand]
-        private Task HomeY() => RunAsync(p => p.HomeAsync(ServoAxis.Y), "Y축 원점");
+        private Task HomeY() => RunAsync(p => p.HomeAsync(ServoAxis.Y), LocalizationManager.Instance["Manual_HomeYLabel"]);
 
         [RelayCommand]
-        private Task MoveToPoint(int index) => RunAsync(p => p.MoveServoToPositionAsync(index), $"{index}포인트 이동");
+        private Task MoveToPoint(int index) => RunAsync(p => p.MoveServoToPositionAsync(index), L("Manual_MovePointLabel", index));
 
         [RelayCommand]
         private Task MoveAbsolute(string axis) => axis == "Y"
-            ? RunAsync(p => p.MoveToCoordinateAsync(ServoXPosition, AbsoluteTargetY), "Y 절대이동")
-            : RunAsync(p => p.MoveToCoordinateAsync(AbsoluteTargetX, ServoYPosition), "X 절대이동");
+            ? RunAsync(p => p.MoveToCoordinateAsync(ServoXPosition, AbsoluteTargetY), LocalizationManager.Instance["Manual_MoveYAbs"])
+            : RunAsync(p => p.MoveToCoordinateAsync(AbsoluteTargetX, ServoYPosition), LocalizationManager.Instance["Manual_MoveXAbs"]);
 
         [RelayCommand]
         private Task MoveRelative(string dir)
@@ -252,7 +253,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 case "Y-": y -= RelativeStepY; break;
                 default: return Task.CompletedTask;
             }
-            return RunAsync(p => p.MoveToCoordinateAsync(x, y), $"상대이동 {dir}");
+            return RunAsync(p => p.MoveToCoordinateAsync(x, y), L("Manual_RelMoveLabel", dir));
         }
 
         [RelayCommand]
@@ -260,10 +261,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             await p.SetTargetTemperatureAsync(TargetTemperature);
             await p.SetControlTemperatureAsync(TargetTemperature);
-        }, "타겟 온도");
+        }, LocalizationManager.Instance["Manual_TargetTempLabel"]);
 
         [RelayCommand]
-        private Task ApplyHumidity() => RunAsync(p => p.SetTargetHumidityAsync(TargetHumidity), "타겟 습도");
+        private Task ApplyHumidity() => RunAsync(p => p.SetTargetHumidityAsync(TargetHumidity), LocalizationManager.Instance["Manual_TargetHumLabel"]);
 
         private bool CanStartRamp() => !IsRamping;
 
@@ -271,7 +272,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private async Task StartRampAsync()
         {
             var plc = AppServices.PlcController;
-            if (plc == null) { StatusMessage = "PLC 미초기화"; return; }
+            if (plc == null) { StatusMessage = LocalizationManager.Instance["Plc_NotInitialized"]; return; }
 
             _rampCts?.Dispose();
             _rampCts = new CancellationTokenSource();
@@ -283,15 +284,15 @@ namespace HeatingCameraSystem.Master.ViewModels
                 var controller = new TemperatureRampController(plc, RampStepIntervalSeconds);
                 var rampProgress = new Progress<string>(message => StatusMessage = message);
                 await controller.RampAsync(start, RampTargetTemperature, RampMinutes, rampProgress, _rampCts.Token);
-                StatusMessage = "온도 램프 완료됨";
+                StatusMessage = LocalizationManager.Instance["Manual_RampDone"];
             }
             catch (OperationCanceledException)
             {
-                StatusMessage = "램프 중지됨";
+                StatusMessage = LocalizationManager.Instance["Manual_RampStopped"];
             }
             catch (Exception ex)
             {
-                StatusMessage = $"온도 램프 오류: {ex.Message}";
+                StatusMessage = L("Manual_RampError", ex.Message);
                 System.Diagnostics.Debug.WriteLine($"[ManualControl] {ex.Message}");
             }
             finally
@@ -306,22 +307,22 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void StopRamp() => _rampCts?.Cancel();
 
         [RelayCommand]
-        private Task ApplyServoSpeed() => RunAsync(p => p.SetServoSpeedAsync(ServoSpeedPercent), "서보 속도");
+        private Task ApplyServoSpeed() => RunAsync(p => p.SetServoSpeedAsync(ServoSpeedPercent), LocalizationManager.Instance["Manual_ServoSpeedLabel"]);
 
         [RelayCommand]
-        private Task ApplyFanSpeed() => RunAsync(p => p.SetFanSpeedAsync(FanSpeedTargetHz), "팬 속도");
+        private Task ApplyFanSpeed() => RunAsync(p => p.SetFanSpeedAsync(FanSpeedTargetHz), LocalizationManager.Instance["Status_FanSpeedLabel"]);
 
         [RelayCommand]
-        private Task ApplyBlackBody1() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(0, BlackBody1Target), "흑체1 온도");
+        private Task ApplyBlackBody1() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(0, BlackBody1Target), LocalizationManager.Instance["Plc_Bb1Temp"]);
 
         [RelayCommand]
-        private Task ApplyBlackBody2() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(1, BlackBody2Target), "흑체2 온도");
+        private Task ApplyBlackBody2() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(1, BlackBody2Target), LocalizationManager.Instance["Plc_Bb2Temp"]);
 
         private async Task PublishCameraCommandAsync(CameraTileModel tile, string op)
         {
             if (tile == null || AppServices.NatsService == null) return;
 
-            tile.LastAckStatus = "⏳ 전송됨…";
+            tile.LastAckStatus = LocalizationManager.Instance["Manual_Sending"];
             var msg = new CameraControlMessage
             {
                 AgentId = tile.AgentId,
@@ -336,7 +337,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
             catch (Exception ex)
             {
-                tile.LastAckStatus = $"✘ 전송 실패: {ex.Message}";
+                tile.LastAckStatus = L("Manual_SendFailed", ex.Message);
                 System.Diagnostics.Debug.WriteLine($"[ManualControl] Publish failed: {ex.Message}");
             }
         }
@@ -349,7 +350,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private async Task SendCapture(CameraTileModel tile)
         {
             if (tile == null || AppServices.NatsService == null) return;
-            tile.LastAckStatus = "⏳ 캡처 요청…";
+            tile.LastAckStatus = LocalizationManager.Instance["Manual_CaptureRequesting"];
             try
             {
                 await AppServices.NatsService.PublishCaptureCommandAsync(new CaptureCommandMessage
@@ -359,11 +360,11 @@ namespace HeatingCameraSystem.Master.ViewModels
                     RecipeStepId = string.Empty,
                     Timestamp = DateTime.UtcNow
                 });
-                tile.LastAckStatus = "캡처 명령 전송됨";
+                tile.LastAckStatus = LocalizationManager.Instance["Manual_CaptureSent"];
             }
             catch (Exception ex)
             {
-                tile.LastAckStatus = $"✘ 캡처 전송 실패: {ex.Message}";
+                tile.LastAckStatus = L("Manual_CaptureFailed", ex.Message);
             }
         }
         [RelayCommand] private Task SendNuc(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Nuc);
@@ -413,18 +414,20 @@ namespace HeatingCameraSystem.Master.ViewModels
             finally { _blackBodyPolling = false; }
         }
 
+        private static string L(string key, params object[] args) => string.Format(LocalizationManager.Instance[key], args);
+
         private async Task RunBlackBodyAsync(Func<IBlackBodyController, Task> action, string label)
         {
             var bb = AppServices.BlackBodyController;
-            if (bb == null) { StatusMessage = "흑체 컨트롤러 미초기화"; return; }
+            if (bb == null) { StatusMessage = LocalizationManager.Instance["Plc_BbNotInit"]; return; }
             try
             {
                 await action(bb);
-                StatusMessage = $"{label} 적용됨";
+                StatusMessage = L("Plc_LabelApplied", label);
             }
             catch (Exception ex)
             {
-                StatusMessage = $"{label} 오류: {ex.Message}";
+                StatusMessage = L("Plc_LabelError", label, ex.Message);
                 System.Diagnostics.Debug.WriteLine($"[ManualControl] {ex.Message}");
             }
         }
@@ -432,15 +435,15 @@ namespace HeatingCameraSystem.Master.ViewModels
         private async Task RunAsync(Func<IPlcController, Task> action, string label)
         {
             var plc = AppServices.PlcController;
-            if (plc == null) { StatusMessage = "PLC 미초기화"; return; }
+            if (plc == null) { StatusMessage = LocalizationManager.Instance["Plc_NotInitialized"]; return; }
             try
             {
                 await action(plc);
-                StatusMessage = $"{label} 실행됨";
+                StatusMessage = L("Manual_LabelExecuted", label);
             }
             catch (Exception ex)
             {
-                StatusMessage = $"{label} 오류: {ex.Message}";
+                StatusMessage = L("Plc_LabelError", label, ex.Message);
                 System.Diagnostics.Debug.WriteLine($"[ManualControl] {ex.Message}");
             }
         }

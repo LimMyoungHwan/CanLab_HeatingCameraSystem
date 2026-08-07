@@ -209,11 +209,11 @@
 
                 <!-- View Mode Toggle -->
                 <StackPanel Margin="0,0,24,0">
-                    <TextBlock Text="보기" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                    <TextBlock Text="{loc:Loc Hist_ViewMode}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,6" FontWeight="SemiBold"/>
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="촬영 이력" Command="{Binding ShowCaptureModeCommand}" Style="{StaticResource CaptureTabStyle}" Height="30"/>
-                        <Button Content="챔버 이력" Command="{Binding ShowChamberModeCommand}" Style="{StaticResource ChamberTabStyle}" Height="30" Margin="4,0,0,0"/>
-                        <Button Content="알람 이력" Command="{Binding ShowAlarmModeCommand}" Style="{StaticResource AlarmTabStyle}" Height="30" Margin="4,0,0,0"/>
+                        <Button Content="{loc:Loc Hist_CaptureTab}" Command="{Binding ShowCaptureModeCommand}" Style="{StaticResource CaptureTabStyle}" Height="30"/>
+                        <Button Content="{loc:Loc Hist_ChamberTab}" Command="{Binding ShowChamberModeCommand}" Style="{StaticResource ChamberTabStyle}" Height="30" Margin="4,0,0,0"/>
+                        <Button Content="{loc:Loc Hist_AlarmTab}" Command="{Binding ShowAlarmModeCommand}" Style="{StaticResource AlarmTabStyle}" Height="30" Margin="4,0,0,0"/>
                     </StackPanel>
                 </StackPanel>
 
@@ -237,13 +237,13 @@
 
                 <!-- Source filter (capture mode) -->
                 <StackPanel Margin="0,0,24,0" Visibility="{Binding IsCaptureMode, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Text="촬영 구분" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                    <TextBlock Text="{loc:Loc Hist_SourceFilter}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,6" FontWeight="SemiBold"/>
                     <ComboBox ItemsSource="{Binding SourceOptions}" SelectedItem="{Binding SelectedSourceFilter, Mode=TwoWay}" Width="130" Background="{StaticResource BgSurfaceContainerLowest}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                 </StackPanel>
 
                 <!-- Alarm severity filter -->
                 <StackPanel Margin="0,0,24,0" Visibility="{Binding IsAlarmMode, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Text="알람 수준" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                    <TextBlock Text="{loc:Loc Hist_SeverityFilter}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,6" FontWeight="SemiBold"/>
                     <ComboBox ItemsSource="{Binding SeverityOptions}" SelectedItem="{Binding SelectedMinimumSeverity, Mode=TwoWay}" Width="130" Background="{StaticResource BgSurfaceContainerLowest}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                 </StackPanel>
 
@@ -437,10 +437,10 @@
                                 <ColumnDefinition Width="1.2*"/>
                                 <ColumnDefinition Width="4*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="시간" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold"/>
-                            <TextBlock Grid.Column="1" Text="등급" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold"/>
-                            <TextBlock Grid.Column="2" Text="출처" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold"/>
-                            <TextBlock Grid.Column="3" Text="메시지" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="0" Text="{loc:Loc Hist_ColTime}" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="1" Text="{loc:Loc Hist_ColSeverity}" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="2" Text="{loc:Loc Hist_ColSource}" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold"/>
+                            <TextBlock Grid.Column="3" Text="{loc:Loc Hist_ColMessage}" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold"/>
                         </Grid>
                     </Border>
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Master.Localization;
 using HeatingCameraSystem.Master.Services;
 using Microsoft.Win32;
 
@@ -67,8 +68,10 @@ namespace HeatingCameraSystem.Master.ViewModels
 
     public partial class HistoryViewModel : ObservableObject
     {
-        // Filter properties
-        public const string AllCamerasFilter = "전체";
+        // Localized filter labels captured at construction (this VM is recreated on each navigation
+        // to History, so it always reflects the active language). Source/severity switches match by
+        // list index, which is language-stable, so localizing the labels never breaks the filter logic.
+        public static string AllCamerasFilter => LocalizationManager.Instance["Nav_AlarmsFilterAll"];
 
         [ObservableProperty]
         private DateTime _fromDateTime;
@@ -77,18 +80,19 @@ namespace HeatingCameraSystem.Master.ViewModels
         private DateTime _toDateTime;
 
         [ObservableProperty]
-        private string _selectedCameraGroup = AllCamerasFilter;
+        private string _selectedCameraGroup = LocalizationManager.Instance["Nav_AlarmsFilterAll"];
 
-        public ObservableCollection<string> CameraGroups { get; } = new ObservableCollection<string> { AllCamerasFilter };
-
-        public const string AllSourcesFilter = "전체";
+        public ObservableCollection<string> CameraGroups { get; } = new ObservableCollection<string> { LocalizationManager.Instance["Nav_AlarmsFilterAll"] };
 
         [ObservableProperty]
-        private string _selectedSourceFilter = AllSourcesFilter;
+        private string _selectedSourceFilter = LocalizationManager.Instance["Nav_AlarmsFilterAll"];
 
         public ObservableCollection<string> SourceOptions { get; } = new ObservableCollection<string>
         {
-            AllSourcesFilter, "레시피", "수동", "AgentUI"
+            LocalizationManager.Instance["Nav_AlarmsFilterAll"],
+            LocalizationManager.Instance["Hist_SourceRecipe"],
+            LocalizationManager.Instance["Hist_SourceManual"],
+            LocalizationManager.Instance["Hist_SourceAgentUi"]
         };
 
         // Pagination properties
@@ -143,14 +147,14 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public ObservableCollection<string> SeverityOptions { get; } = new ObservableCollection<string>
         {
-            "전체",
-            "정보 이상",
-            "경고 이상",
-            "오류만"
+            LocalizationManager.Instance["Nav_AlarmsFilterAll"],
+            LocalizationManager.Instance["Hist_SevInfoAbove"],
+            LocalizationManager.Instance["Hist_SevWarnAbove"],
+            LocalizationManager.Instance["Hist_SevErrorOnly"]
         };
 
         [ObservableProperty]
-        private string _selectedMinimumSeverity = "전체";
+        private string _selectedMinimumSeverity = LocalizationManager.Instance["Nav_AlarmsFilterAll"];
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(IsCaptureMode))]
@@ -195,11 +199,11 @@ namespace HeatingCameraSystem.Master.ViewModels
             if (SelectedCameraGroup != AllCamerasFilter)
                 allRecords = allRecords.Where(r => r.CameraId == SelectedCameraGroup).ToList();
 
-            CaptureSource? sourceFilter = SelectedSourceFilter switch
+            CaptureSource? sourceFilter = SourceOptions.IndexOf(SelectedSourceFilter) switch
             {
-                "레시피" => CaptureSource.Recipe,
-                "수동" => CaptureSource.Manual,
-                "AgentUI" => CaptureSource.AgentUi,
+                1 => CaptureSource.Recipe,
+                2 => CaptureSource.Manual,
+                3 => CaptureSource.AgentUi,
                 _ => null
             };
             if (sourceFilter.HasValue)
@@ -263,11 +267,11 @@ namespace HeatingCameraSystem.Master.ViewModels
                 return;
             }
 
-            AlarmSeverity? minimumSeverity = SelectedMinimumSeverity switch
+            AlarmSeverity? minimumSeverity = SeverityOptions.IndexOf(SelectedMinimumSeverity) switch
             {
-                "정보 이상" => AlarmSeverity.Info,
-                "경고 이상" => AlarmSeverity.Warning,
-                "오류만" => AlarmSeverity.Error,
+                1 => AlarmSeverity.Info,
+                2 => AlarmSeverity.Warning,
+                3 => AlarmSeverity.Error,
                 _ => null
             };
 
@@ -289,9 +293,9 @@ namespace HeatingCameraSystem.Master.ViewModels
                     Timestamp = record.Timestamp,
                     Severity = record.Severity switch
                     {
-                        AlarmSeverity.Error => "오류",
-                        AlarmSeverity.Warning => "경고",
-                        _ => "정보"
+                        AlarmSeverity.Error => LocalizationManager.Instance["Nav_AlarmsFilterError"],
+                        AlarmSeverity.Warning => LocalizationManager.Instance["Nav_AlarmsFilterWarning"],
+                        _ => LocalizationManager.Instance["Nav_AlarmsFilterInfo"]
                     },
                     Source = record.Source,
                     Message = record.Message

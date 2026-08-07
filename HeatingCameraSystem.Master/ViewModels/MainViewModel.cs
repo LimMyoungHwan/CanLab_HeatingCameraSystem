@@ -105,10 +105,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         private string _alarmActionMessage = string.Empty;
 
         [RelayCommand]
-        private Task BuzzerOff() => TriggerAsync(p => p.BuzzerOffAsync(), "부저 OFF");
+        private Task BuzzerOff() => TriggerAsync(p => p.BuzzerOffAsync(), LocalizationManager.Instance["Nav_BuzzerOff"]);
 
         [RelayCommand]
-        private Task ResetError() => TriggerAsync(p => p.ResetErrorAsync(), "에러 리셋");
+        private Task ResetError() => TriggerAsync(p => p.ResetErrorAsync(), LocalizationManager.Instance["Nav_ErrorReset"]);
 
         [RelayCommand]
         private Task PlcOrigin() => TriggerAsync(async p =>
@@ -118,7 +118,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         }, LocalizationManager.Instance["Plc_Origin"]);
 
         [RelayCommand]
-        private Task EmergencyStop() => TriggerAsync(p => p.TriggerEmergencyStopAsync(), "비상정지");
+        private Task EmergencyStop() => TriggerAsync(p => p.TriggerEmergencyStopAsync(), LocalizationManager.Instance["Equip_EStop"]);
 
         private async Task TriggerAsync(Func<IPlcController, Task> action, string label)
         {

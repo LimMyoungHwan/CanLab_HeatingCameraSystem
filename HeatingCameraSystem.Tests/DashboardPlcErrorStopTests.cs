@@ -89,8 +89,8 @@ public class DashboardPlcErrorStopTests
 
         vm.HandlePlcErrors(ErrorAt(1));
 
-        Assert.Contains(AlarmSink.Entries, e => e is not null && e.Severity == AlarmSeverity.Error && e.Message.Contains("비상 정지 실패"));
-        Assert.Contains(AlarmSink.Entries, e => e is not null && e.Severity == AlarmSeverity.Error && e.Message.Contains("챔버 정지 실패"));
+        Assert.Contains(AlarmSink.Entries, e => e is not null && e.Severity == AlarmSeverity.Error && e.Message.Contains("estop boom"));
+        Assert.Contains(AlarmSink.Entries, e => e is not null && e.Severity == AlarmSeverity.Error && e.Message.Contains("chamber boom"));
     }
 
     [Fact]

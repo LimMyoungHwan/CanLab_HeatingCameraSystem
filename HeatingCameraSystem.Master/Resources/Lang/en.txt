@@ -270,3 +270,143 @@ Nav_AlarmsFilterWarning=Warning
 Nav_AlarmsFilterError=Error
 Nav_AlarmsDeleteTooltip=Delete alarm
 Nav_AlarmsEmpty=No alarms
+
+# Status view (hero + card labels)
+Status_HeroChamberTemp=Chamber Temp
+Status_HeroChamberHumidity=Chamber Humidity
+Status_HeroProgress=Progress
+Status_HeroServoPoint=Servo Point
+Status_ChamberEnvTitle=Chamber Environment
+Status_BlackBodyRefTitle=Black Body Reference
+Status_FanSpeedLabel=Fan Speed
+Status_PlcAlarmTitle=PLC Alarms
+Status_ActiveErrorHint=Active errors are highlighted in red
+
+# History view tabs / filters / alarm columns
+Hist_ViewMode=View
+Hist_CaptureTab=Capture Log
+Hist_ChamberTab=Chamber Log
+Hist_AlarmTab=Alarm Log
+Hist_SourceFilter=Capture Type
+Hist_SeverityFilter=Alarm Severity
+Hist_ColTime=Time
+Hist_ColSeverity=Severity
+Hist_ColSource=Source
+Hist_ColMessage=Message
+
+# PLC settings — black body connection
+Plc_BlackBodyConnTitle=Black Body Connection
+Plc_BlackBodyDirectControl=Use Direct Control
+Plc_BlackBody1=Black Body 1
+Plc_BlackBody2=Black Body 2
+Plc_ComPort=COM Port
+
+# ViewModel status messages
+Status_PollingWait=Polling standby
+Agent_SelectAndLoad=Select an agent, then load.
+Agent_Loading=Loading {0} config…
+Agent_Loaded={0} config loaded ({1} cameras). Edit and send.
+Agent_Sending=Sending {0} config…
+
+# Dashboard status messages
+Dash_RecipeIdle=Idle
+Dash_PlcWaiting=PLC standby
+Dash_UnknownPc=(Unknown PC)
+Dash_AgentOffline={0} offline
+Dash_Refreshed=Updated {0}
+Dash_ReadFailed=Read failed: {0}
+Dash_Mode1Active=Mode 1 — Active Camera
+Dash_Mode1Idle=Mode 1 — Idle
+Dash_ServiceNotInit=Service not initialized
+Dash_SelectRecipeNeeded=Select a recipe
+Dash_RecipeRunning=Running: {0}
+Dash_RecipeDone=Done
+Dash_RecipeStopped=Stopped
+Dash_RecipeError=Error: {0}
+Dash_RecipeStopping=Stopping...
+
+# PLC settings status messages
+Common_Idle=Idle
+Plc_ConnSaved=PLC connection saved ({0}:{1}) — applies after restart
+Plc_BbConnSaved=Black body connection saved — applies after restart
+Plc_Bb1Temp=BB1 temperature
+Plc_Bb2Temp=BB2 temperature
+Plc_PointsLoaded=Point coordinates loaded
+Plc_LoadError=Load error: {0}
+Plc_PointsSaved=Point coordinates saved
+Plc_SaveError=Save error: {0}
+Plc_AdminLoaded=Admin settings loaded
+Plc_AdminLabel=Admin settings
+Plc_LabelApplied={0} applied
+Plc_LabelError={0} error: {1}
+Plc_BbNotInit=Black body controller not initialized
+
+# Manual control status messages
+Manual_HumidityControlLabel=Humidity control
+Manual_StartChamber=Start chamber
+Manual_StopChamber=Stop chamber
+Manual_HomeXLabel=X-axis home
+Manual_HomeYLabel=Y-axis home
+Manual_MovePointLabel=Move to point {0}
+Manual_MoveYAbs=Y absolute move
+Manual_MoveXAbs=X absolute move
+Manual_RelMoveLabel=Relative move {0}
+Manual_TargetTempLabel=Target temperature
+Manual_TargetHumLabel=Target humidity
+Manual_RampDone=Temperature ramp completed
+Manual_RampStopped=Ramp stopped
+Manual_RampError=Temperature ramp error: {0}
+Manual_ServoSpeedLabel=Servo speed
+Manual_Sending=⏳ Sending…
+Manual_SendFailed=✘ Send failed: {0}
+Manual_CaptureRequesting=⏳ Capture requesting…
+Manual_CaptureSent=Capture command sent
+Manual_CaptureFailed=✘ Capture send failed: {0}
+Manual_LabelExecuted={0} executed
+
+# History filter options
+Hist_SourceRecipe=Recipe
+Hist_SourceManual=Manual
+Hist_SourceAgentUi=AgentUI
+Hist_SevInfoAbove=Info and above
+Hist_SevWarnAbove=Warning and above
+Hist_SevErrorOnly=Error only
+
+# PLC status messages
+Plc_StatusWaiting=PLC standby
+Plc_ConnRestored=Connection restored
+Plc_ConnLost=Connection lost: {0}
+
+# PLC device bit names (localized only for Korean catalog entries; English entries fall back)
+PlcErr_0=Emergency Stop Switch Activated
+PlcErr_1=Servo Drive 1 - X-axis Error
+PlcErr_2=Servo Drive 2 - Y-axis Error
+PlcErr_3=Overheat Protection Thermostat Error
+PlcErr_4=Main Control Over-temperature
+PlcErr_5=Inverter 1 - FAN1 Error
+PlcErr_6=Inverter 2 - FAN2 Error
+PlcErr_7=SCR Power Regulator Error
+PlcErr_8=EOCR1 Overload
+PlcErr_9=EOCR2 Overload
+PlcErr_10=EOCR3 Overload
+PlcErr_11=EOCR4 Overload
+PlcErr_12=EOCR5 Overload
+PlcErr_13=Chiller EOCR Error
+PlcErr_15=Door Safety Sensor 1 Error
+PlcErr_16=Door Safety Sensor 2 Error
+PlcErr_17=Door Safety Sensor 3 Error
+PlcIn_0=Emergency Stop Signal
+PlcOut_2=Tower Lamp Green
+PlcOut_3=Tower Lamp Yellow
+PlcOut_4=Tower Lamp Red
+PlcOut_5=Buzzer
+PlcOut_8=1st Cooling Magnet
+PlcOut_9=2nd Cooling Magnet
+PlcOut_10=Room Cooling Magnet
+PlcOut_11=Heater Control Magnet
+PlcOut_12=Room Cooling Bypass
+PlcOut_13=Door LAMP
+PlcOut_14=Pair Glass
+PlcOut_15=Door Lock Output
+PlcOut_24=Exhaust Valve
+PlcOut_25=Chiller (Servo Cooling) Magnet ON

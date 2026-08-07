@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Interfaces;
+using HeatingCameraSystem.Master.Localization;
 using HeatingCameraSystem.Master.Services;
 using HeatingCameraSystem.Master.ViewModels;
 using Moq;
@@ -23,7 +24,7 @@ public class MainViewModelTests
         vm.PlcOriginCommand.Execute(null);
 
         // Assert
-        Assert.Equal("PLC 미초기화", vm.AlarmActionMessage);
+        Assert.Equal(LocalizationManager.Instance["Plc_NotInitialized"], vm.AlarmActionMessage);
     }
 
     [Fact]
@@ -51,7 +52,7 @@ public class MainViewModelTests
         Assert.Equal(2, callSequence.Count);
         Assert.Equal("SetPoint", callSequence[0]);
         Assert.Equal("MoveServo", callSequence[1]);
-        Assert.Contains("PLC 원점 복귀 완료", vm.AlarmActionMessage);
+        Assert.Contains(LocalizationManager.Instance["Plc_Origin"], vm.AlarmActionMessage);
         
         plc.Verify(p => p.SetPointCoordinateAsync(1, 0f, 0f), Times.Once);
         plc.Verify(p => p.MoveServoToPositionAsync(1), Times.Once);
@@ -72,7 +73,7 @@ public class MainViewModelTests
         await vm.PlcOriginCommand.ExecuteAsync(null);
 
         // Assert
-        Assert.Contains("PLC 원점 복귀 실패: Test Failure", vm.AlarmActionMessage);
+        Assert.Contains("Test Failure", vm.AlarmActionMessage);
     }
 
     [Fact]

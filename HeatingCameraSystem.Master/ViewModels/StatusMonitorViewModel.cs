@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Master.Localization;
 using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
@@ -19,7 +20,7 @@ namespace HeatingCameraSystem.Master.ViewModels
     public partial class StatusMonitorViewModel : ObservableObject
     {
         [ObservableProperty] private bool _isConnected;
-        [ObservableProperty] private string _statusMessage = "폴링 대기";
+        [ObservableProperty] private string _statusMessage = LocalizationManager.Instance["Status_PollingWait"];
 
         [ObservableProperty] private float _currentTemperature;
         [ObservableProperty] private float _targetTemperature;
@@ -62,26 +63,37 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public StatusMonitorViewModel()
         {
-            BuildBitItems(Errors, PlcDeviceCatalog.ErrorNames);
-            BuildBitItems(Inputs, PlcDeviceCatalog.InputNames);
-            BuildBitItems(Outputs, PlcDeviceCatalog.OutputNames);
+            BuildBitItems(Errors, PlcDeviceCatalog.ErrorNames, "PlcErr_");
+            BuildBitItems(Inputs, PlcDeviceCatalog.InputNames, "PlcIn_");
+            BuildBitItems(Outputs, PlcDeviceCatalog.OutputNames, "PlcOut_");
+
+            LocalizationManager.Instance.PropertyChanged += OnLanguageChanged;
 
             // 공용 PlcStatusService 스냅샷을 구독한다. 자체 폴링을 돌리면 PlcXgtClient의 단일 IO
             // 세마포어를 두 배로 점유해(스냅샷 1회 = 태그 70여 회 왕복) 양쪽 모두 굶어 화면이 멈춘다.
             if (AppServices.PlcStatus == null)
             {
-                StatusMessage = "PLC 미초기화";
+                StatusMessage = LocalizationManager.Instance["Plc_NotInitialized"];
                 return;
             }
             AppServices.PlcStatus.Updated += OnSharedPlcStatus;
             Apply(AppServices.PlcStatus.Snapshot);
         }
 
-        private static void BuildBitItems(ObservableCollection<BitStatusItem> target, string[] names)
+        private static void BuildBitItems(ObservableCollection<BitStatusItem> target, string[] names, string keyPrefix)
         {
+            target.Clear();
             for (int i = 0; i < names.Length; i++)
                 if (!string.IsNullOrEmpty(names[i]))
-                    target.Add(new BitStatusItem { Index = i, Name = names[i] });
+                    target.Add(new BitStatusItem { Index = i, Name = LocalizationManager.Instance.GetOrDefault(keyPrefix + i, names[i]) });
+        }
+
+        private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            BuildBitItems(Errors, PlcDeviceCatalog.ErrorNames, "PlcErr_");
+            BuildBitItems(Inputs, PlcDeviceCatalog.InputNames, "PlcIn_");
+            BuildBitItems(Outputs, PlcDeviceCatalog.OutputNames, "PlcOut_");
+            if (AppServices.PlcStatus != null) Apply(AppServices.PlcStatus.Snapshot);
         }
 
         private async void OnSharedPlcStatus(object? sender, PlcStatusSnapshot s)

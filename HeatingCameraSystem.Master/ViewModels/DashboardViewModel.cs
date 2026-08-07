@@ -82,7 +82,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private float _currentHumidity;
 
         [ObservableProperty]
-        private string _recipeStatus = "대기 중";
+        private string _recipeStatus = LocalizationManager.Instance["Dash_RecipeIdle"];
 
         [ObservableProperty]
         private double _recipeProgressValue = 0;
@@ -140,7 +140,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private bool _blower2;
 
         [ObservableProperty] private bool _isPlcConnected;
-        [ObservableProperty] private string _plcStatusMessage = "PLC 대기 중";
+        [ObservableProperty] private string _plcStatusMessage = LocalizationManager.Instance["Dash_PlcWaiting"];
         [ObservableProperty] private bool _isEmergencyStop;
         [ObservableProperty] private bool _hasActiveErrors;
 
@@ -271,7 +271,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 RunOnUi(() =>
                 {
-                    string hostName = string.IsNullOrWhiteSpace(msg.HostName) ? "(미확인 PC)" : msg.HostName;
+                    string hostName = string.IsNullOrWhiteSpace(msg.HostName) ? LocalizationManager.Instance["Dash_UnknownPc"] : msg.HostName;
                     if (!_agentMap.TryGetValue(msg.AgentId, out var agent))
                     {
                         agent = new AgentNode { Name = msg.AgentId, IsExpanded = true, HostName = hostName };
@@ -401,7 +401,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 if (agent.LastHeartbeat < threshold && agent.IsOnline)
                 {
                     agent.IsOnline = false;
-                    AlarmSink.Raise(AlarmSeverity.Warning, "Agent", $"{agent.Name} 오프라인");
+                    AlarmSink.Raise(AlarmSeverity.Warning, "Agent", Localize("Dash_AgentOffline", agent.Name));
                     foreach (var cam in agent.Cameras)
                         cam.CameraStatus = CameraStatus.Offline;
                 }
@@ -425,14 +425,14 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 var s = await _plcController.ReadStatusAsync();
                 IsPlcConnected = true;
-                PlcStatusMessage = $"갱신 {DateTime.Now:HH:mm:ss}";
+                PlcStatusMessage = Localize("Dash_Refreshed", DateTime.Now.ToString("HH:mm:ss"));
                 ApplyStatus(s);
                 await RefreshBlackBodyAsync(s);
             }
             catch (Exception ex)
             {
                 IsPlcConnected = false;
-                PlcStatusMessage = $"읽기 실패: {ex.Message}";
+                PlcStatusMessage = Localize("Dash_ReadFailed", ex.Message);
                 System.Diagnostics.Debug.WriteLine($"[Dashboard] PLC poll failed: {ex.Message}");
             }
         }
@@ -508,7 +508,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 var fired = new List<string>();
                 for (int i = 0; i < errorBits.Length && i < names.Length; i++)
                     if (errorBits[i] && !string.IsNullOrEmpty(names[i]))
-                        fired.Add(names[i]);
+                        fired.Add(LocalizationManager.Instance.GetOrDefault("PlcErr_" + i, names[i]));
                 string message = fired.Count > 0
                     ? Localize("Plc_ErrorStop", string.Join(", ", fired))
                     : Localize("Plc_ErrorStopNoDetails");
@@ -597,7 +597,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             var names = PlcDeviceCatalog.ErrorNames;
             for (int i = 0; i < bits.Length && i < names.Length; i++)
                 if (bits[i] && !string.IsNullOrEmpty(names[i]))
-                    ActiveErrors.Add(names[i]);
+                    ActiveErrors.Add(LocalizationManager.Instance.GetOrDefault("PlcErr_" + i, names[i]));
             HasActiveErrors = ActiveErrors.Count > 0;
         }
 
@@ -664,7 +664,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             if (CurrentViewMode == 1)
             {
                 CameraFeeds.Clear();
-                CurrentPageInfo = _recipeRunning ? "Mode 1 — 활성 카메라" : "Mode 1 — 대기";
+                CurrentPageInfo = _recipeRunning ? LocalizationManager.Instance["Dash_Mode1Active"] : LocalizationManager.Instance["Dash_Mode1Idle"];
                 if (!_recipeRunning || SelectedRecipe == null)
                     return;
                 if (_activeRecipeStepIndex < 0 || _activeRecipeStepIndex >= SelectedRecipe.Steps.Count)
@@ -725,12 +725,12 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand(CanExecute = nameof(CanStartRecipe))]
         private async Task StartRecipeAsync()
         {
-            if (AppServices.RecipeEngine == null) { RecipeStatus = "서비스 미초기화"; return; }
-            if (SelectedRecipe == null) { RecipeStatus = "레시피 선택 필요"; return; }
+            if (AppServices.RecipeEngine == null) { RecipeStatus = LocalizationManager.Instance["Dash_ServiceNotInit"]; return; }
+            if (SelectedRecipe == null) { RecipeStatus = LocalizationManager.Instance["Dash_SelectRecipeNeeded"]; return; }
 
             _recipeCts?.Cancel();
             _recipeCts = new CancellationTokenSource();
-            RecipeStatus = $"실행 중: {SelectedRecipe.Name}";
+            RecipeStatus = Localize("Dash_RecipeRunning", SelectedRecipe.Name);
             RecipeProgressValue = 0;
             RecipePhaseText = string.Empty;
             _recipeRunning = true;
@@ -752,15 +752,15 @@ namespace HeatingCameraSystem.Master.ViewModels
             try
             {
                 await AppServices.RecipeEngine.ExecuteRecipeAsync(SelectedRecipe, _recipeCts.Token, progress);
-                RecipeStatus = "완료";
+                RecipeStatus = LocalizationManager.Instance["Dash_RecipeDone"];
             }
             catch (OperationCanceledException)
             {
-                RecipeStatus = "중지됨";
+                RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopped"];
             }
             catch (Exception ex)
             {
-                RecipeStatus = $"오류: {ex.Message}";
+                RecipeStatus = Localize("Dash_RecipeError", ex.Message);
             }
             finally
             {
@@ -775,7 +775,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void StopRecipe()
         {
             _recipeCts?.Cancel();
-            RecipeStatus = "중지 중...";
+            RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopping"];
         }
 
         [RelayCommand]
