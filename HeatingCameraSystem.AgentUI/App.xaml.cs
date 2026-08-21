@@ -114,7 +114,9 @@ namespace HeatingCameraSystem.AgentUI
 
             if (!config.SimulationMode)
             {
-                ReconcileSerialPortsFromPairing(config, pairing);
+                IReadOnlyList<CameraComPair> pairs = GetPairsOrEmpty(pairing);
+                AutoRegisterDetectedCameras(config, pairs);
+                ReconcileSerialPortsFromPairing(config, pairs);
                 ReconcileVideoIndicesFromEnumeration(config);
             }
 
@@ -226,21 +228,40 @@ namespace HeatingCameraSystem.AgentUI
             window.Show();
         }
 
-        private static void ReconcileSerialPortsFromPairing(AgentUiConfig config, ICameraComPairingService pairing)
+        // One (expensive) pairing pass shared by auto-registration + the serial/video reconcile; empty on failure.
+        private static IReadOnlyList<CameraComPair> GetPairsOrEmpty(ICameraComPairingService pairing)
         {
-            IReadOnlyList<CameraComPair> pairs;
             try
             {
                 // ponytail: blocks the UI thread on serial S/N reads (~sub-second per camera).
                 // Fine for a bench launch; if 8-camera startup drags, hoist to an async post-show reconcile.
-                pairs = Task.Run(() => pairing.GetPairsAsync()).GetAwaiter().GetResult();
+                return Task.Run(() => pairing.GetPairsAsync()).GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
-                AgentUiLog.Logger.Warning(ex, "Startup serial pairing failed; keeping configured COM ports");
+                AgentUiLog.Logger.Warning(ex, "Camera pairing failed; keeping configured cameras");
+                return Array.Empty<CameraComPair>();
+            }
+        }
+
+        // Persist (Save) newly detected cameras so panels/NATS pick them up now and on future launches.
+        private static void AutoRegisterDetectedCameras(AgentUiConfig config, IReadOnlyList<CameraComPair> pairs)
+        {
+            if (pairs.Count == 0)
+            {
                 return;
             }
 
+            int added = CameraAutoRegistrar.Register(config.Cameras, pairs, Environment.MachineName);
+            if (added > 0)
+            {
+                config.Save();
+                AgentUiLog.Logger.Information("Auto-registered {Count} new camera(s)", added);
+            }
+        }
+
+        private static void ReconcileSerialPortsFromPairing(AgentUiConfig config, IReadOnlyList<CameraComPair> pairs)
+        {
             for (int i = 0; i < config.Cameras.Count; i++)
             {
                 CameraDescriptor cam = config.Cameras[i];
@@ -410,7 +431,9 @@ namespace HeatingCameraSystem.AgentUI
                     {
                         if (_config is not null && !_config.SimulationMode && _pairing is not null)
                         {
-                            ReconcileSerialPortsFromPairing(_config, _pairing);
+                            IReadOnlyList<CameraComPair> pairs = GetPairsOrEmpty(_pairing);
+                            AutoRegisterDetectedCameras(_config, pairs);
+                            ReconcileSerialPortsFromPairing(_config, pairs);
                             ReconcileVideoIndicesFromEnumeration(_config);
                         }
 
