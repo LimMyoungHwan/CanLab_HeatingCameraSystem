@@ -6,7 +6,7 @@
              xmlns:conv="clr-namespace:HeatingCameraSystem.Master.Converters"
              xmlns:loc="clr-namespace:HeatingCameraSystem.Master.Localization"
              mc:Ignorable="d"
-             d:DesignHeight="768"
+             d:DesignHeight="1080"
              d:DesignWidth="1024"
              Background="#0e1321"
              Foreground="#dee2f7">
@@ -60,14 +60,13 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
+        </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="330" />
-            </Grid.ColumnDefinitions>
+                
+        </Grid.ColumnDefinitions>
 
-            <Border Grid.Row="0" Grid.ColumnSpan="2" Style="{StaticResource Card}" Margin="0,0,0,12">
+            <Border Grid.Row="0" Grid.ColumnSpan="3" Style="{StaticResource Card}" Margin="0,0,0,12">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -148,7 +147,10 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
                 <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,6,6">
                     <StackPanel>
@@ -227,9 +229,8 @@
                         </Grid>
                     </StackPanel>
                 </Border>
-            </Grid>
 
-            <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}" Margin="0,0,0,12">
+                <Border Grid.Row="0" Grid.Column="4" Grid.RowSpan="2" Style="{StaticResource Card}" Margin="12,0,0,0">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top">
                         <TextBlock Text="{loc:Loc Status_PlcAlarmTitle}" Style="{StaticResource Head}" />
@@ -250,66 +251,89 @@
                 </DockPanel>
             </Border>
 
-            <Grid Grid.Row="2" Grid.ColumnSpan="2">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
+                <Border Grid.Column="2" Style="{StaticResource Card}" Margin="12,0,6,6">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{loc:Loc Status_InputArea}" Style="{StaticResource Head}" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Inputs}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,1">
+                                        <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding On, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                        <TextBlock Text="{Binding Name}" Margin="8,0,0,0" Foreground="#dee2f7" FontSize="12" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
 
-                <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,6,0">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="{loc:Loc Status_InputArea}" Style="{StaticResource Head}" />
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding Inputs}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" Margin="0,1">
-                                            <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding On, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
-                                            <TextBlock Text="{Binding Name}" Margin="8,0,0,0" Foreground="#dee2f7" FontSize="12" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </DockPanel>
-                </Border>
-
-                <Border Grid.Column="1" Style="{StaticResource Card}" Margin="6,0,6,0">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="{loc:Loc Status_OutputArea}" Style="{StaticResource Head}" />
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding Outputs}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" Margin="0,1">
-                                            <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding On, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
-                                            <TextBlock Text="{Binding Name}" Margin="8,0,0,0" Foreground="#dee2f7" FontSize="12" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </DockPanel>
-                </Border>
-
-                <Border Grid.Column="2" Style="{StaticResource Card}" Margin="6,0,0,0">
+                <Border Grid.Column="3" Style="{StaticResource Card}" Margin="6,0,6,6">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{loc:Loc Status_OutputArea}" Style="{StaticResource Head}" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Outputs}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="0,1">
+                                        <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding On, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                        <TextBlock Text="{Binding Name}" Margin="8,0,0,0" Foreground="#dee2f7" FontSize="12" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+                <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource Card}" Margin="12,6,6,0">
                     <StackPanel>
                         <TextBlock Text="{loc:Loc Status_EquipStatus}" Style="{StaticResource Head}" />
                         <WrapPanel>
-                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Heater, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" /><TextBlock Text="{loc:Loc Equip_Heater}" Style="{StaticResource Lbl}" /></StackPanel>
-                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Cooler1st, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" /><TextBlock Text="{loc:Loc Equip_Cooler1}" Style="{StaticResource Lbl}" /></StackPanel>
-                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Cooler2nd, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" /><TextBlock Text="{loc:Loc Equip_Cooler2}" Style="{StaticResource Lbl}" /></StackPanel>
-                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding CoolerRoom, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" /><TextBlock Text="{loc:Loc Equip_CoolerRoom}" Style="{StaticResource Lbl}" /></StackPanel>
-                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding CoolerRoomBypass, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" /><TextBlock Text="{loc:Loc Equip_Bypass}" Style="{StaticResource Lbl}" /></StackPanel>
-                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding DoorLamp, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" /><TextBlock Text="{loc:Loc Equip_DoorLamp}" Style="{StaticResource Lbl}" /></StackPanel>
-                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding PairGlass, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" /><TextBlock Text="{loc:Loc Equip_PairGlass}" Style="{StaticResource Lbl}" /></StackPanel>
-                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Mcf, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" /><TextBlock Text="MCF" Style="{StaticResource Lbl}" /></StackPanel>
-                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Blower1, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" /><TextBlock Text="{loc:Loc Equip_Blower1}" Style="{StaticResource Lbl}" /></StackPanel>
-                            <StackPanel Style="{StaticResource LampRow}"><Ellipse Width="10" Height="10" Fill="{Binding Blower2, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" /><TextBlock Text="{loc:Loc Equip_Blower2}" Style="{StaticResource Lbl}" /></StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding Heater, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                <TextBlock Text="{loc:Loc Equip_Heater}" Style="{StaticResource Lbl}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding Cooler1st, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                <TextBlock Text="{loc:Loc Equip_Cooler1}" Style="{StaticResource Lbl}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding Cooler2nd, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                <TextBlock Text="{loc:Loc Equip_Cooler2}" Style="{StaticResource Lbl}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding CoolerRoom, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                <TextBlock Text="{loc:Loc Equip_CoolerRoom}" Style="{StaticResource Lbl}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding CoolerRoomBypass, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                <TextBlock Text="{loc:Loc Equip_Bypass}" Style="{StaticResource Lbl}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding DoorLamp, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                <TextBlock Text="{loc:Loc Equip_DoorLamp}" Style="{StaticResource Lbl}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding PairGlass, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                <TextBlock Text="{loc:Loc Equip_PairGlass}" Style="{StaticResource Lbl}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding Mcf, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                <TextBlock Text="MCF" Style="{StaticResource Lbl}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding Blower1, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                <TextBlock Text="{loc:Loc Equip_Blower1}" Style="{StaticResource Lbl}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource LampRow}">
+                                <Ellipse Width="10" Height="10" Fill="{Binding Blower2, Converter={StaticResource Lamp}}" Stroke="#64748b" StrokeThickness="1" />
+                                <TextBlock Text="{loc:Loc Equip_Blower2}" Style="{StaticResource Lbl}" />
+                            </StackPanel>
                         </WrapPanel>
                     </StackPanel>
                 </Border>
-            </Grid>
+        </Grid>
+
     </Grid>
 </UserControl>

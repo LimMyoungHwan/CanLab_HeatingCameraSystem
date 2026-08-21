@@ -248,7 +248,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Width="360" Style="{StaticResource Card}">
+                <Border Width="360" Style="{StaticResource Card}" Visibility="Collapsed">
                     <StackPanel>
                         <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Plc_ChamberBbTitle}" />
                         <StackPanel Style="{StaticResource FieldRow}">

@@ -454,79 +454,78 @@
 
                 <Border Width="360" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Manual_MovePointTitle}" />
-                        <ItemsControl ItemsSource="{Binding PointNumbers}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <UniformGrid Columns="5" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Button
-                                        MinWidth="52"
-                                        Command="{Binding DataContext.MoveToPointCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                        CommandParameter="{Binding}"
-                                        Content="{Binding}"
-                                        Style="{StaticResource Btn}" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
-
-                <Border Width="360" Style="{StaticResource Card}">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Manual_BlackBody}" />
-
-                        <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource Lbl}" Text="{loc:Loc Manual_Bb1Target}" />
-                            <TextBox
-                                Width="80"
-                                Padding="12,8"
-                                VerticalAlignment="Center"
-                                Background="#2f3444"
-                                BorderBrush="#3b4949"
-                                Foreground="#dee2f7"
-                                Text="{Binding BlackBody1Target}" />
-                            <Button
-                                Command="{Binding ApplyBlackBody1Command}"
-                                Content="{loc:Loc Common_Apply}"
-                                Style="{StaticResource Btn}" />
-                            <TextBlock
-                                Margin="10,0,10,0"
-                                Style="{StaticResource Lbl}"
-                                Text="{loc:Loc Manual_Current}" />
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                FontWeight="Bold"
-                                Foreground="#47eaed"
-                                Text="{Binding BlackBody1Current, StringFormat={}{0:0.0} ℃}" />
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Manual_MovePointTitle}" />
+                            <ItemsControl ItemsSource="{Binding PointNumbers}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="5" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button
+                                            MinWidth="52"
+                                            Command="{Binding DataContext.MoveToPointCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="{Binding}"
+                                            Style="{StaticResource Btn}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
+                        <StackPanel Margin="0,6,0,0">
+                            <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Manual_BlackBody}" />
 
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource Lbl}" Text="{loc:Loc Manual_Bb2Target}" />
-                            <TextBox
-                                Width="80"
-                                Padding="12,8"
-                                VerticalAlignment="Center"
-                                Background="#2f3444"
-                                BorderBrush="#3b4949"
-                                Foreground="#dee2f7"
-                                Text="{Binding BlackBody2Target}" />
-                            <Button
-                                Command="{Binding ApplyBlackBody2Command}"
-                                Content="{loc:Loc Common_Apply}"
-                                Style="{StaticResource Btn}" />
-                            <TextBlock
-                                Margin="10,0,10,0"
-                                Style="{StaticResource Lbl}"
-                                Text="{loc:Loc Manual_Current}" />
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                FontWeight="Bold"
-                                Foreground="#47eaed"
-                                Text="{Binding BlackBody2Current, StringFormat={}{0:0.0} ℃}" />
+                            <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Lbl}" Text="{loc:Loc Manual_Bb1Target}" />
+                                <TextBox
+                                    Width="80"
+                                    Padding="12,8"
+                                    VerticalAlignment="Center"
+                                    Background="#2f3444"
+                                    BorderBrush="#3b4949"
+                                    Foreground="#dee2f7"
+                                    Text="{Binding BlackBody1Target}" />
+                                <Button
+                                    Command="{Binding ApplyBlackBody1Command}"
+                                    Content="{loc:Loc Common_Apply}"
+                                    Style="{StaticResource Btn}" />
+                                <TextBlock
+                                    Margin="10,0,10,0"
+                                    Style="{StaticResource Lbl}"
+                                    Text="{loc:Loc Manual_Current}" />
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    FontWeight="Bold"
+                                    Foreground="#47eaed"
+                                    Text="{Binding BlackBody1Current, StringFormat={}{0:0.0} ℃}" />
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Lbl}" Text="{loc:Loc Manual_Bb2Target}" />
+                                <TextBox
+                                    Width="80"
+                                    Padding="12,8"
+                                    VerticalAlignment="Center"
+                                    Background="#2f3444"
+                                    BorderBrush="#3b4949"
+                                    Foreground="#dee2f7"
+                                    Text="{Binding BlackBody2Target}" />
+                                <Button
+                                    Command="{Binding ApplyBlackBody2Command}"
+                                    Content="{loc:Loc Common_Apply}"
+                                    Style="{StaticResource Btn}" />
+                                <TextBlock
+                                    Margin="10,0,10,0"
+                                    Style="{StaticResource Lbl}"
+                                    Text="{loc:Loc Manual_Current}" />
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    FontWeight="Bold"
+                                    Foreground="#47eaed"
+                                    Text="{Binding BlackBody2Current, StringFormat={}{0:0.0} ℃}" />
+                            </StackPanel>
                         </StackPanel>
                     </StackPanel>
                 </Border>

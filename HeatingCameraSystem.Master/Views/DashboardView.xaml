@@ -8,7 +8,7 @@
              xmlns:conv="clr-namespace:HeatingCameraSystem.Master.Converters"
              xmlns:loc="clr-namespace:HeatingCameraSystem.Master.Localization"
              mc:Ignorable="d"
-             d:DesignHeight="900" d:DesignWidth="1600" Background="#0b0f1a" Foreground="#dee2f7">
+             d:DesignHeight="1080" d:DesignWidth="1920" Background="#0b0f1a" Foreground="#dee2f7">
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
@@ -247,6 +247,10 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="350"/>
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition/>
+                <RowDefinition Height="auto"/>
+            </Grid.RowDefinitions>
 
             <!-- ─── COL 0 : TELEMETRY CARDS ─── -->
             <StackPanel Grid.Column="0" Margin="16,16,10,16">
@@ -265,7 +269,9 @@
                                     <TextBlock Text="{loc:Loc Dash_TempLabel}" Style="{StaticResource Lbl}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding CurrentTemperature, StringFormat={}{0:F1}}" FontSize="34" FontWeight="Bold" Foreground="{StaticResource Error}">
-                                            <TextBlock.Effect><DropShadowEffect Color="#ffb4ab" BlurRadius="16" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
+                                            <TextBlock.Effect>
+                                                <DropShadowEffect Color="#ffb4ab" BlurRadius="16" ShadowDepth="0" Opacity="0.5"/>
+                                            </TextBlock.Effect>
                                         </TextBlock>
                                         <TextBlock Text="&#176;C" Style="{StaticResource Unit}"/>
                                     </StackPanel>
@@ -278,7 +284,9 @@
                                     <TextBlock Text="{loc:Loc Dash_HumidityLabel}" Style="{StaticResource Lbl}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding CurrentHumidity, StringFormat={}{0:F1}}" FontSize="34" FontWeight="Bold" Foreground="{StaticResource Primary}">
-                                            <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="16" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
+                                            <TextBlock.Effect>
+                                                <DropShadowEffect Color="#47eaed" BlurRadius="16" ShadowDepth="0" Opacity="0.5"/>
+                                            </TextBlock.Effect>
                                         </TextBlock>
                                         <TextBlock Text="%RH" Style="{StaticResource Unit}"/>
                                     </StackPanel>
@@ -326,7 +334,9 @@
                                     <TextBlock Text="{loc:Loc Dash_Bb1Pv}" Style="{StaticResource Lbl}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding BlackBody1Pv, StringFormat={}{0:F1}}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
-                                            <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
+                                            <TextBlock.Effect>
+                                                <DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/>
+                                            </TextBlock.Effect>
                                         </TextBlock>
                                         <TextBlock Text="&#176;C" Style="{StaticResource Unit}"/>
                                     </StackPanel>
@@ -339,7 +349,9 @@
                                     <TextBlock Text="{loc:Loc Dash_Bb2Pv}" Style="{StaticResource Lbl}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding BlackBody2Pv, StringFormat={}{0:F1}}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
-                                            <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
+                                            <TextBlock.Effect>
+                                                <DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/>
+                                            </TextBlock.Effect>
                                         </TextBlock>
                                         <TextBlock Text="&#176;C" Style="{StaticResource Unit}"/>
                                     </StackPanel>
@@ -376,7 +388,9 @@
                                     <TextBlock Text="Y POSITION" Style="{StaticResource Lbl}"/>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding ServoYPosition, StringFormat={}{0:F1}}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}">
-                                            <TextBlock.Effect><DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/></TextBlock.Effect>
+                                            <TextBlock.Effect>
+                                                <DropShadowEffect Color="#47eaed" BlurRadius="14" ShadowDepth="0" Opacity="0.5"/>
+                                            </TextBlock.Effect>
                                         </TextBlock>
                                         <TextBlock Text="mm" Style="{StaticResource Unit}"/>
                                     </StackPanel>
@@ -385,21 +399,31 @@
                             <Border Height="1" Background="{StaticResource CardEdge}" Margin="0,12,0,10"/>
                             <WrapPanel>
                                 <StackPanel Style="{StaticResource LampCell}">
-                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoXBusy, Converter={StaticResource Lamp}}"/><TextBlock Text=" X BUSY" Style="{StaticResource Lbl}"/>
+                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoXBusy, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text=" X BUSY" Style="{StaticResource Lbl}"/>
                                 </StackPanel>
                                 <StackPanel Style="{StaticResource LampCell}">
-                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoYBusy, Converter={StaticResource Lamp}}"/><TextBlock Text=" Y BUSY" Style="{StaticResource Lbl}"/>
+                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoYBusy, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text=" Y BUSY" Style="{StaticResource Lbl}"/>
                                 </StackPanel>
                                 <StackPanel Style="{StaticResource LampCell}">
-                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoXHomeComplete, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_XOrigin}" Style="{StaticResource Lbl}"/>
+                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoXHomeComplete, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text="{loc:Loc Dash_XOrigin}" Style="{StaticResource Lbl}"/>
                                 </StackPanel>
                                 <StackPanel Style="{StaticResource LampCell}">
-                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoYHomeComplete, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_YOrigin}" Style="{StaticResource Lbl}"/>
+                                    <Ellipse Width="10" Height="10" Fill="{Binding ServoYHomeComplete, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text="{loc:Loc Dash_YOrigin}" Style="{StaticResource Lbl}"/>
                                 </StackPanel>
                             </WrapPanel>
                             <Grid Margin="0,4,0,0">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition/>
+                                    <RowDefinition/>
+                                </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Dash_XErrorCode}" Style="{StaticResource Lbl}"/>
                                 <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ServoXErrorCode}" Style="{StaticResource Val}"/>
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Loc Dash_YErrorCode}" Style="{StaticResource Lbl}"/>
@@ -445,27 +469,55 @@
                     </Border>
 
                     <!-- EQUIPMENT -->
-                    <Border Style="{StaticResource Card}">
+                    <Border Grid.Row="1" Grid.ColumnSpan="3" Style="{StaticResource Card}">
                         <StackPanel>
                             <TextBlock Text="{loc:Loc Dash_EquipTitle}" Style="{StaticResource CardHeader}"/>
                             <WrapPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Heater, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Equip_Heater}" Margin="4,0,8,5" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Cooler1st, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_Cooler1Short}" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Cooler2nd, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_Cooler2Short}" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding CoolerRoom, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_CoolerRoomShort}" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding CoolerRoomBypass, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_BypassShort}" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding DoorLamp, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_DoorLampShort}" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding PairGlass, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_PairGlassShort}" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Mcf, Converter={StaticResource Lamp}}"/><TextBlock Text=" MCF" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Blower1, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_Blower1Short}" Style="{StaticResource Lbl}"/></StackPanel>
-                                <StackPanel Style="{StaticResource LampCell}"><Ellipse Width="10" Height="10" Fill="{Binding Blower2, Converter={StaticResource Lamp}}"/><TextBlock Text="{loc:Loc Dash_Blower2Short}" Style="{StaticResource Lbl}"/></StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding Heater, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text="{loc:Loc Equip_Heater}" Margin="4,0,8,5" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding Cooler1st, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text="{loc:Loc Dash_Cooler1Short}" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding Cooler2nd, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text="{loc:Loc Dash_Cooler2Short}" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding CoolerRoom, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text="{loc:Loc Dash_CoolerRoomShort}" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding CoolerRoomBypass, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text="{loc:Loc Dash_BypassShort}" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding DoorLamp, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text="{loc:Loc Dash_DoorLampShort}" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding PairGlass, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text="{loc:Loc Dash_PairGlassShort}" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding Mcf, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text=" MCF" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding Blower1, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text="{loc:Loc Dash_Blower1Short}" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                                <StackPanel Style="{StaticResource LampCell}">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding Blower2, Converter={StaticResource Lamp}}"/>
+                                    <TextBlock Text="{loc:Loc Dash_Blower2Short}" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
                             </WrapPanel>
                         </StackPanel>
                     </Border>
-
                 </StackPanel>
                 </StackPanel>
-
             <!-- ─── COL 1 : CAMERA FEEDS ─── -->
             <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
@@ -637,7 +689,9 @@
                                                                     <DataTrigger Binding="{Binding IsOnline}" Value="True">
                                                                         <Setter Property="Fill" Value="#4ae183"/>
                                                                         <Setter Property="Effect">
-                                                                            <Setter.Value><DropShadowEffect Color="#4ae183" BlurRadius="8" ShadowDepth="0" Opacity="0.8"/></Setter.Value>
+                                                                            <Setter.Value>
+                                                                                <DropShadowEffect Color="#4ae183" BlurRadius="8" ShadowDepth="0" Opacity="0.8"/>
+                                                                            </Setter.Value>
                                                                         </Setter>
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
@@ -703,7 +757,9 @@
                             </Grid>
                             <TextBlock Text="{Binding RecipeStatus}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,8"/>
                             <Button Content="START" Background="{StaticResource Secondary}" Foreground="#00210c" FontSize="20" FontWeight="Bold" Padding="0,12" Margin="0,0,0,8" BorderThickness="0" Command="{Binding StartRecipeCommand}">
-                                <Button.Effect><DropShadowEffect Color="#4ae183" BlurRadius="16" ShadowDepth="0" Opacity="0.45"/></Button.Effect>
+                                <Button.Effect>
+                                    <DropShadowEffect Color="#4ae183" BlurRadius="16" ShadowDepth="0" Opacity="0.45"/>
+                                </Button.Effect>
                             </Button>
                             <ProgressBar Value="{Binding RecipeProgressValue}" Height="6" Foreground="{StaticResource Secondary}" Background="{StaticResource BgSurface}" BorderThickness="0" Margin="0,0,0,4"/>
                             <TextBlock Text="{Binding RecipePhaseText}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,8"/>
