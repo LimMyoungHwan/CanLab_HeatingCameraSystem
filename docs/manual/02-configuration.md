@@ -43,7 +43,7 @@
 | `HumPv` / `HumSv` | string | `D130` / `D131` | 챔버 습도 PV/SV word |
 | `Bb1Pv` / `Bb1Sv` | string | `D140` / `D142` | 블랙바디 #1 PV/SV word |
 | `Bb2Pv` / `Bb2Sv` | string | `D150` / `D152` | 블랙바디 #2 PV/SV word |
-| `BitTempStart` / `BitTempStop` | string | `M10` / `M11` | 온도제어 시작/정지 bit |
+| `BitTempStart` / `BitTempStop` | string | `M10` / `M21` (정지 M21, 램프 OFF `M11`) | 온도제어 시작/정지 bit |
 | `ServoPointMoveBase` | string | `P601` | 포인트 이동 one-touch bit base |
 | `ServoPointXBase` / `ServoPointYBase` | string | `D3010` / `D3012` | 포인트 좌표 word base |
 

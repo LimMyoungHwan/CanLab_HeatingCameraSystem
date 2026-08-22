@@ -60,11 +60,14 @@ namespace HeatingCameraSystem.Protocols
         {
             await WriteBitAsync(_s.BitChamberRun, true);
             await WriteBitAsync(_s.BitTempStart, true);
+            await WriteBitAsync(_s.BitTempStopLamp, false);
+            await WriteBitAsync(_s.BitTempStop, false);
         }
 
         public async Task StopChamberAsync()
         {
             await WriteBitAsync(_s.BitTempStart, false);
+            await WriteBitAsync(_s.BitTempStopLamp, true);
             await WriteBitAsync(_s.BitTempStop, true);
             await WriteBitAsync(_s.BitChamberRun, false);
         }

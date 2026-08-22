@@ -47,11 +47,22 @@ namespace HeatingCameraSystem.Master.Services
                 {
                     for (int i = 0; i < _blackBody.Count; i++)
                     {
-                        float current = await _blackBody.GetCurrentTemperatureAsync(i);
-                        float target = await _blackBody.GetTargetTemperatureAsync(i);
-                        await _plc.WriteBlackBodyTemperaturesAsync(i, current, target);
-                        if (i == 0) { s.BlackBody1Pv = current; s.BlackBody1Sv = target; }
-                        if (i == 1) { s.BlackBody2Pv = current; s.BlackBody2Sv = target; }
+                        try
+                        {
+                            float current = await _blackBody.GetCurrentTemperatureAsync(i);
+                            float target = await _blackBody.GetTargetTemperatureAsync(i);
+                            await _plc.WriteBlackBodyTemperaturesAsync(i, current, target);
+                            if (i == 0) { s.BlackBody1Pv = current; s.BlackBody1Sv = target; }
+                            if (i == 1) { s.BlackBody2Pv = current; s.BlackBody2Sv = target; }
+                        }
+                        catch(Exception ex)
+                        {
+                            //if (_wasConnected) AlarmSink.Raise(AlarmSeverity.Error, "PLC", string.Format(LocalizationManager.Instance["Plc_ConnLost"], ex.Message));
+                            _wasConnected = false;
+                            IsConnected = false;
+                            StatusMessage = string.Format(LocalizationManager.Instance["Dash_ReadFailed"], ex.Message);
+                            System.Diagnostics.Debug.WriteLine($"[BlockBody{i}Status] poll failed: {ex.Message}");
+                        }
                     }
                 }
                 Snapshot = s;

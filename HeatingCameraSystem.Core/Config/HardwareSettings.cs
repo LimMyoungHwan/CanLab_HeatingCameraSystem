@@ -72,7 +72,8 @@ namespace HeatingCameraSystem.Core.Config
 
         // ── 제어 비트 ──
         public string BitTempStart { get; set; } = "M10";     // 온도제어 시작
-        public string BitTempStop { get; set; } = "M11";      // 온도제어 정지
+        public string BitTempStopLamp { get; set; } = "M11";      // 온도제어 정지
+        public string BitTempStop { get; set; } = "M21";      // 온도제어 정지
         public string BitChamberRun { get; set; } = "M1910";  // PC RUN 표시등
         public string BitHumidityControl { get; set; } = "D281.0"; // 습도제어 켜짐
         // ponytail: 문서엔 챔버 비상정지 '상태'만 존재. PC 트리거 쓰기비트는 임의 지정 — 실제 비트 확인 후 교체.

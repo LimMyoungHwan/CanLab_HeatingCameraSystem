@@ -15,7 +15,7 @@ namespace HeatingCameraSystem.Core.Interfaces
 
         // ── 챔버 온도/습도 제어 ──
         Task StartChamberAsync();   // 온도제어 시작 (M10 + PC RUN)
-        Task StopChamberAsync();    // 온도제어 정지 (M11)
+        Task StopChamberAsync();    // 온도제어 정지 (M21) + 램프 OFF(M11)
         Task SetTargetTemperatureAsync(float temperature);
         Task SetControlTemperatureAsync(float temperature);
         Task<float> GetCurrentTemperatureAsync();

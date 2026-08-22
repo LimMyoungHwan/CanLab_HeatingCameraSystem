@@ -25,6 +25,9 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal("D102", s.Plc.TempSv);
             Assert.Equal(XgtCpuSeries.XGB, s.Plc.CpuSeries);
             Assert.True(s.Plc.UseHexBitIndex);
+            Assert.Equal("M10", s.Plc.BitTempStart);
+            Assert.Equal("M11", s.Plc.BitTempStopLamp);
+            Assert.Equal("M21", s.Plc.BitTempStop);
             Assert.Equal("nats://127.0.0.1:4222", s.Nats.Url);
             Assert.Equal("COM3", s.Serial.PortName);
             Assert.Equal(0.5f, s.RecipeEngine.TemperatureTolerance);
@@ -94,6 +97,8 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal("10.0.1.50", loaded!.Plc.IpAddress);
             Assert.Equal(2004, loaded.Plc.Port);
             Assert.Equal("D100", loaded.Plc.TempPv);
+            Assert.Equal("M11", loaded.Plc.BitTempStopLamp);
+            Assert.Equal("M21", loaded.Plc.BitTempStop);
         }
 
         [Fact]
