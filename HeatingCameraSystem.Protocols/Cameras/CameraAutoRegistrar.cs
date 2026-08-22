@@ -48,6 +48,51 @@ namespace HeatingCameraSystem.Protocols.Cameras
             return added;
         }
 
+        // Fallback for when serial pairing yields no pair (broken/absent COM port, or a WMI hiccup):
+        // register a thermal camera from the video enumeration alone so its panel + live video still
+        // come up. Keys on UsbContainerId only (no serial S/N here); skips non-thermal names and devices
+        // with no stable ContainerId. Reuses Register's host numbering + dedupe.
+        public static int RegisterVideoOnly(
+            IList<CameraDescriptor> cameras,
+            IReadOnlyList<VideoDevice> devices,
+            string host,
+            string friendlyNamePrefix = "CLTC_T_VGA")
+        {
+            int nextNumber = NextAgentNumber(cameras, host);
+            int added = 0;
+
+            foreach (VideoDevice device in devices)
+            {
+                if (string.IsNullOrWhiteSpace(device.ContainerId))
+                {
+                    continue;
+                }
+
+                if (!device.FriendlyName.StartsWith(friendlyNamePrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (IsAlreadyRegistered(cameras, serial: null, containerId: device.ContainerId))
+                {
+                    continue;
+                }
+
+                string agentId = $"{host}_Agent_{nextNumber++}";
+                cameras.Add(new CameraDescriptor(
+                    agentId,
+                    device.Index,
+                    device.FriendlyName,
+                    null,
+                    device.FriendlyName,
+                    null,
+                    device.ContainerId));
+                added++;
+            }
+
+            return added;
+        }
+
         private static int NextAgentNumber(IEnumerable<CameraDescriptor> cameras, string host)
         {
             string prefix = host + "_Agent_";

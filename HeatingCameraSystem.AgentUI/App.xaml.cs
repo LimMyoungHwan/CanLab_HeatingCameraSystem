@@ -116,6 +116,7 @@ namespace HeatingCameraSystem.AgentUI
             {
                 IReadOnlyList<CameraComPair> pairs = GetPairsOrEmpty(pairing);
                 AutoRegisterDetectedCameras(config, pairs);
+                AutoRegisterVideoOnlyCameras(config);
                 ReconcileSerialPortsFromPairing(config, pairs);
                 ReconcileVideoIndicesFromEnumeration(config);
             }
@@ -260,6 +261,35 @@ namespace HeatingCameraSystem.AgentUI
             }
         }
 
+        // Video-only fallback: register thermal cameras the video enumerator sees but pairing missed
+        // (broken/absent serial, or a WMI hiccup that emptied the pair list), so a working camera still
+        // gets a panel + live video. Runs after pair-based registration, before the video-index reconcile.
+        private void AutoRegisterVideoOnlyCameras(AgentUiConfig config)
+        {
+            if (_videoEnumerator is null)
+            {
+                return;
+            }
+
+            IReadOnlyList<VideoDevice> devices;
+            try
+            {
+                devices = _videoEnumerator.Enumerate();
+            }
+            catch (Exception ex)
+            {
+                AgentUiLog.Logger.Warning(ex, "Video-only camera enumeration failed");
+                return;
+            }
+
+            int added = CameraAutoRegistrar.RegisterVideoOnly(config.Cameras, devices, Environment.MachineName);
+            if (added > 0)
+            {
+                config.Save();
+                AgentUiLog.Logger.Information("Auto-registered {Count} video-only camera(s)", added);
+            }
+        }
+
         private static void ReconcileSerialPortsFromPairing(AgentUiConfig config, IReadOnlyList<CameraComPair> pairs)
         {
             for (int i = 0; i < config.Cameras.Count; i++)
@@ -365,18 +395,26 @@ namespace HeatingCameraSystem.AgentUI
                 };
 
                 ICameraSerialClient? serial = _serialFactory(cam);
+                string? serialStatus = null;
                 if (serial is not null)
                 {
                     try
                     {
-                        _ = serial.InitializeAsync();
+                        // Complete the (synchronous) port open now so a broken port is caught here and
+                        // nulls serial — video output must never be gated on serial success.
+                        serial.InitializeAsync().GetAwaiter().GetResult();
                     }
                     catch (Exception ex)
                     {
                         AgentUiLog.Logger.Warning(ex, "Camera {AgentId} serial {Port} open failed", agentId, cam.SerialPortName);
                         serial.Dispose();
                         serial = null;
+                        serialStatus = $"시리얼 제어 비활성화: {cam.SerialPortName} 열기 실패 ({ex.Message}). 영상은 계속 동작합니다.";
                     }
+                }
+                else if (string.IsNullOrWhiteSpace(cam.SerialPortName))
+                {
+                    serialStatus = "시리얼 포트 없음: 영상만 동작 (제어 비활성화)";
                 }
 
                 ThermalNucCorrector nuc = _nucs.TryGetValue(cam.AgentId, out ThermalNucCorrector? existingNuc)
@@ -386,12 +424,15 @@ namespace HeatingCameraSystem.AgentUI
 
                 var panel = new CameraPanelViewModel(cam.Alias, cam.AgentId, runtime, Dispatcher, nuc, _store, _config.CaptureBurstCount, serial,
                     publishResult: msg => _nats is { } n ? n.PublishCaptureResultAsync(msg) : Task.CompletedTask);
+                if (serialStatus is not null)
+                {
+                    panel.SerialStatus = serialStatus;
+                }
                 _mainViewModel.Cameras.Add(panel);
 
-                if (serial is not null)
-                {
-                    _ = panel.StartLiveAsync();
-                }
+                // Always attempt live-start: serial RUN/shutter are best-effort (no-op when serial is
+                // null), so video output is decoupled from serial. The video runtime starts in StartAllAsync.
+                _ = panel.StartLiveAsync();
             }
 
             _ = _manager.StartAllAsync();
@@ -433,11 +474,16 @@ namespace HeatingCameraSystem.AgentUI
                         {
                             IReadOnlyList<CameraComPair> pairs = GetPairsOrEmpty(_pairing);
                             AutoRegisterDetectedCameras(_config, pairs);
+                            AutoRegisterVideoOnlyCameras(_config);
                             ReconcileSerialPortsFromPairing(_config, pairs);
                             ReconcileVideoIndicesFromEnumeration(_config);
                         }
 
                         await Dispatcher.InvokeAsync(RebuildCameraPanels).Task.ConfigureAwait(false);
+                        if (_natsConnector is not null)
+                        {
+                            await _natsConnector.SyncSubscriptionsAsync().ConfigureAwait(false);
+                        }
                     }
                 }
                 catch (Exception ex)

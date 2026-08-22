@@ -20,6 +20,9 @@ namespace HeatingCameraSystem.Tests
                 PairingStatus.Paired,
                 false);
 
+        private static VideoDevice Video(string friendly, string containerId, int index = 0) =>
+            new(index, $"path-{index}", containerId, friendly);
+
         [Fact]
         public void RegistersDetectedCameraWithAutoNumberedAgentId()
         {
@@ -123,6 +126,74 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal(2, added);
             Assert.Equal("PC_Agent_1", cams[0].AgentId);
             Assert.Equal("PC_Agent_2", cams[1].AgentId);
+        }
+
+        [Fact]
+        public void RegisterVideoOnly_RegistersThermalVideoDeviceWithoutSerial()
+        {
+            var cams = new List<CameraDescriptor>();
+            var devices = new List<VideoDevice> { Video("CLTC_T_VGA A", "{CID-A}", 2) };
+
+            int added = CameraAutoRegistrar.RegisterVideoOnly(cams, devices, Host);
+
+            Assert.Equal(1, added);
+            Assert.Single(cams);
+            Assert.Equal("PC_Agent_1", cams[0].AgentId);
+            Assert.Equal(2, cams[0].OpenCvIndex);
+            Assert.Null(cams[0].SerialPortName);
+            Assert.Null(cams[0].CameraSerialNumber);
+            Assert.Equal("{CID-A}", cams[0].UsbContainerId);
+        }
+
+        [Fact]
+        public void RegisterVideoOnly_DedupesByContainerId()
+        {
+            var cams = new List<CameraDescriptor>
+            {
+                new("PC_Agent_1", 0, "Existing", null, null, null, "{CID-1}"),
+            };
+            var devices = new List<VideoDevice> { Video("CLTC_T_VGA", "{CID-1}", 3) };
+
+            int added = CameraAutoRegistrar.RegisterVideoOnly(cams, devices, Host);
+
+            Assert.Equal(0, added);
+            Assert.Single(cams);
+        }
+
+        [Fact]
+        public void RegisterVideoOnly_IgnoresNonThermalOrUnstableDevices()
+        {
+            var cams = new List<CameraDescriptor>();
+            var devices = new List<VideoDevice>
+            {
+                Video("USB2.0 Webcam", "{CID-W}", 0),
+                Video("CLTC_T_VGA B", "", 1),
+            };
+
+            int added = CameraAutoRegistrar.RegisterVideoOnly(cams, devices, Host);
+
+            Assert.Equal(0, added);
+            Assert.Empty(cams);
+        }
+
+        [Fact]
+        public void RegisterVideoOnly_ContinuesNumberingAndSkipsAlreadyRegistered()
+        {
+            var cams = new List<CameraDescriptor>
+            {
+                new("PC_Agent_2", 0, "Existing", null, null, "111", "{CID-EXIST}"),
+            };
+            var devices = new List<VideoDevice>
+            {
+                Video("CLTC_T_VGA A", "{CID-EXIST}", 0),
+                Video("CLTC_T_VGA B", "{CID-NEW}", 1),
+            };
+
+            int added = CameraAutoRegistrar.RegisterVideoOnly(cams, devices, Host);
+
+            Assert.Equal(1, added);
+            Assert.Equal("PC_Agent_3", cams[1].AgentId);
+            Assert.Equal("{CID-NEW}", cams[1].UsbContainerId);
         }
     }
 }

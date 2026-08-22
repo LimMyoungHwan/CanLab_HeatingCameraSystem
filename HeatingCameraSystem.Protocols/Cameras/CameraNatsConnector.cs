@@ -34,6 +34,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly Func<CameraDescriptor, string, Task<(bool Success, string Message)>>? _cameraControlHandler;
 
         private readonly CancellationTokenSource _cts = new();
+        private readonly SemaphoreSlim _subscriptionGate = new(1, 1);
+        private readonly HashSet<string> _subscribedAgentIds = new(StringComparer.Ordinal);
         private Timer? _heartbeat;
         private volatile bool _connected;
 
@@ -90,51 +92,94 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 return;
             }
 
-            foreach (CameraDescriptor cam in _cameras)
-            {
-                CameraDescriptor descriptor = cam;
-                try
-                {
-                    await _nats.SubscribeCaptureCommandAsync(
-                        descriptor.AgentId,
-                        cmd => _ = HandleCaptureAsync(descriptor, cmd)).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[CameraNats] subscribe failed for {descriptor.AgentId}: {ex.Message}");
-                }
-
-                try
-                {
-                    await _nats.SubscribeCameraControlAsync(
-                        descriptor.AgentId,
-                        msg => _ = HandleCameraControlAsync(descriptor, msg)).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[CameraNats] camera control subscribe failed for {descriptor.AgentId}: {ex.Message}");
-                }
-
-                if (_getConfigSnapshot is not null || _applyConfigSnapshot is not null)
-                {
-                    string agentId = descriptor.AgentId;
-                    try
-                    {
-                        if (_getConfigSnapshot is not null)
-                            await _nats.SubscribeAgentConfigRequestAsync(agentId, req => _ = PublishConfigSnapshotAsync(agentId)).ConfigureAwait(false);
-                        if (_applyConfigSnapshot is not null)
-                            await _nats.SubscribeAgentConfigApplyAsync(agentId, msg => _ = ApplyConfigAsync(msg)).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"[CameraNats] config subscribe failed for {agentId}: {ex.Message}");
-                    }
-                }
-            }
+            await SyncSubscriptionsAsync().ConfigureAwait(false);
 
             _heartbeat = new Timer(_ => PublishHeartbeats(), null, TimeSpan.Zero, TimeSpan.FromSeconds(_heartbeatSeconds));
 
             _ = Task.Run(() => LiveStreamLoopAsync(_cts.Token));
+        }
+
+        public async Task SyncSubscriptionsAsync()
+        {
+            if (!_connected || _cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            try
+            {
+                await _subscriptionGate.WaitAsync(_cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            try
+            {
+                foreach (CameraDescriptor descriptor in new List<CameraDescriptor>(_cameras))
+                {
+                    if (!_subscribedAgentIds.Add(descriptor.AgentId))
+                    {
+                        continue;
+                    }
+
+                    if (!await SubscribeCameraAsync(descriptor).ConfigureAwait(false))
+                    {
+                        _subscribedAgentIds.Remove(descriptor.AgentId);
+                    }
+                }
+            }
+            finally
+            {
+                _subscriptionGate.Release();
+            }
+        }
+
+        private async Task<bool> SubscribeCameraAsync(CameraDescriptor descriptor)
+        {
+            bool success = true;
+            try
+            {
+                await _nats.SubscribeCaptureCommandAsync(
+                    descriptor.AgentId,
+                    cmd => _ = HandleCaptureAsync(descriptor, cmd)).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                success = false;
+                Debug.WriteLine($"[CameraNats] subscribe failed for {descriptor.AgentId}: {ex.Message}");
+            }
+
+            try
+            {
+                await _nats.SubscribeCameraControlAsync(
+                    descriptor.AgentId,
+                    msg => _ = HandleCameraControlAsync(descriptor, msg)).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                success = false;
+                Debug.WriteLine($"[CameraNats] camera control subscribe failed for {descriptor.AgentId}: {ex.Message}");
+            }
+
+            if (_getConfigSnapshot is not null || _applyConfigSnapshot is not null)
+            {
+                try
+                {
+                    if (_getConfigSnapshot is not null)
+                        await _nats.SubscribeAgentConfigRequestAsync(descriptor.AgentId, req => _ = PublishConfigSnapshotAsync(descriptor.AgentId)).ConfigureAwait(false);
+                    if (_applyConfigSnapshot is not null)
+                        await _nats.SubscribeAgentConfigApplyAsync(descriptor.AgentId, msg => _ = ApplyConfigAsync(msg)).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    success = false;
+                    Debug.WriteLine($"[CameraNats] config subscribe failed for {descriptor.AgentId}: {ex.Message}");
+                }
+            }
+
+            return success;
         }
 
         public async Task HandleCaptureAsync(CameraDescriptor descriptor, CaptureCommandMessage cmd)
@@ -372,6 +417,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 await _heartbeat.DisposeAsync().ConfigureAwait(false);
             }
 
+            _subscriptionGate.Dispose();
             _cts.Dispose();
         }
     }

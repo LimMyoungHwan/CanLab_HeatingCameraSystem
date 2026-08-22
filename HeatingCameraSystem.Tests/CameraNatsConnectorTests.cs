@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
@@ -183,6 +185,60 @@ namespace HeatingCameraSystem.Tests
             {
                 try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
             }
+        }
+
+        [Fact]
+        public async Task SyncSubscriptions_AddsOnlyNewCameraSubscriptions()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "hcs_nats_sync_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                var natsMock = new Mock<INatsCommunicationService>();
+                var cameras = new List<CameraDescriptor>
+                {
+                    new("cam0", 0, "Camera 0")
+                };
+                var subscribed = new List<string>();
+                natsMock.Setup(n => n.ConnectAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+                natsMock.Setup(n => n.SubscribeCaptureCommandAsync(It.IsAny<string>(), It.IsAny<Action<CaptureCommandMessage>>()))
+                    .Callback<string, Action<CaptureCommandMessage>>((agentId, _) => subscribed.Add($"capture:{agentId}"))
+                    .Returns(Task.CompletedTask);
+                natsMock.Setup(n => n.SubscribeCameraControlAsync(It.IsAny<string>(), It.IsAny<Action<CameraControlMessage>>()))
+                    .Callback<string, Action<CameraControlMessage>>((agentId, _) => subscribed.Add($"control:{agentId}"))
+                    .Returns(Task.CompletedTask);
+
+                using var manager = new CameraRuntimeManager(
+                    d => new CameraRuntime(d.OpenCvIndex, new FakeThermalFrameSource(), framePeriodMs: 10));
+                using var index = new LiteDbCaptureIndex(Path.Combine(dir, "idx.db"));
+                using var store = new CaptureStore(dir, index);
+                await using var connector = new CameraNatsConnector(natsMock.Object, manager, store, cameras);
+
+                connector.Start("nats://127.0.0.1:4222");
+                await WaitUntilAsync(() => subscribed.Count == 2);
+
+                cameras.Add(new CameraDescriptor("cam1", 1, "Camera 1"));
+                await connector.SyncSubscriptionsAsync();
+                await connector.SyncSubscriptionsAsync();
+
+                Assert.Equal(4, subscribed.Count);
+                Assert.Single(subscribed.FindAll(s => s == "capture:cam1"));
+                Assert.Single(subscribed.FindAll(s => s == "control:cam1"));
+            }
+            finally
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+            }
+        }
+
+        private static async Task WaitUntilAsync(Func<bool> condition)
+        {
+            for (int i = 0; i < 100 && !condition(); i++)
+            {
+                await Task.Delay(10);
+            }
+
+            Assert.True(condition());
         }
     }
 }

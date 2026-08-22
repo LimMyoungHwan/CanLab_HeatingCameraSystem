@@ -250,9 +250,9 @@
                                                         <materialIcons:MaterialIconText Kind="Tune" Text="{loc:Loc Cam_Nuc}" Spacing="6"/>
                                                     </Button>
                                                 </WrapPanel>
-                                                <TextBlock Text="{Binding SerialStatus}" Foreground="#B0B0B0" Margin="2,2,0,0" TextWrapping="Wrap"/>
                                             </StackPanel>
                                         </Border>
+                                        <TextBlock Text="{Binding SerialStatus}" Foreground="#B0B0B0" Margin="2,4,0,0" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>
