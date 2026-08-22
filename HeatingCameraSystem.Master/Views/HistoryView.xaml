@@ -14,6 +14,7 @@
         <SolidColorBrush x:Key="BgSurface" Color="#0e1321"/>
         <SolidColorBrush x:Key="BgSurfaceContainer" Color="#1a1f2e"/>
         <SolidColorBrush x:Key="BgSurfaceContainerHigh" Color="#252a39"/>
+        <SolidColorBrush x:Key="BgSurfaceContainerHighest" Color="#30364a"/>
         <SolidColorBrush x:Key="BgSurfaceContainerLow" Color="#161b2a"/>
         <SolidColorBrush x:Key="BgSurfaceContainerLowest" Color="#090e1c"/>
         <SolidColorBrush x:Key="BgSurfaceVariant" Color="#2f3444"/>

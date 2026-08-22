@@ -189,25 +189,30 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             LogItems.Clear();
 
-            var allRecords = AppServices.HistoryRepo
-                .QueryAsync(FromDateTime, ToDateTime, null, 1, int.MaxValue)
-                .GetAwaiter().GetResult()
-                .ToList();
+            List<CaptureHistoryRecord> allRecords;
+            try
+            {
+                var (from, to) = HistoryQuery.NormalizeRange(FromDateTime, ToDateTime);
+                allRecords = AppServices.HistoryRepo
+                    .QueryAsync(from, to, null, 1, int.MaxValue)
+                    .GetAwaiter().GetResult()
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                // A DB read failure must not crash the operator app when opening History.
+                System.Diagnostics.Debug.WriteLine($"[History] capture query failed: {ex.Message}");
+                TotalRecords = 0;
+                TotalPages = 1;
+                SystemStatusText = string.Format(LocalizationManager.Instance["Dash_ReadFailed"], ex.Message);
+                return;
+            }
 
             RefreshCameraFilterOptions(allRecords);
 
-            if (SelectedCameraGroup != AllCamerasFilter)
-                allRecords = allRecords.Where(r => r.CameraId == SelectedCameraGroup).ToList();
-
-            CaptureSource? sourceFilter = SourceOptions.IndexOf(SelectedSourceFilter) switch
-            {
-                1 => CaptureSource.Recipe,
-                2 => CaptureSource.Manual,
-                3 => CaptureSource.AgentUi,
-                _ => null
-            };
-            if (sourceFilter.HasValue)
-                allRecords = allRecords.Where(r => r.Source == sourceFilter.Value).ToList();
+            string? cameraId = SelectedCameraGroup != AllCamerasFilter ? SelectedCameraGroup : null;
+            CaptureSource? sourceFilter = HistoryQuery.SourceForIndex(SourceOptions.IndexOf(SelectedSourceFilter));
+            allRecords = HistoryQuery.ApplyFilters(allRecords, cameraId, sourceFilter).ToList();
 
             TotalRecords = allRecords.Count;
             TotalPages = (int)Math.Ceiling((double)TotalRecords / PageSize);
@@ -232,8 +237,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             ChamberItems.Clear();
 
+            var (from, to) = HistoryQuery.NormalizeRange(FromDateTime, ToDateTime);
             var allRecords = AppServices.ChamberHistoryRepo
-                .QueryAsync(FromDateTime, ToDateTime, 1, int.MaxValue)
+                .QueryAsync(from, to, 1, int.MaxValue)
                 .GetAwaiter().GetResult()
                 .ToList();
 
@@ -275,8 +281,9 @@ namespace HeatingCameraSystem.Master.ViewModels
                 _ => null
             };
 
+            var (from, to) = HistoryQuery.NormalizeRange(FromDateTime, ToDateTime);
             var allRecords = repository
-                .QueryAsync(FromDateTime, ToDateTime, minimumSeverity, 1, int.MaxValue)
+                .QueryAsync(from, to, minimumSeverity, 1, int.MaxValue)
                 .GetAwaiter().GetResult()
                 .ToList();
 
@@ -409,13 +416,14 @@ namespace HeatingCameraSystem.Master.ViewModels
             };
             if (dlg.ShowDialog() != true) return;
 
-            var records = AppServices.HistoryRepo
-                .QueryAsync(FromDateTime, ToDateTime, null, 1, int.MaxValue)
-                .GetAwaiter().GetResult()
-                .ToList();
-
-            if (SelectedCameraGroup != AllCamerasFilter)
-                records = records.Where(r => r.CameraId == SelectedCameraGroup).ToList();
+            var (from, to) = HistoryQuery.NormalizeRange(FromDateTime, ToDateTime);
+            string? cameraId = SelectedCameraGroup != AllCamerasFilter ? SelectedCameraGroup : null;
+            CaptureSource? sourceFilter = HistoryQuery.SourceForIndex(SourceOptions.IndexOf(SelectedSourceFilter));
+            var records = HistoryQuery.ApplyFilters(
+                AppServices.HistoryRepo
+                    .QueryAsync(from, to, null, 1, int.MaxValue)
+                    .GetAwaiter().GetResult(),
+                cameraId, sourceFilter).ToList();
 
             using var writer = new StreamWriter(dlg.FileName, false, new UTF8Encoding(true));
             writer.WriteLine("Timestamp,CameraId,Temperature,Humidity,RecipeStepId,ImagePath");
