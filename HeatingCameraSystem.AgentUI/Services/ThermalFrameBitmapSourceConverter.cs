@@ -7,20 +7,20 @@ using HeatingCameraSystem.Core.Models;
 namespace HeatingCameraSystem.AgentUI.Services
 {
     /// <summary>
-    /// Converts a 14-bit Y16 <see cref="ThermalFrame"/> to a frozen false-color thermal
-    /// <see cref="BitmapSource"/> for live display. Two stages: (1) plateau histogram
-    /// equalization (thermal AGC, ported from the reference Python
-    /// two_point_viewer.thresh_plateau_hist_eq) maps 14-bit → 8-bit with per-bin clipping so a
-    /// flat background / dead pixels can't wash out contrast; (2) an iron palette LUT maps
-    /// 8-bit → color. Frozen so it may be built on the camera loop thread and assigned on the UI
-    /// thread. Preview only — the 14-bit radiometric data is NOT preserved (raw persisted separately).
+    /// 14비트 Y16 <see cref="ThermalFrame"/>을 라이브 표시용 frozen false-color 열영상
+    /// <see cref="BitmapSource"/>로 변환한다. 두 단계다: (1) plateau 히스토그램 평활화(열영상 AGC,
+    /// 레퍼런스 Python two_point_viewer.thresh_plateau_hist_eq 이식)가 bin별 클리핑으로
+    /// 14비트 → 8비트를 매핑해 평탄한 배경/데드픽셀이 대비를 뭉개지 못하게 하고,
+    /// (2) iron 팔레트 LUT가 8비트 → 컬러를 매핑한다. 카메라 루프 스레드에서 만들어 UI 스레드에서
+    /// 할당할 수 있도록 Freeze한다. 미리보기 전용 — 14비트 방사 측정 데이터는 보존되지 않는다
+    /// (원본은 따로 저장).
     /// </summary>
     public static class ThermalFrameBitmapSourceConverter
     {
-        private const int Bins = 1 << 14;      // 14-bit thermal range (0..16383)
+        private const int Bins = 1 << 14;      // 14비트 열영상 범위 (0..16383)
 
-        // ponytail: thermal AGC plateau (per-bin count cap). 100 = Python parity. It is the
-        // display-contrast tuning knob — lower = flatter, higher = harsher. Bump if contrast is off.
+        // ponytail: 열영상 AGC plateau(bin별 카운트 상한). 100 = Python 동일값. 표시 대비의 튜닝
+        // 노브다 — 낮추면 평탄해지고 높이면 거칠어진다. 대비가 이상하면 조정할 것.
         private const int PlateauLimit = 100;
 
         private static readonly uint[] IronLut = BuildIronLut();
@@ -40,7 +40,7 @@ namespace HeatingCameraSystem.AgentUI.Services
                 hist[px[i] & 0x3FFF]++;
             }
 
-            // Plateau-clipped cumulative histogram (the AGC transfer function).
+            // plateau로 클리핑한 누적 히스토그램(AGC 전달 함수).
             var cdf = new long[Bins];
             long cum = 0;
             for (int i = 0; i < Bins; i++)
@@ -50,8 +50,8 @@ namespace HeatingCameraSystem.AgentUI.Services
                 cdf[i] = cum;
             }
 
-            // Normalize the CDF over its populated range (leading zero bins stay black),
-            // producing a 14-bit → 8-bit grayscale LUT.
+            // 값이 채워진 구간 기준으로 CDF를 정규화한다(앞쪽의 0 bin은 검정 유지).
+            // 결과는 14비트 → 8비트 그레이스케일 LUT다.
             long cdfLast = cdf[Bins - 1];
             long cdfMin = 0;
             for (int i = 0; i < Bins; i++)
@@ -71,7 +71,7 @@ namespace HeatingCameraSystem.AgentUI.Services
                 }
             }
 
-            // 14-bit → gray → iron color, packed as Bgr24.
+            // 14비트 → 그레이 → iron 컬러, Bgr24로 패킹.
             int w = f.Width, h = f.Height;
             int stride = w * 3;
             var bytes = new byte[stride * h];
@@ -89,8 +89,8 @@ namespace HeatingCameraSystem.AgentUI.Services
             return bmp;
         }
 
-        // Classic ironbow palette: black → purple → magenta → red → orange → amber → white,
-        // built by linearly interpolating anchor colors into a 256-entry 0x00RRGGBB LUT.
+        // 전형적인 ironbow 팔레트: 검정 → 보라 → 마젠타 → 빨강 → 주황 → 호박 → 흰색.
+        // 앵커 색을 선형 보간해 256 엔트리 0x00RRGGBB LUT를 만든다.
         private static uint[] BuildIronLut()
         {
             (int Pos, int R, int G, int B)[] anchors =

@@ -75,5 +75,79 @@ namespace HeatingCameraSystem.Tests
 
             Assert.Null(snap);
         }
+
+        [Fact]
+        public async Task FrameStarvation_FaultsInsteadOfLookingHealthy()
+        {
+            var source = new SwitchableFrameSource();
+            using var runtime = new CameraRuntime(0, source, framePeriodMs: 5, frameTimeoutMs: 150);
+            await runtime.StartAsync();
+            await WaitForStatusAsync(runtime, CameraRuntimeStatus.Running);
+
+            source.Starving = true;
+
+            await WaitForStatusAsync(runtime, CameraRuntimeStatus.Faulted);
+            await runtime.StopAsync();
+        }
+
+        [Fact]
+        public async Task FrameStarvation_RecoversToRunningWhenFramesReturn()
+        {
+            var source = new SwitchableFrameSource { Starving = true };
+            using var runtime = new CameraRuntime(0, source, framePeriodMs: 5, frameTimeoutMs: 150);
+            await runtime.StartAsync();
+            await WaitForStatusAsync(runtime, CameraRuntimeStatus.Faulted);
+
+            source.Starving = false;
+
+            await WaitForStatusAsync(runtime, CameraRuntimeStatus.Running);
+            await runtime.StopAsync();
+        }
+
+        [Fact]
+        public async Task BriefFrameGap_ShorterThanTimeout_StaysRunning()
+        {
+            var source = new SwitchableFrameSource();
+            using var runtime = new CameraRuntime(0, source, framePeriodMs: 5, frameTimeoutMs: 1000);
+            await runtime.StartAsync();
+            await WaitForStatusAsync(runtime, CameraRuntimeStatus.Running);
+
+            source.Starving = true;
+            await Task.Delay(150);
+
+            Assert.Equal(CameraRuntimeStatus.Running, runtime.Status);
+            await runtime.StopAsync();
+        }
+
+        private static async Task WaitForStatusAsync(CameraRuntime runtime, CameraRuntimeStatus expected)
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            while (runtime.Status != expected)
+            {
+                if (cts.IsCancellationRequested)
+                    Assert.Fail($"Expected {expected} but stayed {runtime.Status}.");
+                await Task.Delay(10);
+            }
+        }
+
+        private sealed class SwitchableFrameSource : Core.Interfaces.IThermalFrameSource
+        {
+            private volatile bool _starving;
+
+            public bool Starving
+            {
+                get => _starving;
+                set => _starving = value;
+            }
+
+            public void Open() { }
+
+            public ThermalFrame? Read() =>
+                _starving ? null : new ThermalFrame(new ushort[4], 2, 2, DateTimeOffset.Now);
+
+            public void Close() { }
+
+            public void Dispose() { }
+        }
     }
 }

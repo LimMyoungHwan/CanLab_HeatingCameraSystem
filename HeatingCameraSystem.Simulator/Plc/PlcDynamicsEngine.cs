@@ -4,6 +4,13 @@ using HeatingCameraSystem.Simulator.Memory;
 
 namespace HeatingCameraSystem.Simulator.Plc;
 
+/// <summary>
+/// 디바이스 메모리 위에서 도는 결정론적 물리 대역. 매 tick(기본 100ms)마다
+/// 온도/습도/흑체 PV를 SV 쪽으로 고정 속도만큼 선형 램프하고, 장비 명령 비트를 상태 비트로
+/// 미러링하며, 조그 비트가 눌린 동안 서보 위치 워드를 램프한다. 포인트 이동 트리거는
+/// ServoBusyMs 대기 후 좌표 워드를 즉시 복사하는 방식이다.
+/// 실 챔버와의 차이: 열 관성·오버슈트·센서 노이즈·축별 이동 시간 차가 없고 램프는 항상 직선이다.
+/// </summary>
 public sealed class PlcDynamicsEngine : IDisposable
 {
     private readonly FEnetDeviceMemory _memory;
@@ -29,6 +36,7 @@ public sealed class PlcDynamicsEngine : IDisposable
         _triggerTimer = new Timer(_ => ScanTriggers(), null, Timeout.Infinite, Timeout.Infinite);
     }
 
+    /// <summary>동역학 tick과 트리거 스캔 타이머를 함께 기동한다.</summary>
     public void Start()
     {
         _timer.Change(_dynamics.TickMs, _dynamics.TickMs);
@@ -41,7 +49,7 @@ public sealed class PlcDynamicsEngine : IDisposable
         _cts.Cancel();
         _triggerTimer.Dispose();
         _timer.Dispose();
-        // ponytail: not disposing _cts — an in-flight Tick may still reference its Token; Cancel is enough
+        // ponytail: _cts는 Dispose하지 않는다 — 진행 중인 Tick이 아직 Token을 참조할 수 있다. Cancel로 충분하다
     }
 
     private void Tick()
@@ -77,6 +85,7 @@ public sealed class PlcDynamicsEngine : IDisposable
 
     private void Mirror(string source, string target) => _memory.WriteBitToken(target, _memory.ReadBitToken(source));
 
+    // PV를 SV 쪽으로 한 tick 이동. 최대 스텝 = rate(단위/s) × scale × TickMs / 1000, 최소 1 raw.
     private void StepScaled(string pvToken, string svToken, double ratePerSecond, int scale = 10)
     {
         short pv = _memory.ReadWordToken(pvToken);
@@ -107,6 +116,7 @@ public sealed class PlcDynamicsEngine : IDisposable
         memory.WriteWordToken(posToken, (short)next);
     }
 
+    // 포인트 이동 트리거 비트의 상승 에지를 래치로 감지해 이동을 시작한다.
     private void DetectPointMoves()
     {
         for (int i = 0; i < _moveLatch.Length; i++)
@@ -120,6 +130,7 @@ public sealed class PlcDynamicsEngine : IDisposable
         }
     }
 
+    // busy를 올리고 ServoBusyMs 대기 후 포인트 좌표를 현재 위치로 복사, busy/트리거를 내린다.
     private async Task CompleteMoveAsync(int position, string moveBit)
     {
         _memory.WriteBitToken(_plc.ServoXBusyBit, true);
@@ -130,7 +141,7 @@ public sealed class PlcDynamicsEngine : IDisposable
         }
         catch (OperationCanceledException)
         {
-            return; // engine disposed mid-move: stop before mutating shared memory
+            return; // 이동 도중 엔진이 dispose됨: 공유 메모리를 건드리기 전에 중단한다
         }
         lock (_gate)
         {
@@ -146,6 +157,7 @@ public sealed class PlcDynamicsEngine : IDisposable
         }
     }
 
+    // 포인트 n의 좌표 워드: X = ServoPointXBase + (n-1)×ServoPointStride, Y = X + 2.
     private (string X, string Y) PointCoordDevices(int positionIndex)
     {
         var (prefix, baseNum) = SplitDecimal(_plc.ServoPointXBase);

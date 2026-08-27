@@ -30,6 +30,7 @@ namespace HeatingCameraSystem.AgentManager.Services
             _logger   = logger;
         }
 
+        /// <summary>해당 Agent 로그 디렉터리의 *.log 변경 감시를 시작한다. 이미 감시 중이면 무시한다.</summary>
         public void Watch(string agentId, string logDirectory)
         {
             if (_watchers.ContainsKey(agentId)) return;
@@ -55,6 +56,10 @@ namespace HeatingCameraSystem.AgentManager.Services
             _offsets.TryRemove(agentId, out _);
         }
 
+        /// <summary>
+        /// 마지막 오프셋 이후 추가된 라인만 읽어 처리한다. 오프셋이 파일이 아니라 Agent 단위로
+        /// 유지되므로 로그 파일이 날짜로 굴러가면 새 파일 앞부분을 건너뛸 수 있다.
+        /// </summary>
         private async Task TailFileAsync(string agentId, string filePath)
         {
             try
@@ -77,6 +82,10 @@ namespace HeatingCameraSystem.AgentManager.Services
             }
         }
 
+        /// <summary>
+        /// NDJSON 한 줄(@l 레벨, @mt/@m 메시지)을 파싱해 Error/Fatal(설정 시 Warning 포함)이면
+        /// <c>agent-mgr.log.alert.{PCId}</c>로 LogAlert를 발행한다.
+        /// </summary>
         private void ProcessLine(string agentId, string line)
         {
             if (string.IsNullOrWhiteSpace(line)) return;
@@ -111,7 +120,7 @@ namespace HeatingCameraSystem.AgentManager.Services
             }
             catch
             {
-                /* malformed NDJSON — skip */
+                /* 손상된 NDJSON — 건너뜀 */
             }
         }
 

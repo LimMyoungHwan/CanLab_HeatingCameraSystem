@@ -8,11 +8,11 @@ using HeatingCameraSystem.Core.Models;
 namespace HeatingCameraSystem.Protocols.Cameras
 {
     /// <summary>
-    /// Owns all local <see cref="ICameraRuntime"/> instances for one AgentUI process — one
-    /// runtime per physical camera (distinct indices, no handle contention). Start/stop of a
-    /// single camera is isolated: one camera failing to start or faulting never stops the
-    /// others. The concrete frame source (real Y16 vs simulation) is chosen by the injected
-    /// factory, keeping this manager hardware-independent and unit-testable.
+    /// AgentUI 프로세스 하나의 모든 로컬 <see cref="ICameraRuntime"/>을 소유한다 — 물리 카메라당
+    /// 런타임 하나(인덱스가 서로 달라 핸들 경합 없음). 카메라 한 대의 시작/정지는 격리되어,
+    /// 하나가 시작에 실패하거나 Faulted가 되어도 나머지는 절대 멈추지 않는다. 실제 프레임 소스
+    /// (실제 Y16 vs 시뮬레이션)는 주입된 팩터리가 고르므로 이 매니저는 하드웨어와 무관하고
+    /// 단위 테스트 가능하다.
     /// </summary>
     public sealed class CameraRuntimeManager : IDisposable
     {
@@ -35,7 +35,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             get { lock (_gate) return _runtimes.Count; }
         }
 
-        /// <summary>Creates and registers a runtime for the descriptor. Does not start it.</summary>
+        /// <summary>디스크립터로 런타임을 만들어 등록한다. 시작은 하지 않는다.</summary>
         public ICameraRuntime Add(CameraDescriptor descriptor)
         {
             if (descriptor is null) throw new ArgumentNullException(nameof(descriptor));
@@ -45,7 +45,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             {
                 if (_runtimes.TryGetValue(descriptor.AgentId, out var existing))
                 {
-                    // Replace: dispose the stale one outside the hot path is fine here (rare).
+                    // 교체: 드문 경로라 묵은 런타임을 여기서 바로 Dispose해도 된다.
                     _runtimes[descriptor.AgentId] = runtime;
                     existing.Dispose();
                 }
@@ -66,7 +66,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             }
         }
 
-        /// <summary>Starts every registered runtime. A failure on one camera is isolated.</summary>
+        /// <summary>등록된 모든 런타임을 시작한다. 한 카메라의 실패는 격리된다.</summary>
         public async Task StartAllAsync()
         {
             foreach (var runtime in Runtimes)
@@ -77,8 +77,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 }
                 catch
                 {
-                    // Isolated: the faulting runtime reports Faulted via its own status;
-                    // siblings keep running.
+                    // 격리: 실패한 런타임은 자체 상태로 Faulted를 보고하고, 나머지는 계속 돈다.
                 }
             }
         }
@@ -93,14 +92,14 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 }
                 catch
                 {
-                    // best effort
+                    // 최선 노력
                 }
             }
         }
 
         /// <summary>
-        /// Stops, disposes and removes a single camera runtime — the per-camera "unload" used
-        /// by Reject/Disable so one camera never takes down the whole process (see S7).
+        /// 카메라 런타임 하나를 정지·해제·제거한다 — Reject/Disable이 쓰는 카메라별 "언로드"로,
+        /// 카메라 한 대가 프로세스 전체를 무너뜨리지 않게 한다(S7 참조).
         /// </summary>
         public void Remove(string agentId)
         {
@@ -128,7 +127,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             foreach (var runtime in snapshot)
             {
                 try { runtime.Dispose(); }
-                catch { /* best effort */ }
+                catch { /* 최선 노력 */ }
             }
         }
     }

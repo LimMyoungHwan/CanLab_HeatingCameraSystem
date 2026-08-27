@@ -29,6 +29,7 @@ namespace HeatingCameraSystem.Protocols
 
         public PlcXgtClient(PlcSettings? settings = null) => _s = settings ?? new PlcSettings();
 
+        /// <summary>TCP 채널과 FEnetClient를 생성한다. 이미 연결돼 있으면 아무것도 하지 않는다.</summary>
         public async Task ConnectAsync(string ipAddress, int port = 2004)
         {
             if (_isConnected) return;
@@ -49,8 +50,8 @@ namespace HeatingCameraSystem.Protocols
         public void Disconnect()
         {
             _isConnected = false;
-            try { _client?.Dispose(); } catch { /* ignore */ }
-            try { _channel?.Dispose(); } catch { /* ignore */ }
+            try { _client?.Dispose(); } catch { /* 무시 */ }
+            try { _channel?.Dispose(); } catch { /* 무시 */ }
             _client = null;
             _channel = null;
         }
@@ -72,15 +73,18 @@ namespace HeatingCameraSystem.Protocols
             await WriteBitAsync(_s.BitChamberRun, false);
         }
 
+        /// <summary>목표 온도(℃)를 0.1℃ 단위 워드(x10)로 기록한다.</summary>
         public Task SetTargetTemperatureAsync(float temperature)
             => WriteWordAsync(_s.TempTarget, ToScaled(temperature, 10));
 
+        /// <summary>제어(SV) 온도(℃)를 0.1℃ 단위 워드(x10)로 기록한다.</summary>
         public Task SetControlTemperatureAsync(float temperature)
             => WriteWordAsync(_s.TempSv, ToScaled(temperature, 10));
 
         public async Task<float> GetCurrentTemperatureAsync()
             => FromScaled(await ReadWordAsync(_s.TempPv), 10);
 
+        /// <summary>목표 습도를 0.1 단위 워드(x10)로 기록한다.</summary>
         public Task SetTargetHumidityAsync(float humidity)
             => WriteWordAsync(_s.HumSv, ToScaled(humidity, 10));
 
@@ -91,6 +95,7 @@ namespace HeatingCameraSystem.Protocols
             => WriteBitAsync(_s.BitHumidityControl, on);
 
         // ── 흑체 ──
+        /// <summary>흑체 SV(℃)를 0.01℃ 단위 워드(x100)로 기록한다. blackBodyIndex 0 → Bb1, 그 외 → Bb2.</summary>
         public Task SetBlackBodyTemperatureAsync(int blackBodyIndex, float temperature)
             => WriteWordAsync(blackBodyIndex == 0 ? _s.Bb1Sv : _s.Bb2Sv, ToScaled(temperature, 100));
 
@@ -104,9 +109,11 @@ namespace HeatingCameraSystem.Protocols
         }
 
         // ── 서보/모션 ──
+        /// <summary>포지션 이동 트리거 비트를 올린다(P 비트 모멘터리). positionIndex는 1부터 시작한다.</summary>
         public Task MoveServoToPositionAsync(int positionIndex)
             => WriteBitAsync(PointMoveBit(positionIndex), true);
 
+        /// <summary>현재 포인트 워드가 positionIndex와 같고 X/Y 축 모두 Busy가 아닐 때만 true다.</summary>
         public async Task<bool> IsServoAtPositionAsync(int positionIndex)
         {
             short current = await ReadWordAsync(_s.ServoCurrentPoint);
@@ -154,10 +161,12 @@ namespace HeatingCameraSystem.Protocols
         public Task SetEquipmentAsync(PlcEquipment equipment, bool on)
             => WriteBitAsync(EquipmentDevice(equipment), on);
 
+        /// <summary>팬 속도(Hz)를 0.01Hz 단위 워드(x100)로 기록한다.</summary>
         public Task SetFanSpeedAsync(float hz)
             => WriteWordAsync(_s.FanSpeed, ToScaled(hz, 100));
 
         // ── 관리자 설정 ──
+        /// <summary>관리자 설정을 일괄 기록한다. 지연(분) 워드만 원값이고 나머지는 전부 0.1 단위(x10)다.</summary>
         public async Task WriteAdminSettingsAsync(PlcAdminSettings settings)
         {
             await WriteWordAsync(_s.AdminOverheatLimit, ToScaled(settings.OverheatLimit, 10));
@@ -171,6 +180,10 @@ namespace HeatingCameraSystem.Protocols
         }
 
         // ── 상태/에러 일괄 ──
+        /// <summary>
+        /// 상태 화면이 1초 주기로 호출하는 일괄 판독. 항목마다 개별 FEnet 요청을 순차 수행하므로
+        /// 항목을 늘리면 그만큼 폴링 한 사이클이 길어진다.
+        /// </summary>
         public async Task<PlcStatusSnapshot> ReadStatusAsync()
         {
             var s = new PlcStatusSnapshot
@@ -243,8 +256,10 @@ namespace HeatingCameraSystem.Protocols
 
         private static float FromScaled(short raw, int scale) => raw / (float)scale;
 
+        /// <summary>positionIndex(1부터)를 이동 트리거 비트 토큰으로 변환한다(base + index - 1).</summary>
         private string PointMoveBit(int positionIndex) => IncDevice(_s.ServoPointMoveBase, positionIndex - 1);
 
+        /// <summary>positionIndex(1부터)의 X/Y 좌표 워드 토큰. 포인트당 ServoPointStride 간격이고 Y는 X + 2 워드다.</summary>
         private (string X, string Y) PointCoordDevices(int positionIndex)
         {
             var (prefix, baseNum) = SplitDecimal(_s.ServoPointXBase);
@@ -270,6 +285,7 @@ namespace HeatingCameraSystem.Protocols
             _ => throw new ArgumentOutOfRangeException(nameof(equipment))
         };
 
+        /// <summary>base 토큰부터 연속 count개 비트를 읽는다. hex=true면 주소 증가를 16진수로 계산한다.</summary>
         private async Task<bool[]> ReadBitBlockAsync(string baseToken, int count, bool hex)
         {
             var arr = new bool[count];
@@ -285,6 +301,7 @@ namespace HeatingCameraSystem.Protocols
             return (token.Substring(0, i), int.Parse(token.Substring(i)));
         }
 
+        /// <summary>디바이스 토큰의 숫자부를 offset만큼 올린다. hex=true면 자릿수를 유지한 16진수 연산이다.</summary>
         private static string IncDevice(string token, int offset, bool hex = false)
         {
             int i = 0;
@@ -306,6 +323,7 @@ namespace HeatingCameraSystem.Protocols
             return (token.Substring(0, i), token.Substring(i));
         }
 
+        /// <summary>'D2520.0' 형태를 워드 토큰과 비트 번호로 분리한다. 점이 없으면 false.</summary>
         private static bool TrySplitDotted(string token, out string wordToken, out int bit)
         {
             int dot = token.IndexOf('.');
@@ -376,6 +394,10 @@ namespace HeatingCameraSystem.Protocols
                 }
             });
 
+        /// <summary>
+        /// _io 세마포어로 직렬화해 실행한다. 실패하면 연결 끊김으로 표시하고 예외를 그대로 던진다
+        /// — 재연결은 ConnectionMonitorService 몫이다.
+        /// </summary>
         private async Task<T> Query<T>(Func<FEnetClient, T> action)
         {
             await _io.WaitAsync();
@@ -392,6 +414,7 @@ namespace HeatingCameraSystem.Protocols
             finally { _io.Release(); }
         }
 
+        /// <summary>쓰기용 실행 경로. 직렬화와 실패 처리는 <see cref="Query{T}"/>와 동일하다.</summary>
         private async Task Exec(Action<FEnetClient> action)
         {
             await _io.WaitAsync();

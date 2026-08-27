@@ -9,14 +9,14 @@ using HeatingCameraSystem.Core.Models;
 namespace HeatingCameraSystem.Protocols.Cameras
 {
     /// <summary>
-    /// Optional NATS bridge for an AgentUI process. Each local camera keeps its logical
-    /// <see cref="CameraDescriptor.AgentId"/>, so the existing Master contract is unchanged:
-    /// per camera it subscribes <c>master.cmd.capture.{AgentId}</c> (and the shared
-    /// <c>master.cmd.capture.all</c>, giving in-process fan-out), snapshots the live loop
-    /// (tee — never re-opens the camera), persists radiometric <c>.y16</c> locally, and
-    /// publishes <c>agent.result.capture.{AgentId}</c> with a viewable JPG plus periodic
-    /// <c>agent.status.{AgentId}</c> heartbeats. NATS is never a startup dependency: connect
-    /// runs in the background with retry, and the local runtime works with NATS absent.
+    /// AgentUI 프로세스의 선택적 NATS 브리지. 로컬 카메라마다 논리적
+    /// <see cref="CameraDescriptor.AgentId"/>를 유지하므로 기존 Master 계약은 그대로다:
+    /// 카메라별로 <c>master.cmd.capture.{AgentId}</c>(그리고 공유 <c>master.cmd.capture.all</c> —
+    /// 프로세스 내 팬아웃)를 구독하고, 라이브 루프를 스냅샷하고(tee — 카메라를 다시 열지 않는다),
+    /// 방사 측정 <c>.y16</c>을 로컬에 저장하며, 볼 수 있는 JPG를 실은
+    /// <c>agent.result.capture.{AgentId}</c>와 주기적 <c>agent.status.{AgentId}</c> 하트비트를
+    /// 발행한다. NATS는 절대 시작 의존성이 아니다: 접속은 백그라운드에서 재시도로 돌고,
+    /// NATS가 없어도 로컬 런타임은 동작한다.
     /// </summary>
     public sealed class CameraNatsConnector : IAsyncDisposable
     {
@@ -32,6 +32,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly Func<AgentConfigSnapshot>? _getConfigSnapshot;
         private readonly Action<AgentConfigSnapshot>? _applyConfigSnapshot;
         private readonly Func<CameraDescriptor, string, Task<(bool Success, string Message)>>? _cameraControlHandler;
+        private readonly Func<CameraDescriptor, bool>? _serialHealth;
 
         private readonly CancellationTokenSource _cts = new();
         private readonly SemaphoreSlim _subscriptionGate = new(1, 1);
@@ -49,7 +50,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
             int captureBurstCount = 1,
             Func<AgentConfigSnapshot>? getConfigSnapshot = null,
             Action<AgentConfigSnapshot>? applyConfigSnapshot = null,
-            Func<CameraDescriptor, string, Task<(bool Success, string Message)>>? cameraControlHandler = null)
+            Func<CameraDescriptor, string, Task<(bool Success, string Message)>>? cameraControlHandler = null,
+            Func<CameraDescriptor, bool>? serialHealth = null)
         {
             _nats = nats ?? throw new ArgumentNullException(nameof(nats));
             _manager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -61,10 +63,12 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _getConfigSnapshot = getConfigSnapshot;
             _applyConfigSnapshot = applyConfigSnapshot;
             _cameraControlHandler = cameraControlHandler;
+            _serialHealth = serialHealth;
         }
 
         public bool IsConnected => _connected;
 
+        /// <summary>백그라운드에서 접속 재시도를 시작한다. 접속에 실패해도 호출자를 막지 않는다.</summary>
         public void Start(string natsUrl)
         {
             _ = Task.Run(() => ConnectWithRetryAsync(natsUrl, _cts.Token));
@@ -99,6 +103,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _ = Task.Run(() => LiveStreamLoopAsync(_cts.Token));
         }
 
+        /// <summary>
+        /// 아직 구독하지 않은 카메라의 NATS 구독을 채운다. 핫플러그로 카메라가 늘어난 뒤 호출하지
+        /// 않으면 새 카메라는 캡처 명령을 받지 못한다.
+        /// </summary>
         public async Task SyncSubscriptionsAsync()
         {
             if (!_connected || _cts.IsCancellationRequested)
@@ -134,6 +142,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
             {
                 _subscriptionGate.Release();
             }
+
+            // 카메라 구성이 바뀐 직후(핫플러그/재구성) 즉시 인벤토리를 알린다. 하트비트 주기를
+            // 기다리면 Master가 최대 HeartbeatSeconds 동안 사라진 카메라를 계속 보여준다.
+            PublishHeartbeats();
         }
 
         private async Task<bool> SubscribeCameraAsync(CameraDescriptor descriptor)
@@ -182,6 +194,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
             return success;
         }
 
+        /// <summary>
+        /// 캡처 명령 처리: 라이브 루프를 스냅샷해 NUC 보정 후 저장하고 결과를 발행한다.
+        /// 캡처가 실패해도 <c>IsSuccess=false</c>로 결과는 반드시 발행한다.
+        /// </summary>
         public async Task HandleCaptureAsync(CameraDescriptor descriptor, CaptureCommandMessage cmd)
         {
             bool success = false;
@@ -244,6 +260,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             }
         }
 
+        /// <summary>카메라 제어 명령을 주입된 핸들러에 위임하고 성패를 ACK로 발행한다.</summary>
         public async Task HandleCameraControlAsync(CameraDescriptor cam, CameraControlMessage msg)
         {
             bool success = false;
@@ -331,16 +348,55 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
         private void PublishHeartbeats()
         {
-            foreach (CameraDescriptor cam in _cameras)
+            var live = new List<CameraDescriptor>();
+            foreach (CameraDescriptor cam in new List<CameraDescriptor>(_cameras))
+            {
+                if (_manager.TryGet(cam.AgentId, out _))
+                {
+                    live.Add(cam);
+                }
+            }
+
+            var inventory = new List<string>(live.Count);
+            foreach (CameraDescriptor cam in live) inventory.Add(cam.AgentId);
+
+            // 마지막 카메라까지 빠지면 인벤토리를 실어 보낼 카메라가 없다. 호스트 이름으로 빈
+            // 인벤토리를 한 번 보고해야 Master가 그 PC의 카메라를 지운다(침묵은 신호가 아니다).
+            if (live.Count == 0)
+            {
+                _ = PublishHostInventoryAsync(inventory);
+                return;
+            }
+
+            foreach (CameraDescriptor cam in live)
             {
                 if (_manager.TryGet(cam.AgentId, out ICameraRuntime runtime))
                 {
-                    _ = PublishStatusAsync(cam, MapStatus(runtime.Status));
+                    _ = PublishStatusAsync(cam, MapStatus(runtime.Status), inventory);
                 }
             }
         }
 
-        private async Task PublishStatusAsync(CameraDescriptor cam, CameraStatus status)
+        private async Task PublishHostInventoryAsync(List<string> inventory)
+        {
+            try
+            {
+                await _nats.PublishAgentStatusAsync(new AgentStatusMessage
+                {
+                    AgentId = Environment.MachineName,
+                    HostName = Environment.MachineName,
+                    CameraStatus = CameraStatus.Offline,
+                    Timestamp = DateTime.UtcNow,
+                    HostAgentIds = inventory
+                }).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[CameraNats] host inventory publish failed: {ex.Message}");
+            }
+        }
+
+        private async Task PublishStatusAsync(CameraDescriptor cam, CameraStatus status, List<string> inventory)
         {
             try
             {
@@ -351,12 +407,25 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     HostName = Environment.MachineName,
                     CameraIndex = cam.OpenCvIndex,
                     CameraStatus = status,
-                    Timestamp = DateTime.UtcNow
+                    Timestamp = DateTime.UtcNow,
+                    HostAgentIds = inventory,
+                    IsSerialConnected = ReadSerialHealth(cam)
                 }).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[CameraNats] heartbeat failed for {cam.AgentId}: {ex.Message}");
+            }
+        }
+
+        private bool? ReadSerialHealth(CameraDescriptor cam)
+        {
+            if (_serialHealth is null) return null;
+            try { return _serialHealth(cam); }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[CameraNats] serial health probe failed for {cam.AgentId}: {ex.Message}");
+                return false;
             }
         }
 
@@ -366,8 +435,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _ => CameraStatus.Offline
         };
 
-        // ponytail: ~10fps color-JPEG preview per camera over NATS. Bandwidth ceiling — raise the
-        // delay (or drop resolution) if many agents saturate the link.
+        // ponytail: 카메라당 NATS로 ~10fps 컬러 JPEG 미리보기. 대역폭 상한 — 여러 Agent가 링크를
+        // 포화시키면 지연을 늘리거나 해상도를 낮출 것.
         private async Task LiveStreamLoopAsync(CancellationToken ct)
         {
             while (!ct.IsCancellationRequested)

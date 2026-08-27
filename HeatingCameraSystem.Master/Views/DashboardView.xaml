@@ -597,7 +597,22 @@
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
                                         <Border Background="#131a2a" Padding="8,5" CornerRadius="8,8,0,0">
-                                            <TextBlock Text="{Binding Camera.Id}" Foreground="{StaticResource Primary}" FontSize="12" FontWeight="Bold"/>
+                                            <Grid>
+                                                <TextBlock Text="{Binding Camera.Id}" Foreground="{StaticResource Primary}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                <Border Background="#3a1a1f" CornerRadius="3" Padding="5,1" HorizontalAlignment="Right" VerticalAlignment="Center" ToolTip="Serial (shutter) link down">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Camera.IsSerialConnected}" Value="False">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="NO SERIAL" Foreground="#ff6b6b" FontSize="9" FontWeight="Bold"/>
+                                                </Border>
+                                            </Grid>
                                         </Border>
                                         <Border Grid.Row="1" Background="#111624" Margin="8" CornerRadius="4" ClipToBounds="True">
                                             <Grid>
@@ -729,7 +744,22 @@
                                                                     </Ellipse.Style>
                                                                 </Ellipse>
                                                                 <TextBlock Grid.Column="1" Text="{Binding Id}" Foreground="{StaticResource TextOnSurface}" FontSize="14" VerticalAlignment="Center"/>
-                                                                <TextBlock Grid.Column="2" Text="{Binding CameraStatus}" Foreground="{StaticResource Outline}" FontSize="10" VerticalAlignment="Center"/>
+                                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                    <Border Background="#3a1a1f" CornerRadius="3" Padding="4,1" Margin="0,0,6,0" ToolTip="Serial (shutter) link down">
+                                                                        <Border.Style>
+                                                                            <Style TargetType="Border">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsSerialConnected}" Value="False">
+                                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Border.Style>
+                                                                        <TextBlock Text="NO SERIAL" Foreground="#ff6b6b" FontSize="9" FontWeight="Bold"/>
+                                                                    </Border>
+                                                                    <TextBlock Text="{Binding CameraStatus}" Foreground="{StaticResource Outline}" FontSize="10" VerticalAlignment="Center"/>
+                                                                </StackPanel>
                                                             </Grid>
                                                         </Border>
                                                     </DataTemplate>

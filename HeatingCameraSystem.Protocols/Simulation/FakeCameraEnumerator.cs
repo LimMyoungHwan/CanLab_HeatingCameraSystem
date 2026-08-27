@@ -24,12 +24,13 @@ namespace HeatingCameraSystem.Protocols.Simulation
 
         public IReadOnlyList<DiscoveredCamera> Enumerate() => _cameras;
 
+        /// <summary>FriendlyName이 접두사로 시작하는 카메라만 걸러 반환한다(대소문자 무시).</summary>
         public IReadOnlyList<DiscoveredCamera> EnumerateThermal(string friendlyNamePrefix = "CLTC_T_VGA") =>
             _cameras.Where(c => c.FriendlyName.StartsWith(friendlyNamePrefix, StringComparison.OrdinalIgnoreCase)).ToList();
 
-        public void StartWatching() { /* no-op for fake */ }
+        public void StartWatching() { /* 가짜 구현이므로 아무 동작 없음 */ }
 
-        public void StopWatching() { /* no-op for fake */ }
+        public void StopWatching() { /* 가짜 구현이므로 아무 동작 없음 */ }
 
         public void Dispose() { }
 

@@ -258,7 +258,7 @@ Agent_ColAlias=Alias
 Agent_ColDeviceName=Device Name
 Agent_ColSerialCOM=Serial COM
 
-Manual_BlackBody=흥체
+Manual_BlackBody=흑체
 Hist_AgentId=에이전트 ID
 
 Nav_PlcOrigin=PLC 원점 복귀

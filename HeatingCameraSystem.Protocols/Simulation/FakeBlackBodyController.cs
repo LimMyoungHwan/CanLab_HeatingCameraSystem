@@ -21,6 +21,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
 
         public FakeBlackBodyController(int count = 2) => Count = count;
 
+        /// <summary>모든 흑체의 PV/SV를 25.0℃로 초기화하고 즉시 연결 상태가 된다. 실제 I/O는 없다.</summary>
         public Task ConnectAsync()
         {
             for (int i = 0; i < Count; i++)
@@ -40,17 +41,20 @@ namespace HeatingCameraSystem.Protocols.Simulation
             Log("Disconnect() -> OK (simulated)");
         }
 
+        /// <summary>SV 설정과 동시에 PV가 즉시 SV로 스냅한다. 승온·정착 시간 시뮬레이션은 없다.</summary>
         public Task SetTemperatureAsync(int blackBodyIndex, float celsius)
         {
             _sv[blackBodyIndex] = celsius;
-            _pv[blackBodyIndex] = celsius; // current snaps to target
+            _pv[blackBodyIndex] = celsius; // 현재값이 타겟으로 즉시 스냅한다
             Log($"SetTemperatureAsync(BB{blackBodyIndex}, {celsius}) -> snaps");
             return Task.CompletedTask;
         }
 
+        /// <summary>한 번도 설정하지 않은 인덱스는 25.0℃를 반환한다.</summary>
         public Task<float> GetCurrentTemperatureAsync(int blackBodyIndex)
             => Task.FromResult(_pv.GetOrAdd(blackBodyIndex, 25.0f));
 
+        /// <summary>한 번도 설정하지 않은 인덱스는 25.0℃를 반환한다.</summary>
         public Task<float> GetTargetTemperatureAsync(int blackBodyIndex)
             => Task.FromResult(_sv.GetOrAdd(blackBodyIndex, 25.0f));
 

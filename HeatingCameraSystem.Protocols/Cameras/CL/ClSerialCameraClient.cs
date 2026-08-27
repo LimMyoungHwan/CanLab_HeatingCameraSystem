@@ -6,8 +6,10 @@ using HeatingCameraSystem.Core.Interfaces;
 
 namespace HeatingCameraSystem.Protocols.Cameras.CL
 {
-    // One client per COM port. SerialPort is not concurrent → a single
-    // SemaphoreSlim serializes every command (request write + 7-byte read).
+    /// <summary>
+    /// COM 포트 하나당 클라이언트 하나. SerialPort는 동시 접근이 안 되므로 SemaphoreSlim 하나로
+    /// 모든 명령(요청 쓰기 + 7바이트 읽기)을 직렬화한다.
+    /// </summary>
     public class ClSerialCameraClient : ICameraSerialClient
     {
         private readonly SemaphoreSlim _gate = new(1, 1);
@@ -21,6 +23,7 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
             PortName = portName;
         }
 
+        /// <summary>포트를 연다. 다른 명령보다 먼저 호출해야 하며, 그 전에는 모든 명령이 예외를 던진다.</summary>
         public Task InitializeAsync(CancellationToken ct = default)
         {
             _port = new SerialPort(PortName, 115200, Parity.None, 8, StopBits.One)
@@ -33,6 +36,7 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
             return Task.CompletedTask;
         }
 
+        /// <summary>S/N 레지스터 4바이트를 차례로 읽어 9자리 시리얼 번호로 디코딩한다.</summary>
         public async Task<string> ReadSerialNumberAsync(CancellationToken ct = default)
         {
             byte a = await QueryAsync((byte)ClMainId.Detector, (byte)ClDetectorSubId.SerialNbA, ClRw.Read, 0, ct).ConfigureAwait(false);
@@ -72,7 +76,7 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
                 while (read < 7)
                 {
                     ct.ThrowIfCancellationRequested();
-                    read += _port.Read(rx, read, 7 - read); // honors ReadTimeout
+                    read += _port.Read(rx, read, 7 - read); // ReadTimeout을 따른다
                 }
 
                 return ClPacket.ExtractPayload(rx);
