@@ -221,16 +221,6 @@ Hist_ModalCameraSource=카메라 소스
 Hist_ModalTemperature=온도
 Hist_ModalHumidity=습도
 
-# Dash Extras
-Dash_Cooler1Short= 1차 냉동
-Dash_Cooler2Short= 2차 냉동
-Dash_CoolerRoomShort= 상온 냉동
-Dash_BypassShort= 바이패스
-Dash_DoorLampShort= 도어램프
-Dash_PairGlassShort= 페어글라스
-Dash_Blower1Short= 블로워1
-Dash_Blower2Short= 블로워2
-
 # Manual Extras
 Manual_XPosCol=X 위치:
 Manual_YPosCol=Y 위치:
@@ -253,10 +243,10 @@ Status_Blower2Short= 블로워2
 
 # Agent Headers
 Agent_ColAgentId=Agent Id
-Agent_ColOpenCvIdx=OpenCV Idx
-Agent_ColAlias=Alias
-Agent_ColDeviceName=Device Name
-Agent_ColSerialCOM=Serial COM
+Agent_ColOpenCvIdx=OpenCV 인덱스
+Agent_ColAlias=별칭
+Agent_ColDeviceName=장치명
+Agent_ColSerialCOM=시리얼 COM
 
 Manual_BlackBody=흑체
 Hist_AgentId=에이전트 ID

@@ -221,16 +221,6 @@ Hist_ModalCameraSource=CAMERA SOURCE
 Hist_ModalTemperature=TEMPERATURE
 Hist_ModalHumidity=HUMIDITY
 
-# Dash Extras
-Dash_Cooler1Short= 1st Cooler
-Dash_Cooler2Short= 2nd Cooler
-Dash_CoolerRoomShort= Room Cooler
-Dash_BypassShort= Bypass
-Dash_DoorLampShort= Door Lamp
-Dash_PairGlassShort= Pair Glass
-Dash_Blower1Short= Blower 1
-Dash_Blower2Short= Blower 2
-
 # Manual Extras
 Manual_XPosCol=X Position:
 Manual_YPosCol=Y Position:
