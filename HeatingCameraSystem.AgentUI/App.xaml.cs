@@ -21,10 +21,16 @@ using HeatingCameraSystem.Protocols.Simulation;
 
 namespace HeatingCameraSystem.AgentUI
 {
+    /// <summary>
+    /// AgentUI 애플리케이션 진입점. 한 프로세스에서 로컬 카메라 여러 대를 호스팅하며,
+    /// 시작 시 카메라 자동 등록·페어링 reconcile → 패널 구성 → <see cref="CameraNatsConnector"/>로
+    /// NATS 브리지 기동 → USB 핫플러그 감시 순으로 초기화한다. 종료 시에는 네이티브 카메라/시리얼
+    /// 콜이 wedge될 수 있어 워치독이 프로세스를 강제 종료한다(<see cref="OnExit"/>).
+    /// </summary>
     public partial class App : Application
     {
-        // Session-scoped single-instance guard: prevents autostart + Manager relaunch
-        // (scheduled task) from double-launching AgentUI in the same operator session.
+        // 세션 범위 단일 인스턴스 가드: 자동 시작 + Manager 재기동(예약 작업)이 같은 운영자
+        // 세션에서 AgentUI를 이중 실행하는 것을 막는다.
         private const string SingleInstanceMutexName = "HeatingCameraSystem.AgentUI.SingleInstance";
 
         private Mutex? _singleInstanceMutex;
@@ -47,7 +53,7 @@ namespace HeatingCameraSystem.AgentUI
             _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out bool createdNew);
             if (!createdNew)
             {
-                // Another AgentUI instance already owns this session.
+                // 다른 AgentUI 인스턴스가 이미 이 세션을 점유하고 있다.
                 Shutdown();
                 return;
             }
@@ -56,8 +62,8 @@ namespace HeatingCameraSystem.AgentUI
 
             AgentUiLog.Initialize();
 
-            // [S8] Headless deploy mode: run cameras + NATS with no window. WPF would exit on
-            // last-window-close, so switch to explicit shutdown before skipping the MainWindow.
+            // [S8] 헤드리스 배포 모드: 창 없이 카메라 + NATS만 돌린다. WPF는 마지막 창이 닫히면
+            // 종료되므로 MainWindow를 건너뛰기 전에 명시적 종료 모드로 전환한다.
             bool headless = e.Args.Any(a => a.Equals("--headless", StringComparison.OrdinalIgnoreCase));
             if (headless)
             {
@@ -68,7 +74,7 @@ namespace HeatingCameraSystem.AgentUI
 
             if (!config.SimulationMode)
             {
-                // Namespace each AgentId by host so N PCs' "Agent_1"s don't collide on shared NATS topics.
+                // AgentId에 호스트명을 접두해 여러 PC의 "Agent_1"들이 공유 NATS 토픽에서 충돌하지 않게 한다.
                 string host = Environment.MachineName;
                 for (int i = 0; i < config.Cameras.Count; i++)
                 {
@@ -150,9 +156,9 @@ namespace HeatingCameraSystem.AgentUI
                 {
                     try
                     {
-                        // [S7] Per-camera runtime load/unload from the Manager: release or
-                        // re-acquire ONE camera's UVC handle without touching the others or the
-                        // process. runtimeLoad is an idempotent reload (drop stale, re-add, start).
+                        // [S7] Manager발 카메라별 런타임 load/unload: 다른 카메라나 프로세스는
+                        // 건드리지 않고 카메라 한 대의 UVC 핸들만 해제/재획득한다.
+                        // runtimeLoad는 멱등 재적재다(낡은 것 제거, 재등록, 시작).
                         if (op == CameraControlOps.RuntimeUnload)
                         {
                             _manager!.Remove(descriptor.AgentId);
@@ -199,7 +205,11 @@ namespace HeatingCameraSystem.AgentUI
                     {
                         return (false, ex.Message);
                     }
-                });
+                },
+                // 패널이 핫플러그마다 재생성되므로 스냅샷이 아니라 매번 조회한다. 패널이 아직 없으면
+                // 시리얼 제어가 없다는 뜻이므로 false — 영상 전용 구성은 지원 대상이 아니다.
+                serialHealth: descriptor => _mainViewModel?.Cameras
+                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.HasSerialControl ?? false);
             _natsConnector.Start(config.NatsUrl);
 
             if (!config.SimulationMode)
@@ -222,20 +232,22 @@ namespace HeatingCameraSystem.AgentUI
 
             _mainViewModel.DataBrowser = new DataBrowserViewModel(_store);
             _mainViewModel.Logs = new LogViewerViewModel(AgentUiLog.LogDir);
-            _mainViewModel.Settings = new SettingsViewModel(config, pairing);
+            var settingsVm = new SettingsViewModel(config, pairing);
+            settingsVm.Saved += OnSettingsSaved;
+            _mainViewModel.Settings = settingsVm;
 
             var window = new MainWindow { DataContext = _mainViewModel };
             MainWindow = window;
             window.Show();
         }
 
-        // One (expensive) pairing pass shared by auto-registration + the serial/video reconcile; empty on failure.
+        // 자동 등록 + 시리얼/영상 reconcile이 공유하는 (비싼) 페어링 1회 수행. 실패 시 빈 목록.
         private static IReadOnlyList<CameraComPair> GetPairsOrEmpty(ICameraComPairingService pairing)
         {
             try
             {
-                // ponytail: blocks the UI thread on serial S/N reads (~sub-second per camera).
-                // Fine for a bench launch; if 8-camera startup drags, hoist to an async post-show reconcile.
+                // ponytail: 시리얼 S/N 읽는 동안 UI 스레드를 막는다(카메라당 1초 미만). 벤치 기동에는
+                // 충분 — 8대 시작이 느려지면 창 표시 후 비동기 reconcile로 올릴 것.
                 return Task.Run(() => pairing.GetPairsAsync()).GetAwaiter().GetResult();
             }
             catch (Exception ex)
@@ -245,7 +257,7 @@ namespace HeatingCameraSystem.AgentUI
             }
         }
 
-        // Persist (Save) newly detected cameras so panels/NATS pick them up now and on future launches.
+        // 새로 감지된 카메라를 저장(Save)해 패널/NATS가 지금은 물론 이후 실행에서도 인식하게 한다.
         private static void AutoRegisterDetectedCameras(AgentUiConfig config, IReadOnlyList<CameraComPair> pairs)
         {
             if (pairs.Count == 0)
@@ -261,9 +273,9 @@ namespace HeatingCameraSystem.AgentUI
             }
         }
 
-        // Video-only fallback: register thermal cameras the video enumerator sees but pairing missed
-        // (broken/absent serial, or a WMI hiccup that emptied the pair list), so a working camera still
-        // gets a panel + live video. Runs after pair-based registration, before the video-index reconcile.
+        // 영상 전용 fallback: 영상 열거기에는 보이지만 페어링이 놓친 열화상 카메라(시리얼 고장/부재,
+        // 혹은 페어 목록을 비워버린 WMI 오동작)를 등록해, 동작하는 카메라가 패널 + 라이브 영상은
+        // 받게 한다. 페어 기반 등록 후, 영상 인덱스 reconcile 전에 실행된다.
         private void AutoRegisterVideoOnlyCameras(AgentUiConfig config)
         {
             if (_videoEnumerator is null)
@@ -343,6 +355,10 @@ namespace HeatingCameraSystem.AgentUI
             }
         }
 
+        /// <summary>
+        /// 설정된 카메라와 감지된 페어를 확신 가능한 키로만 매칭한다: 고유 카메라 S/N 일치 →
+        /// UsbContainerId 일치. 애매하면 null(잘못된 포트를 배정하느니 건드리지 않는다).
+        /// </summary>
         private static CameraComPair? ResolveConfidentPair(IReadOnlyList<CameraComPair> pairs, CameraDescriptor cam)
         {
             if (IsUsableSerial(cam.CameraSerialNumber))
@@ -365,9 +381,15 @@ namespace HeatingCameraSystem.AgentUI
             return null;
         }
 
+        // 비었거나 0뿐인 S/N은 미기록 테스트 카메라 — 식별 키로 쓰지 않는다.
         private static bool IsUsableSerial([NotNullWhen(true)] string? serial) =>
             !string.IsNullOrWhiteSpace(serial) && serial.Any(c => c is >= '1' and <= '9');
 
+        /// <summary>
+        /// 설정된 카메라 전체의 패널을 처음부터 다시 만든다. 기존 패널을 전부 Dispose하고 런타임을
+        /// 재등록하므로 핫플러그 재구성 때마다 카메라 패널이 재생성된다. 시리얼 포트 열기에 실패하면
+        /// serial을 null로 두고 영상은 계속 살린다(영상-시리얼 분리).
+        /// </summary>
         private void RebuildCameraPanels()
         {
             if (_manager is null || _mainViewModel is null || _config is null || _serialFactory is null || _nucs is null || _store is null)
@@ -400,8 +422,8 @@ namespace HeatingCameraSystem.AgentUI
                 {
                     try
                     {
-                        // Complete the (synchronous) port open now so a broken port is caught here and
-                        // nulls serial — video output must never be gated on serial success.
+                        // (동기) 포트 열기를 지금 완료해 고장난 포트를 여기서 잡아 serial을 null로
+                        // 만든다 — 영상 출력이 시리얼 성공에 좌우되는 일은 절대 없어야 한다.
                         serial.InitializeAsync().GetAwaiter().GetResult();
                     }
                     catch (Exception ex)
@@ -430,17 +452,53 @@ namespace HeatingCameraSystem.AgentUI
                 }
                 _mainViewModel.Cameras.Add(panel);
 
-                // Always attempt live-start: serial RUN/shutter are best-effort (no-op when serial is
-                // null), so video output is decoupled from serial. The video runtime starts in StartAllAsync.
+                // 라이브 시작은 항상 시도한다: 시리얼 RUN/셔터는 best-effort(serial이 null이면 no-op)라
+                // 영상 출력은 시리얼과 분리된다. 영상 런타임 자체는 StartAllAsync에서 시작된다.
                 _ = panel.StartLiveAsync();
             }
 
             _ = _manager.StartAllAsync();
         }
 
-        // [S7] After a per-camera runtimeLoad/Unload, point the existing panel at the new video runtime
-        // (or clear it on unload) so its live view follows the reloaded handle instead of freezing on the
-        // stale one. Marshalled to the UI thread; the panel's serial client + NUC are untouched.
+        /// <summary>
+        /// 설정 화면 저장 → 카메라 구성을 재시작 없이 라이브 적용한다. 물리 감지(AutoRegister)는
+        /// 일부러 돌리지 않는다 — 사용자가 방금 지운 카메라를 되살리지 않기 위함. config.Cameras는
+        /// SettingsViewModel.Save가 in-place로 이미 갱신했으므로 그 기준으로 패널/런타임을 재구성하고,
+        /// 구성에서 빠진 런타임을 제거한 뒤 NATS 인벤토리를 즉시 재발행한다(→ Master가 라이브 반영).
+        /// </summary>
+        private void OnSettingsSaved()
+        {
+            if (_config is null || _mainViewModel is null || _manager is null)
+            {
+                return;
+            }
+
+            var previous = _mainViewModel.Cameras
+                .Select(panel => panel.AgentId)
+                .ToHashSet(StringComparer.Ordinal);
+            var current = new HashSet<string>(
+                _config.Cameras.Select(cam => cam.AgentId), StringComparer.Ordinal);
+
+            RebuildCameraPanels();
+
+            // RebuildCameraPanels는 현재 구성만 재등록(add 전용)하므로 삭제된 카메라의 런타임이 남는다.
+            // UVC 핸들을 놓고 하트비트 인벤토리에서 빠지도록 명시적으로 제거한다.
+            foreach (string agentId in previous)
+            {
+                if (!current.Contains(agentId))
+                {
+                    _manager.Remove(agentId);
+                }
+            }
+
+            // 즉시 인벤토리 재발행: 추가분 구독 + 축소된 인벤토리 통지 → Master가 하트비트 주기를
+            // 기다리지 않고 곧바로 노드를 지운다.
+            _ = _natsConnector?.SyncSubscriptionsAsync();
+        }
+
+        // [S7] 카메라별 runtimeLoad/Unload 후 기존 패널을 새 영상 런타임으로 향하게 하거나(unload면
+        // 해제) 라이브 뷰가 낡은 핸들에 얼어붙지 않고 재적재된 핸들을 따르게 한다. UI 스레드로
+        // 마샬링되며 패널의 시리얼 클라이언트 + NUC는 건드리지 않는다.
         private void RebindPanelRuntime(string agentId, ICameraRuntime? runtime)
         {
             CameraPanelViewModel? panel = _mainViewModel?.Cameras
@@ -453,6 +511,11 @@ namespace HeatingCameraSystem.AgentUI
             _ = Dispatcher.InvokeAsync(() => panel.RebindRuntime(runtime));
         }
 
+        /// <summary>
+        /// USB 핫플러그 콜백. dirty 플래그 병합 루프로 재구성을 직렬화한다: 재구성 도중 도착한
+        /// 이벤트는 플래그만 세우고, 진행 중인 루프가 끝나기 전에 한 번 더 돌아 반영된다.
+        /// 재구성은 페어링 reconcile → 패널 재생성 → NATS 구독 동기화 순으로 진행된다.
+        /// </summary>
         private void OnCameraHotplug(PnpChange change)
         {
             Interlocked.Exchange(ref _rebuildDirty, 1);
@@ -465,9 +528,9 @@ namespace HeatingCameraSystem.AgentUI
             {
                 try
                 {
-                    // ponytail: dirty-flag coalescing — a rebuild in flight re-runs once if another event
-                    // landed. Residual loop-exit/release race is harmless: 1s WMI debounce spaces real
-                    // hotplug events seconds apart, and the next plug re-triggers a rebuild anyway.
+                    // ponytail: dirty 플래그 병합 — 재구성 진행 중에 이벤트가 또 오면 한 번만 다시
+                    // 돈다. 루프 종료/해제의 잔여 레이스는 무해하다: 1초 WMI 디바운스가 실제 핫플러그
+                    // 이벤트를 수 초 간격으로 벌리고, 다음 플러그가 어차피 재구성을 다시 유발한다.
                     while (Interlocked.Exchange(ref _rebuildDirty, 0) == 1)
                     {
                         if (_config is not null && !_config.SimulationMode && _pairing is not null)
@@ -497,6 +560,10 @@ namespace HeatingCameraSystem.AgentUI
             });
         }
 
+        /// <summary>
+        /// 종료 정리. 네이티브 카메라/시리얼 콜은 CLR abort 한계 너머로 wedge될 수 있으므로,
+        /// 정리와 별개로 워치독이 6초 뒤 프로세스를 강제 종료해 OS가 카메라+COM을 해제하게 한다.
+        /// </summary>
         protected override void OnExit(ExitEventArgs e)
         {
             _cameraWatcher?.StopWatching();
@@ -554,7 +621,7 @@ namespace HeatingCameraSystem.AgentUI
             }
             catch
             {
-                // best effort during shutdown
+                // 종료 중 best-effort
             }
 
             _singleInstanceMutex?.Dispose();

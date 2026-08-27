@@ -11,6 +11,7 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.AgentUI.ViewModels
 {
+    /// <summary>설정 그리드에서 편집하는 카메라 한 행. <see cref="CameraDescriptor"/>와 상호 변환한다.</summary>
     public partial class CameraRow : ObservableObject
     {
         [ObservableProperty]
@@ -60,6 +61,11 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 string.IsNullOrWhiteSpace(UsbContainerId) ? null : UsbContainerId);
     }
 
+    /// <summary>
+    /// AgentUI 설정 편집 화면 뷰모델. 저장 시 agentui.json에 기록하고 <see cref="Saved"/>를 발행한다.
+    /// App이 이를 받아 카메라 구성을 재시작 없이 즉시 적용한다(패널/런타임 재구성 + NATS 인벤토리
+    /// 재발행). COM 자동 감지는 카메라-COM 페어링 서비스에 위임한다.
+    /// </summary>
     public partial class SettingsViewModel : ObservableObject
     {
         private readonly AgentUiConfig _config;
@@ -89,6 +95,10 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private string _statusText = string.Empty;
 
         public ObservableCollection<CameraRow> Cameras { get; } = new();
+
+        /// <summary>저장이 성공해 config.Cameras가 갱신된 직후 발행된다. App이 구독해 런타임·패널·
+        /// NATS 인벤토리를 재시작 없이 라이브로 재구성한다.</summary>
+        public event Action? Saved;
 
         public SettingsViewModel(AgentUiConfig config, ICameraComPairingService? pairing = null)
         {
@@ -128,19 +138,33 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _config.HeartbeatSeconds = HeartbeatSeconds;
             _config.CaptureImageFormat = CaptureImageFormat;
             _config.CaptureBurstCount = CaptureBurstCount;
-            _config.Cameras = Cameras.Select(row => row.ToDescriptor()).ToList();
+
+            // ponytail: 새 List로 재할당 금지 — CameraNatsConnector가 시작 시점의 이 리스트 객체를
+            // 참조로 붙들고 하트비트 인벤토리를 만든다. in-place로 갈아끼워야 카메라 삭제/추가가
+            // 재시작 없이 인벤토리에 즉시 반영된다. (상한: 하트비트 타이머 스레드의 열거와 겹칠 수
+            // 있음 — 실사용 빈도상 무해. 문제 시 config.Cameras 접근에 락.)
+            List<CameraDescriptor> updated = Cameras.Select(row => row.ToDescriptor()).ToList();
+            _config.Cameras.Clear();
+            _config.Cameras.AddRange(updated);
 
             try
             {
                 _config.Save();
-                StatusText = "Saved. Restart AgentUI to apply.";
+                StatusText = "저장됨. 재시작 없이 즉시 적용됩니다.";
             }
             catch (Exception ex)
             {
                 StatusText = $"Save failed: {ex.Message}";
+                return;
             }
+
+            Saved?.Invoke();
         }
 
+        /// <summary>
+        /// 페어링 서비스로 카메라-COM 쌍을 감지해 각 행의 포트/S/N/ContainerID를 채운다.
+        /// 결과는 행에만 반영되며 Save 후 재시작해야 적용된다.
+        /// </summary>
         [RelayCommand]
         private async Task AutoDetectSerialAsync()
         {
@@ -183,6 +207,10 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             }
         }
 
+        /// <summary>
+        /// 행과 감지된 페어를 매칭한다. 우선순위: 고유 카메라 S/N → UsbContainerId →
+        /// Device Name 부분 일치 → OpenCvIndex.
+        /// </summary>
         private static CameraComPair? FindPairForRow(IReadOnlyList<CameraComPair> pairs, CameraRow row)
         {
             if (IsUsableSerial(row.CameraSerialNumber))
@@ -209,7 +237,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             return pairs.FirstOrDefault(p => p.Camera.OpenCvIndex == row.OpenCvIndex);
         }
 
-        // A blank or all-zeros S/N is an unprogrammed test camera — not a real identity key; fall back to ContainerID.
+        // 비었거나 0뿐인 S/N은 미기록 테스트 카메라 — 진짜 식별 키가 아니므로 ContainerID로 fall back한다.
         private static bool IsUsableSerial([NotNullWhen(true)] string? serial) =>
             !string.IsNullOrWhiteSpace(serial) && serial.Any(c => c is >= '1' and <= '9');
     }
