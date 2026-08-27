@@ -15,13 +15,24 @@ using Serilog.Formatting.Compact;
 
 namespace HeatingCameraSystem.Agent
 {
+    /// <summary>
+    /// 헤드리스 카메라 Agent 콘솔 앱. exe 옆의 agent.json을 읽거나 CLI 인수로 오버라이드하며,
+    /// 캡처 명령 수신 → 캡처 → 결과 발행, 시리얼 설정 적용, 하트비트 발행을 담당한다.
+    /// 현재 아키텍처에서는 AgentUI가 주 카메라 호스트이고 이 콘솔 Agent는 보조/진단용이다.
+    /// </summary>
     class Program
     {
+        /// <summary>
+        /// 설정 로드 → Serilog NDJSON 파일 싱크 구성 → 카메라 초기화 → NATS 연결 후
+        /// <c>master.cmd.capture.{AgentId}</c>와 <c>master.cmd.capture.all</c>(캡처 명령),
+        /// <c>master.config.serial.{AgentId}</c>(시리얼 설정)를 구독하고,
+        /// <c>agent.status.{AgentId}</c>로 하트비트를 주기 발행하며 Ctrl+C까지 대기한다.
+        /// </summary>
         static async Task Main(string[] args)
         {
             var config = LoadOrCreateConfig(args);
 
-            // Serilog NDJSON file sink (Manager LogTailService가 tail)
+            // Serilog NDJSON 파일 싱크 (Manager LogTailService가 tail)
             string logDir = string.IsNullOrEmpty(config.LogPath)
                 ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs")
                 : config.LogPath;
@@ -101,6 +112,8 @@ namespace HeatingCameraSystem.Agent
             shutterController?.Dispose();
             cameraService.Stop();
 
+            // 시리얼 설정을 받아 기존 셔터 컨트롤러를 버리고 새로 연결한 뒤,
+            // 적용 결과를 agent.config.serial.ack.{AgentId}로 발행한다.
             async Task ApplySerialConfigAsync(SerialConfigMessage msg)
             {
                 bool   success = true;
@@ -138,6 +151,11 @@ namespace HeatingCameraSystem.Agent
             }
         }
 
+        /// <summary>
+        /// exe 옆의 agent.json을 읽고, 없으면 기본값을 만든다(CLI 인수가 있으면 파일을 쓰지 않아
+        /// 다중 인스턴스 실행이 안전하다). CLI 인수 순서는 AgentId, NatsUrl, CameraIndex,
+        /// StoragePath, SimulationMode, LogPath이며 파일 값보다 우선한다.
+        /// </summary>
         private static AgentConfig LoadOrCreateConfig(string[] args)
         {
             string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "agent.json");
@@ -180,6 +198,10 @@ namespace HeatingCameraSystem.Agent
             return config;
         }
 
+        /// <summary>
+        /// 공유 잠금으로 agent.json을 읽는다. IOException은 최대 3회 재시도하고,
+        /// JSON이 손상되었으면 null을 반환한다(호출부가 기본값으로 대체).
+        /// </summary>
         private static AgentConfig? TryReadConfig(string path, JsonSerializerOptions opts)
         {
             for (int attempt = 0; attempt < 3; attempt++)
@@ -202,6 +224,11 @@ namespace HeatingCameraSystem.Agent
             return null;
         }
 
+        /// <summary>
+        /// 캡처 명령 한 건을 처리한다. 캡처 동안 상태를 Streaming으로 올렸다가 되돌리고,
+        /// 성공 여부와 무관하게 결과를 <c>agent.result.capture.{AgentId}</c>로 발행한다
+        /// (저장 파일을 읽을 수 있으면 JPEG 바이트를 함께 실어 보낸다).
+        /// </summary>
         private static async Task HandleCaptureAsync(
             CaptureCommandMessage cmd,
             ICameraCaptureService camera,
@@ -241,6 +268,10 @@ namespace HeatingCameraSystem.Agent
             }
         }
 
+        /// <summary>
+        /// 하트비트 타이머와 캡처 처리 태스크가 공유하는 현재 카메라 상태 홀더.
+        /// Volatile 읽기/쓰기로 스레드 간 가시성을 보장한다.
+        /// </summary>
         private sealed class StatusBox
         {
             private int _current;

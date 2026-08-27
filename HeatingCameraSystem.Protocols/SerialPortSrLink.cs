@@ -4,6 +4,10 @@ using HeatingCameraSystem.Core.Config;
 
 namespace HeatingCameraSystem.Protocols
 {
+    /// <summary>
+    /// SR-800N 흑체와의 RS-232 시리얼 링크. 스트림 기반이므로 <see cref="Read"/>가
+    /// sync 바이트(0xAA) 재동기화와 프레임 재조립을 직접 수행한다.
+    /// </summary>
     public sealed class SerialPortSrLink : ISrLink
     {
         private readonly BlackBodyUnitSettings _cfg;
@@ -18,6 +22,7 @@ namespace HeatingCameraSystem.Protocols
 
         public bool IsOpen => _port?.IsOpen ?? false;
 
+        /// <summary>포트를 연다. Parity/StopBits 문자열 파싱에 실패하면 None/One으로 조용히 대체한다.</summary>
         public void Open()
         {
             if (IsOpen) return;
@@ -38,6 +43,10 @@ namespace HeatingCameraSystem.Protocols
 
         public void Write(byte[] data) => _port!.Write(data, 0, data.Length);
 
+        /// <summary>
+        /// 응답 프레임 하나를 재조립해 반환한다. sync(0xAA)가 나올 때까지 바이트를 버려 재동기화한 뒤
+        /// 헤더(sync, address, size 상위/하위)를 읽고, size 바이트를 모두 채울 때까지 읽는다.
+        /// </summary>
         public byte[] Read()
         {
             SerialPort port = _port ?? throw new InvalidOperationException("SR-800N serial port not open.");

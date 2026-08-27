@@ -7,6 +7,11 @@ using OpenCvSharp;
 
 namespace HeatingCameraSystem.Protocols.Cameras.CL
 {
+    /// <summary>
+    /// CLTC 카메라의 라이브 스트림 구현: raw Y16 모드로 열고 자체 캡처 루프에서 프레임마다
+    /// 33ms 지연을 두고 <see cref="FrameReady"/>를 발행한다. 여기서 검증된 획득 로직을
+    /// <see cref="CltcThermalFrameSource"/>가 그대로 따른다.
+    /// </summary>
     public class CltcLiveThermalCamera : ILiveThermalCamera
     {
         private readonly object _gate = new();
@@ -22,6 +27,7 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
             get { lock (_gate) return _isRunning; }
         }
 
+        /// <summary>캡처 루프를 시작한다. 이미 실행 중이면 무시하고, 카메라 열기에 실패하면 예외를 던진다.</summary>
         public Task StartAsync(int cameraIndex, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
@@ -65,6 +71,7 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
             return Task.CompletedTask;
         }
 
+        /// <summary>루프에 취소를 걸고 종료를 기다린 뒤 캡처 자원을 해제한다.</summary>
         public async Task StopAsync()
         {
             Task? loopTask;

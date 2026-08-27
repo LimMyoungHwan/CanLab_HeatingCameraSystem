@@ -5,6 +5,12 @@ using HeatingCameraSystem.Core.Interfaces;
 
 namespace HeatingCameraSystem.Protocols.Simulation
 {
+    /// <summary>
+    /// 하드웨어 없이 동작하는 가짜 셔터 컨트롤러. SimulationMode=true 시
+    /// SerialShutterController(raw binary 시리얼 전송) 대신 사용한다.
+    /// 포트 I/O 없이 카메라별 셔터 상태를 인메모리로만 유지하며 명령은 즉시 성공한다.
+    /// 연결 전에 명령을 호출하면 InvalidOperationException을 던진다.
+    /// </summary>
     public class FakeSerialShutterController : ISerialShutterController
     {
         private bool _isConnected;
@@ -41,6 +47,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>인메모리 상태를 반환한다. 한 번도 조작하지 않은 카메라는 닫힘(false)이 기본이다.</summary>
         public Task<bool> GetShutterStateAsync(int cameraIndex)
         {
             EnsureConnected();

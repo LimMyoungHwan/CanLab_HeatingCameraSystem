@@ -3,12 +3,12 @@ using VagabondK.Protocols.LSElectric;
 namespace HeatingCameraSystem.Simulator.Memory;
 
 /// <summary>
-/// Logical-token convenience access (PlcSettings style: "D100", "M10", "P000", "D2520.0").
-/// Token→DeviceVariable mapping is delegated to VagabondK's own
-/// <see cref="DeviceVariable.Parse(string, bool)"/> exactly as <c>PlcXgtClient</c> does:
-/// word tokens become <c>%{area}W{n}</c>, bit tokens <c>%{area}X{n}</c> (honoring
-/// UseHexBitIndex). A dotted D token ("D2520.0") is a bit-of-word: read = word read + mask,
-/// write = read-modify-write preserving the other 15 bits (atomic under the store lock).
+/// 논리 토큰(PlcSettings 스타일: "D100", "M10", "P000", "D2520.0") 편의 접근.
+/// 토큰→DeviceVariable 변환은 <c>PlcXgtClient</c>와 똑같이 VagabondK의
+/// <see cref="DeviceVariable.Parse(string, bool)"/>에 위임한다:
+/// 워드 토큰은 <c>%{area}W{n}</c>, 비트 토큰은 <c>%{area}X{n}</c>이 된다(UseHexBitIndex 준수).
+/// 점 붙은 D 토큰("D2520.0")은 비트-오브-워드다: 읽기 = 워드 읽기 + 마스크,
+/// 쓰기 = 나머지 15비트를 보존하는 read-modify-write(저장소 락 아래에서 원자적).
 /// </summary>
 public sealed partial class FEnetDeviceMemory
 {
@@ -41,8 +41,8 @@ public sealed partial class FEnetDeviceMemory
         if (TrySplitDotted(token, out string wordToken, out int bit))
         {
             DeviceVariable wordVar = ParseWord(wordToken);
-            // Read-modify-write must be atomic: hold the store lock across read + write so a
-            // concurrent RMW on the same word cannot clobber sibling bits.
+            // read-modify-write는 원자적이어야 한다: 읽기 + 쓰기 전 구간에서 저장소 락을 잡아
+            // 같은 워드에 대한 동시 RMW가 이웃 비트를 덮어쓰지 못하게 한다.
             lock (_gate)
             {
                 ushort word = (ushort)ReadValueLocked(wordVar).WordValue;

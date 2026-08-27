@@ -7,6 +7,10 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Master.Services
 {
+    /// <summary>
+    /// 챔버 이력을 LiteDB <c>chamber_history</c> 컬렉션에 보관하는 저장소.
+    /// Timestamp 인덱스를 만들고 조회는 항상 최신순(Timestamp 내림차순)이다.
+    /// </summary>
     public class LiteDbChamberHistoryRepository : IChamberHistoryRepository
     {
         private readonly ILiteCollection<ChamberHistoryRecord> _col;
@@ -23,6 +27,7 @@ namespace HeatingCameraSystem.Master.Services
             return Task.CompletedTask;
         }
 
+        /// <summary>기간 내 이력을 최신순으로 페이징 조회한다.</summary>
         public Task<IEnumerable<ChamberHistoryRecord>> QueryAsync(
             DateTime from, DateTime to, int page = 1, int pageSize = 10)
         {

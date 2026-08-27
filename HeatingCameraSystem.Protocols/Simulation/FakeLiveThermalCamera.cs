@@ -6,6 +6,13 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Protocols.Simulation
 {
+    /// <summary>
+    /// 하드웨어 없이 동작하는 가짜 열화상 라이브 카메라. SimulationMode에서
+    /// CltcLiveThermalCamera(OpenCV 캡처) 대신 사용한다.
+    /// 백그라운드 루프가 67ms 간격(약 15Hz)으로 640x480 14-bit 합성 프레임을 발생시키며,
+    /// 프레임 패턴은 <see cref="FakeThermalFrameSource"/>와 동일한 결정적 이동 핫스팟이다.
+    /// cameraIndex는 무시되어 어떤 인덱스로 시작해도 같은 영상이 나온다.
+    /// </summary>
     public class FakeLiveThermalCamera : ILiveThermalCamera
     {
         private const int Width = 640;
@@ -23,6 +30,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             get { lock (_gate) return _isRunning; }
         }
 
+        /// <summary>프레임 발생 루프를 시작한다. 이미 실행 중이면 아무것도 하지 않는다. cameraIndex는 사용하지 않는다.</summary>
         public Task StartAsync(int cameraIndex, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
@@ -43,6 +51,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>루프를 취소하고 완전히 종료될 때까지 대기한다. 실행 중이 아니면 즉시 반환한다.</summary>
         public async Task StopAsync()
         {
             Task? loopTask;
@@ -99,6 +108,10 @@ namespace HeatingCameraSystem.Protocols.Simulation
             }
         }
 
+        /// <summary>
+        /// tick에서만 파생되는 결정적 합성 프레임을 만든다. 배경은 대각선 그라데이션,
+        /// 그 위에 반지름 42px의 핫스팟이 tick마다 (11, 7)픽셀씩 이동한다. 값 범위는 0~0x3FFF(14-bit).
+        /// </summary>
         private static ThermalFrame CreateFrame(int tick)
         {
             var pixels = new ushort[Width * Height];

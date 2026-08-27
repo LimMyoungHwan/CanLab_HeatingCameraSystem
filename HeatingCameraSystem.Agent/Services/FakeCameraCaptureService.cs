@@ -5,6 +5,10 @@ using OpenCvSharp;
 
 namespace HeatingCameraSystem.Agent.Services
 {
+    /// <summary>
+    /// 실제 카메라 없이 합성 프레임(시간에 따라 색이 변하는 배경 + 사각형 + AgentId/타임스탬프 텍스트)을
+    /// 만들어 저장하는 캡처 구현. SimulationMode=true일 때 캡처 왕복 검증용으로 사용된다.
+    /// </summary>
     public class FakeCameraCaptureService : ICameraCaptureService, IDisposable
     {
         private readonly string _storagePath;
@@ -20,6 +24,7 @@ namespace HeatingCameraSystem.Agent.Services
                 Directory.CreateDirectory(_storagePath);
         }
 
+        /// <summary>인덱스만 기록하고 항상 성공한다. 하드웨어는 건드리지 않는다.</summary>
         public bool InitializeCamera(int cameraIndex)
         {
             _cameraIndex = cameraIndex;
@@ -28,6 +33,7 @@ namespace HeatingCameraSystem.Agent.Services
             return true;
         }
 
+        /// <summary>640x480 합성 이미지를 생성해 실제 구현과 같은 파일명 규칙으로 저장한다.</summary>
         public bool CaptureFrame(out string savedFilePath)
         {
             savedFilePath = string.Empty;
@@ -59,6 +65,7 @@ namespace HeatingCameraSystem.Agent.Services
             return frame.SaveImage(savedFilePath);
         }
 
+        /// <summary>초기화 상태를 해제해 이후 캡처가 실패하게 만든다.</summary>
         public void Stop() { _initialized = false; }
 
         public void Dispose() => Stop();

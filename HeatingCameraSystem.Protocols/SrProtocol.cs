@@ -3,6 +3,11 @@ using System.Buffers.Binary;
 
 namespace HeatingCameraSystem.Protocols
 {
+    /// <summary>
+    /// SR-800N VIP 바이너리 프레임 빌더/파서(통신 규격 6057060).
+    /// 프레임 = sync(0xAA) + address + size(2바이트) + service + 파라미터 블록들 + 체크섬.
+    /// 다바이트 값은 전부 big-endian이다.
+    /// </summary>
     public static class SrProtocol
     {
         public const byte Sync = 0xAA;
@@ -45,6 +50,10 @@ namespace HeatingCameraSystem.Protocols
             return Frame(ServiceGetParameters, dataBlock);
         }
 
+        /// <summary>
+        /// 응답 프레임에서 parameterId의 4바이트 float 값을 찾아 반환한다.
+        /// 프레임이 깨졌거나 해당 파라미터가 없으면 FormatException을 던진다.
+        /// </summary>
         public static float ParseFloat(byte[] frame, ushort parameterId)
         {
             if (frame is null || frame.Length < 7)
@@ -75,6 +84,7 @@ namespace HeatingCameraSystem.Protocols
             throw new FormatException($"SR-800N response has no parameter 0x{parameterId:X4}.");
         }
 
+        /// <summary>파라미터 블록(id, 길이, 데이터)을 Set 서비스 프레임으로 감싼다.</summary>
         private static byte[] BuildSetParameter(ushort parameterId, byte[] parameterData)
         {
             var dataBlock = new byte[4 + parameterData.Length];
@@ -84,6 +94,7 @@ namespace HeatingCameraSystem.Protocols
             return Frame(ServiceSetParameters, dataBlock);
         }
 
+        /// <summary>공통 프레임 골격을 만든다. size는 service + 데이터 블록 + 체크섬 길이다.</summary>
         private static byte[] Frame(byte serviceCode, byte[] dataBlock)
         {
             int size = dataBlock.Length + 2;
@@ -97,6 +108,7 @@ namespace HeatingCameraSystem.Protocols
             return frame;
         }
 
+        /// <summary>바이트 합의 2의 보수 — 체크섬까지 더한 프레임 전체 합이 0이 되게 한다.</summary>
         private static byte Checksum(byte[] frame, int count)
         {
             int sum = 0;

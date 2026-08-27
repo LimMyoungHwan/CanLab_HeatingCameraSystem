@@ -7,6 +7,10 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Master.Services
 {
+    /// <summary>
+    /// 촬영 이력을 LiteDB <c>capture_history</c> 컬렉션에 보관하는 저장소.
+    /// Timestamp·CameraId 인덱스를 만들고 조회는 항상 최신순(Timestamp 내림차순)이다.
+    /// </summary>
     public class LiteDbCaptureHistoryRepository : ICaptureHistoryRepository
     {
         private readonly ILiteCollection<CaptureHistoryRecord> _col;
@@ -24,6 +28,7 @@ namespace HeatingCameraSystem.Master.Services
             return Task.CompletedTask;
         }
 
+        /// <summary>기간 내 이력을 최신순으로 페이징 조회한다. cameraId를 주면 해당 카메라로 한정한다.</summary>
         public Task<IEnumerable<CaptureHistoryRecord>> QueryAsync(
             DateTime from, DateTime to, string? cameraId = null, int page = 1, int pageSize = 10)
         {
@@ -51,6 +56,7 @@ namespace HeatingCameraSystem.Master.Services
             return Task.FromResult<IEnumerable<CaptureHistoryRecord>>(results);
         }
 
+        /// <summary><see cref="QueryAsync"/>와 같은 조건에 해당하는 이력 건수를 센다.</summary>
         public Task<int> CountAsync(DateTime from, DateTime to, string? cameraId = null)
         {
             int count;

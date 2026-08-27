@@ -6,8 +6,10 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Master.Services
 {
-    // 비레시피 캡처(수동/AgentUI)만 capture_history에 기록. 레시피 캡처는 RecipeEngine이 동기 PLC
-    // 온습도까지 채워 직접 기록하므로 여기선 무시(RecipeStepId 있음 or Source==Recipe) — 중복 방지.
+    /// <summary>
+    /// 비레시피 캡처(수동/AgentUI)만 capture_history에 기록한다. 레시피 캡처는 RecipeEngine이 동기 PLC
+    /// 온습도까지 채워 직접 기록하므로 여기선 무시한다(RecipeStepId 있음 or Source==Recipe) — 중복 방지.
+    /// </summary>
     public sealed class CaptureResultHistoryRecorder : IDisposable
     {
         private readonly ICaptureHistoryRepository _repo;
@@ -25,6 +27,11 @@ namespace HeatingCameraSystem.Master.Services
             _snapshot = snapshot;
         }
 
+        /// <summary>
+        /// 성공한 비레시피 캡처를 이미지 캐시에 저장하고 이력에 남긴다.
+        /// NATS 콜백 스레드에서 호출되며 세마포어로 한 번에 하나씩만 처리한다.
+        /// 저장 실패는 디버그 로그만 남기고 삼킨다.
+        /// </summary>
         public async Task RecordAsync(CaptureResultMessage result)
         {
             if (!result.IsSuccess) return;

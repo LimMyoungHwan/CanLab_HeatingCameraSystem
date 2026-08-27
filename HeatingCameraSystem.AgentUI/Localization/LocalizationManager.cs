@@ -7,6 +7,7 @@ using System.Linq;
 
 namespace HeatingCameraSystem.AgentUI.Localization
 {
+    /// <summary>언어 선택 UI에 표시되는 항목(언어 코드 + 표시명).</summary>
     public sealed class LanguageOption
     {
         public string Code { get; init; } = string.Empty;
@@ -15,9 +16,9 @@ namespace HeatingCameraSystem.AgentUI.Localization
     }
 
     /// <summary>
-    /// Runtime i18n from external <c>Resources/Lang/&lt;code&gt;.txt</c> files (key=value, # comments).
-    /// Drop a new txt file next to the exe to add a language — no rebuild. English is the fallback
-    /// when the active language is missing a key. XAML binds via the <c>{loc:Loc Key}</c> extension.
+    /// 외부 <c>Resources/Lang/&lt;code&gt;.txt</c> 파일(key=value, # 주석) 기반 런타임 i18n.
+    /// exe 옆에 새 txt 파일을 놓기만 하면 언어가 추가된다 — 재빌드 불필요. 활성 언어에 키가 없으면
+    /// 영어가 fallback이다. XAML은 <c>{loc:Loc Key}</c> 확장으로 바인딩한다.
     /// </summary>
     public sealed class LocalizationManager : INotifyPropertyChanged
     {
@@ -48,6 +49,7 @@ namespace HeatingCameraSystem.AgentUI.Localization
             SetLanguage(LoadPreferredCode(), persist: false);
         }
 
+        /// <summary>키 조회: 활성 언어 → 영어 fallback → 키 문자열 자체 순으로 반환한다.</summary>
         public string this[string key]
         {
             get
@@ -70,11 +72,12 @@ namespace HeatingCameraSystem.AgentUI.Localization
             _current = Load(code);
             _currentCode = code;
             if (persist) SavePreferredCode(code);
-            // "Item[]" is WPF's indexer-change token: refreshes every {loc:Loc} binding at once.
+            // "Item[]"은 WPF의 인덱서 변경 토큰: 모든 {loc:Loc} 바인딩을 한 번에 갱신한다.
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentLanguage)));
         }
 
+        /// <summary>LangDir의 txt 파일을 훑어 언어 목록을 만든다. 표시명은 각 파일의 Lang_Name 키에서 읽는다.</summary>
         private void Discover()
         {
             var list = new List<LanguageOption>();

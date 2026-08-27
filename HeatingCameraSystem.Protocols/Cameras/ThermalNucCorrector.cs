@@ -5,12 +5,11 @@ using HeatingCameraSystem.Core.Models;
 namespace HeatingCameraSystem.Protocols.Cameras
 {
     /// <summary>
-    /// Per-camera flat-field correction captured with the shutter closed: a one-point (offset)
-    /// non-uniformity map removes the fixed-pattern shading/gradient, and outlier ("dead") pixels
-    /// detected against their local neighborhood are replaced with the neighbor average. Gain
-    /// non-uniformity needs a two-point (cold/hot blackbody) calibration and is out of scope here.
-    /// Maps are swapped atomically, so <see cref="Apply"/> on the frame threads never tears against
-    /// a capture on another thread.
+    /// 셔터를 닫은 상태에서 캡처하는 카메라별 flat-field 보정. 1점(오프셋) 불균일 맵으로
+    /// 고정 패턴 음영/그라디언트를 제거하고, 국소 이웃 대비 이상치("dead") 픽셀은 이웃 평균으로
+    /// 대체한다. 게인 불균일은 2점(저온/고온 흑체) 교정이 필요하므로 여기서는 다루지 않는다.
+    /// 맵은 원자적으로 교체되므로 프레임 스레드의 <see cref="Apply"/>가 다른 스레드의 캡처와
+    /// 절대 찢어지지 않는다.
     /// </summary>
     public sealed class ThermalNucCorrector
     {
@@ -24,6 +23,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
         public int DeadPixelCount => _deadPixels?.Length ?? 0;
 
+        /// <summary>보정 기준을 버린다. 이후 <see cref="Apply"/>는 입력을 그대로 통과시킨다.</summary>
         public void Clear()
         {
             _offset = null;
@@ -32,8 +32,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
         }
 
         /// <summary>
-        /// Builds the offset map and the dead-pixel map from an averaged flat-field frame
-        /// (shutter closed).
+        /// 평균화된 flat-field 프레임(셔터 닫힘)에서 오프셋 맵과 dead 픽셀 맵을 만든다.
         /// </summary>
         public void CaptureFromFlat(ThermalFrame flat)
         {
@@ -53,7 +52,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             DetectDeadPixels(px, flat.Width, flat.Height);
         }
 
-        /// <summary>Returns a corrected frame, or the input unchanged when no reference is set.</summary>
+        /// <summary>보정된 프레임을 반환한다. 기준이 없으면 입력을 그대로 반환한다.</summary>
         public ThermalFrame Apply(ThermalFrame frame)
         {
             int[]? offset = _offset;
@@ -84,9 +83,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
             return new ThermalFrame(outPx, frame.Width, frame.Height, frame.Timestamp);
         }
 
-        // Flags pixels that deviate from their 5x5 local median far beyond the typical noise spread
-        // (robust to the FPN gradient), then precomputes each one's good neighbors so the per-frame
-        // correction is a cheap neighbor average. Runs once per capture.
+        // 5x5 국소 중앙값에서 통상 노이즈 산포를 크게 벗어난 픽셀을 표시하고(FPN 그라디언트에
+        // 강건), 각 픽셀의 정상 이웃을 미리 계산해 프레임별 보정이 값싼 이웃 평균이 되게 한다.
+        // 캡처당 한 번 실행된다.
         private void DetectDeadPixels(ushort[] px, int w, int h)
         {
             if (w <= 0 || h <= 0 || px.Length != w * h)

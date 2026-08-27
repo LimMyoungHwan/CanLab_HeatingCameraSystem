@@ -6,9 +6,9 @@ using OpenCvSharp;
 namespace HeatingCameraSystem.Protocols.Cameras.CL
 {
     /// <summary>
-    /// Real CLTC thermal frame source: opens the UVC camera in raw Y16 mode
-    /// (FourCC "Y16 ", ConvertRgb=0) and reads 14-bit masked thermal frames.
-    /// Mirrors the proven acquisition logic in <see cref="CltcLiveThermalCamera"/>.
+    /// 실제 CLTC 열화상 프레임 소스: UVC 카메라를 raw Y16 모드(FourCC "Y16 ", ConvertRgb=0)로
+    /// 열어 14비트로 마스킹된 열화상 프레임을 읽는다. <see cref="CltcLiveThermalCamera"/>에서
+    /// 검증된 획득 로직을 그대로 따른다.
     /// </summary>
     public sealed class CltcThermalFrameSource : IThermalFrameSource
     {
@@ -21,6 +21,7 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
             _cameraIndex = cameraIndex;
         }
 
+        /// <summary>카메라를 연다. 이미 열려 있으면 무시하고, 열기에 실패하면 예외를 던진다.</summary>
         public void Open()
         {
             if (_capture is not null)
@@ -42,6 +43,10 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
             _mat = new Mat();
         }
 
+        /// <summary>
+        /// 프레임 하나를 읽어 14비트로 마스킹해 반환한다. 미오픈·읽기 실패·형식 불일치는 예외 없이
+        /// null을 반환하므로, 지속되면 CameraRuntime의 프레임 기아 감시가 Faulted로 떨어뜨린다.
+        /// </summary>
         public ThermalFrame? Read()
         {
             var capture = _capture;

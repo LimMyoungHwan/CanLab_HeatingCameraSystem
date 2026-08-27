@@ -7,6 +7,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
     /// <summary>
     /// 하드웨어 없이 동작하는 가짜 USB-Serial 열거자.
     /// SimulationMode=true 시 WmiUsbSerialEnumerator 대신 사용.
+    /// 고정 2개 포트(COM7, COM8)를 즉시 반환하며 포트 추가·제거는 시뮬레이션하지 않는다.
     /// UsbParentId 규약은 FakeCameraEnumerator와 공유되어 카메라↔COM 페어링 조인이 가능하다.
     /// </summary>
     public class FakeUsbSerialEnumerator : IUsbSerialEnumerator

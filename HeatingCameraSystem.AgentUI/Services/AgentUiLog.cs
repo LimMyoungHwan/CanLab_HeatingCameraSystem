@@ -6,20 +6,20 @@ using Serilog.Formatting.Compact;
 namespace HeatingCameraSystem.AgentUI.Services
 {
     /// <summary>
-    /// Process-wide Serilog logger for AgentUI. Writes compact-JSON (CLEF) <c>.ndjson</c> that the
-    /// in-app log viewer reads back via <c>NdjsonLogReader</c>, one rolling file per day under
-    /// <see cref="LogDir"/>, plus a human-readable console line for attached debugging.
-    /// <see cref="Initialize"/> is idempotent; <see cref="CloseAndFlush"/> is called on shutdown.
+    /// AgentUI 프로세스 전역 Serilog 로거. 인앱 로그 뷰어가 <c>NdjsonLogReader</c>로 되읽는
+    /// compact-JSON(CLEF) <c>.ndjson</c>을 <see cref="LogDir"/> 아래 일 단위 롤링 파일로 쓰고,
+    /// 디버거 연결 시 읽기 좋은 콘솔 라인도 함께 남긴다.
+    /// <see cref="Initialize"/>는 멱등이며 <see cref="CloseAndFlush"/>는 종료 시 호출된다.
     /// </summary>
     public static class AgentUiLog
     {
         private static readonly object Gate = new();
         private static bool _initialized;
 
-        /// <summary>Directory holding the rolling <c>agentui-*.ndjson</c> files.</summary>
+        /// <summary>롤링 <c>agentui-*.ndjson</c> 파일이 쌓이는 디렉터리.</summary>
         public static string LogDir => Path.Combine(AgentUiConfig.ConfigDir, "logs");
 
-        /// <summary>The active logger (Serilog's no-op logger until <see cref="Initialize"/> runs).</summary>
+        /// <summary>활성 로거(<see cref="Initialize"/> 전에는 Serilog의 no-op 로거).</summary>
         public static ILogger Logger => Log.Logger;
 
         public static void Initialize()

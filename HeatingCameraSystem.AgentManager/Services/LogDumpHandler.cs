@@ -10,6 +10,10 @@ using Microsoft.Extensions.Logging;
 
 namespace HeatingCameraSystem.AgentManager.Services
 {
+    /// <summary>
+    /// <c>server.req.log.{PCId}</c>의 로그 덤프 요청을 받아 해당 Agent의 로그 파일들을 모아
+    /// gzip 압축한 뒤 <c>agent-mgr.log.dump.{PCId}</c>로 응답한다.
+    /// </summary>
     public class LogDumpHandler
     {
         private readonly INatsCommunicationService _nats;
@@ -24,11 +28,16 @@ namespace HeatingCameraSystem.AgentManager.Services
             _logger   = logger;
         }
 
+        /// <summary><c>server.req.log.{PCId}</c> 구독을 시작한다.</summary>
         public void Subscribe()
         {
             _nats.SubscribeLogDumpRequestAsync(_settings.PCId, req => _ = HandleAsync(req));
         }
 
+        /// <summary>
+        /// 로그 파일을 이름 내림차순(최신 우선)으로 이어 붙이되, MaxBytes를 넘게 만드는 파일은
+        /// 뒷부분만 잘라 넣고 중단하며 IsTruncated를 참으로 둔다. 결과는 gzip 압축해 발행한다.
+        /// </summary>
         private async Task HandleAsync(LogDumpRequestMessage req)
         {
             _logger.LogInformation("LogDump requested for {AgentId}, max={Max}B", req.AgentId, req.MaxBytes);

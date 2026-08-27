@@ -5,12 +5,14 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Protocols.Cameras
 {
-    // Adds a CameraDescriptor for each detected camera pair that isn't already in the list, keyed by a
-    // stable identity (app-level S/N first, USB ContainerId fallback). AgentId is auto-numbered
-    // "{host}_Agent_{n}", continuing past the highest existing number for this host. Mutates the list in
-    // place and returns how many were added. Run at startup and on hotplug BEFORE the serial/video
-    // reconcile refines COM ports and OpenCvIndex. Devices with neither a usable S/N nor a ContainerId are
-    // skipped — there is no stable key to dedupe them on, so registering would duplicate on every launch.
+    /// <summary>
+    /// 감지된 카메라 페어 중 목록에 아직 없는 것마다 CameraDescriptor를 추가한다. 키는 안정적
+    /// 정체성(앱 수준 S/N 우선, USB ContainerId 폴백)이다. AgentId는 "{host}_Agent_{n}"으로 자동
+    /// 번호가 붙고, 이 호스트의 기존 최대 번호 다음부터 이어진다. 목록을 제자리에서 수정하고
+    /// 추가된 개수를 반환한다. 시작 시와 핫플러그 때, 시리얼/비디오 리컨사일이 COM 포트와
+    /// OpenCvIndex를 다듬기 전에 실행한다. 쓸 만한 S/N도 ContainerId도 없는 장치는 건너뛴다 —
+    /// 중복 제거에 쓸 안정적 키가 없어, 등록하면 실행할 때마다 중복이 생기기 때문이다.
+    /// </summary>
     public static class CameraAutoRegistrar
     {
         public static int Register(IList<CameraDescriptor> cameras, IReadOnlyList<CameraComPair> pairs, string host)
@@ -48,10 +50,12 @@ namespace HeatingCameraSystem.Protocols.Cameras
             return added;
         }
 
-        // Fallback for when serial pairing yields no pair (broken/absent COM port, or a WMI hiccup):
-        // register a thermal camera from the video enumeration alone so its panel + live video still
-        // come up. Keys on UsbContainerId only (no serial S/N here); skips non-thermal names and devices
-        // with no stable ContainerId. Reuses Register's host numbering + dedupe.
+        /// <summary>
+        /// 시리얼 페어링이 페어를 못 만들 때(COM 포트 고장/부재, WMI 오동작)의 폴백: 비디오 열거만으로
+        /// 열화상 카메라를 등록해 패널과 라이브 영상이라도 뜨게 한다. 키는 UsbContainerId뿐이며
+        /// (여기엔 시리얼 S/N이 없다), 열화상이 아닌 이름과 안정적 ContainerId가 없는 장치는 건너뛴다.
+        /// Register의 호스트 번호 매기기와 중복 제거를 재사용한다.
+        /// </summary>
         public static int RegisterVideoOnly(
             IList<CameraDescriptor> cameras,
             IReadOnlyList<VideoDevice> devices,
@@ -127,7 +131,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             return false;
         }
 
-        // A blank or all-zeros S/N is an unprogrammed test camera — not a real identity key; fall back to ContainerId.
+        // 비어 있거나 전부 0인 S/N은 프로그래밍되지 않은 테스트 카메라 — 실제 정체성 키가 아니므로 ContainerId로 폴백한다.
         private static bool IsUsableSerial(string? serial) =>
             !string.IsNullOrWhiteSpace(serial) && serial.Any(c => c is >= '1' and <= '9');
     }

@@ -12,6 +12,11 @@ using Microsoft.Win32;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
+    /// <summary>
+    /// 레시피 편집 그리드의 스텝 1행. 좌표는 mm, 온도는 ℃ 단위다.
+    /// <see cref="CameraIndex"/>·<see cref="TargetPositionIndex"/>가 실제 값이고,
+    /// NodeAssignment 문자열은 표시용이자 값이 0일 때의 파싱 폴백이다.
+    /// </summary>
     public partial class RecipeStepModel : ObservableObject
     {
         [ObservableProperty] private int _stepNumber;
@@ -26,6 +31,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         public int TargetPositionIndex { get; set; }
     }
 
+    /// <summary>미리보기 카메라 선택 콤보의 항목(온라인 Agent 카메라 1대).</summary>
     public sealed class AgentCameraOption
     {
         public string AgentId { get; init; } = string.Empty;
@@ -33,6 +39,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         public string Label => $"{AgentId} (CAM-{CameraIndex:D2})";
     }
 
+    /// <summary>레시피 1건의 편집용 모델. 도메인 <see cref="Recipe"/>와 ToDomain/FromDomain으로 상호 변환한다.</summary>
     public partial class RecipeModel : ObservableObject
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
@@ -48,6 +55,11 @@ namespace HeatingCameraSystem.Master.ViewModels
         public ObservableCollection<RecipeStepModel> Steps { get; } = new();
     }
 
+    /// <summary>
+    /// 레시피 편집 화면. 레시피 CRUD·복사·JSON 가져오기/내보내기, 스텝 편집(추가·삭제·순서 이동),
+    /// 그리고 좌표 잡기를 위한 서보 이동·JOG와 카메라 라이브 미리보기를 담당한다.
+    /// NATS 콜백은 백그라운드 스레드로 오므로 UI 갱신은 Dispatcher로 마샬링한다.
+    /// </summary>
     public partial class RecipeEditorViewModel : ObservableObject, IDisposable
     {
         public ObservableCollection<RecipeModel> Recipes { get; } = new ObservableCollection<RecipeModel>();
@@ -66,6 +78,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 SelectRecipe(Recipes[0]);
         }
 
+        /// <summary>레시피를 선택하고 목록의 선택 하이라이트를 옮긴다.</summary>
         [RelayCommand]
         private void SelectRecipe(RecipeModel recipe)
         {
@@ -76,6 +89,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public event EventHandler? RecipeAdded;
 
+        /// <summary>기본값으로 새 레시피를 만들고 즉시 저장·선택한다.</summary>
         [RelayCommand]
         private void AddRecipe()
         {
@@ -86,6 +100,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             RecipeAdded?.Invoke(this, EventArgs.Empty);
         }
 
+        /// <summary>선택 레시피를 새 Id로 복제해 저장·선택한다. 이름에는 "(복사)"가 붙는다.</summary>
         [RelayCommand]
         private void CopyRecipe()
         {
@@ -99,6 +114,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             SelectRecipe(vm);
         }
 
+        /// <summary>선택 레시피를 저장하고 수정 시각을 갱신한다.</summary>
         [RelayCommand]
         private void SaveRecipe()
         {
@@ -107,6 +123,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             AppServices.RecipeRepo.SaveAsync(ToDomain(SelectedRecipe)).GetAwaiter().GetResult();
         }
 
+        /// <summary>레시피를 삭제한다. 선택 중이던 레시피였다면 남은 첫 레시피를 선택한다.</summary>
         [RelayCommand]
         private void DeleteRecipe(RecipeModel recipe)
         {
@@ -117,6 +134,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 SelectedRecipe = Recipes.FirstOrDefault();
         }
 
+        /// <summary>다음 번호의 스텝을 추가한다. 기본값은 "Position N -> CAM-N" 짝이다.</summary>
         [RelayCommand]
         private void AddStep()
         {
@@ -132,6 +150,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             });
         }
 
+        /// <summary>스텝을 삭제하고 남은 스텝 번호를 1부터 다시 매긴다.</summary>
         [RelayCommand]
         private void DeleteStep(RecipeStepModel step)
         {
@@ -141,6 +160,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 SelectedRecipe.Steps[i].StepNumber = i + 1;
         }
 
+        /// <summary>드래그&amp;드롭으로 스텝(Item1)을 대상 스텝(Item2) 위치로 옮기고 번호를 다시 매긴다.</summary>
         [RelayCommand]
         private void MoveStep(Tuple<RecipeStepModel, RecipeStepModel> param)
         {
@@ -155,6 +175,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>선택 레시피를 JSON 파일로 내보낸다.</summary>
         [RelayCommand]
         private void ExportRecipe()
         {
@@ -172,6 +193,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             File.WriteAllText(dlg.FileName, json);
         }
 
+        /// <summary>JSON 파일에서 레시피를 가져온다. Id는 새로 발급해 기존 레시피를 덮어쓰지 않는다.</summary>
         [RelayCommand]
         private void ImportRecipe()
         {
@@ -200,6 +222,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>촬영 방식 토글. "Sequential"이면 순차 모드, 그 외는 동시 모드다.</summary>
         [RelayCommand]
         private void SetCaptureMode(string mode)
         {
@@ -207,6 +230,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 SelectedRecipe.IsSequentialMode = mode == "Sequential";
         }
 
+        /// <summary>레시피 깊은 복사본을 새 Id와 "(복사)" 이름으로 만든다. 스텝 목록까지 복제한다.</summary>
         public static Recipe CloneRecipe(Recipe source)
         {
             return new Recipe
@@ -231,6 +255,10 @@ namespace HeatingCameraSystem.Master.ViewModels
             };
         }
 
+        /// <summary>
+        /// 편집 모델을 도메인 <see cref="Recipe"/>로 변환한다. CameraIndex/TargetPositionIndex가
+        /// 0이면 NodeAssignment 문자열 파싱으로 폴백한다(구버전 데이터 호환).
+        /// </summary>
         private static Recipe ToDomain(RecipeModel vm)
         {
             var r = new Recipe
@@ -255,6 +283,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             return r;
         }
 
+        /// <summary>도메인 <see cref="Recipe"/>를 편집 모델로 변환하고 스텝 번호·표시 문자열을 만든다.</summary>
         private static RecipeModel FromDomain(Recipe r)
         {
             var vm = new RecipeModel { Id = r.Id, Name = r.Name, TargetChamberTemp = r.GlobalTargetTemperature, RampMinutes = r.TemperatureRampMinutes, TargetChamberHumidity = r.GlobalTargetHumidity, LastModified = DateTime.Now.ToString("g") };
@@ -275,12 +304,14 @@ namespace HeatingCameraSystem.Master.ViewModels
             return vm;
         }
 
+        /// <summary>"Position NN -> CAM-NN" 표시 문자열에서 카메라 인덱스를 파싱한다. 실패 시 1.</summary>
         private static int ParseCameraIndex(string s)
         {
             try { var p = s.Split(new[] { "-> CAM-" }, StringSplitOptions.None); if (p.Length > 1 && int.TryParse(p[1].Trim(), out int v)) return v; } catch { }
             return 1;
         }
 
+        /// <summary>"Position NN -> CAM-NN" 표시 문자열에서 포지션 인덱스를 파싱한다. 실패 시 1.</summary>
         private static int ParsePositionIndex(string s)
         {
             try { var p = s.Replace("Position ", "").Split(new[] { " ->" }, StringSplitOptions.None); if (p.Length > 0 && int.TryParse(p[0].Trim(), out int v)) return v; } catch { }
@@ -320,6 +351,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             });
         }
 
+        /// <summary>선택된 미리보기 카메라의 프레임만 디코드해 표시한다. 나머지 카메라 프레임은 버린다.</summary>
         private void OnLiveFrame(LiveFrameMessage msg)
         {
             if (msg.ImageBytes is null || msg.ImageBytes.Length == 0) return;
@@ -332,6 +364,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => CurrentPreview = bmp));
         }
 
+        /// <summary>JPEG 바이트를 디코드한다. Freeze로 스레드 간 전달을 허용하며, 손상 데이터는 null을 반환한다.</summary>
         private static System.Windows.Media.Imaging.BitmapSource? Decode(byte[] jpeg)
         {
             try
@@ -353,6 +386,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         partial void OnSelectedPreviewCameraChanged(AgentCameraOption? value) => CurrentPreview = null;
 
+        /// <summary>선택 스텝의 좌표(mm)로 서보를 이동시킨다.</summary>
         [RelayCommand]
         private async System.Threading.Tasks.Task GoToXyAsync()
         {
@@ -362,6 +396,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>현재 서보 X 위치(mm)를 선택 스텝의 X 좌표로 채운다.</summary>
         [RelayCommand]
         private async System.Threading.Tasks.Task UseCurrentXAsync()
         {
@@ -375,6 +410,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>현재 서보 Y 위치(mm)를 선택 스텝의 Y 좌표로 채운다.</summary>
         [RelayCommand]
         private async System.Threading.Tasks.Task UseCurrentYAsync()
         {
@@ -388,6 +424,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>X·Y축을 차례로 원점 복귀시킨다.</summary>
         [RelayCommand]
         private async System.Threading.Tasks.Task HomeServoAsync()
         {
@@ -398,6 +435,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>선택된 미리보기 카메라에 카메라 제어 명령(Run/Stop/셔터)을 발행한다.</summary>
         private async System.Threading.Tasks.Task SendCameraOpAsync(string op)
         {
             var sel = SelectedPreviewCamera;
@@ -423,13 +461,15 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand] private System.Threading.Tasks.Task StartCameraAsync() => SendCameraOpAsync(CameraControlOps.Run);
         [RelayCommand] private System.Threading.Tasks.Task StopCameraAsync() => SendCameraOpAsync(CameraControlOps.Stop);
 
+        /// <summary>JOG 이동 시작(버튼 누름). View 코드비하인드가 직접 호출한다.</summary>
         public System.Threading.Tasks.Task StartJog(ServoAxis axis, bool positive) => AppServices.PlcController?.JogAsync(axis, positive, true) ?? System.Threading.Tasks.Task.CompletedTask;
+        /// <summary>JOG 이동 정지(버튼 뗌). View 코드비하인드가 직접 호출한다.</summary>
         public System.Threading.Tasks.Task StopJog(ServoAxis axis, bool positive) => AppServices.PlcController?.JogAsync(axis, positive, false) ?? System.Threading.Tasks.Task.CompletedTask;
 
         public void Dispose()
         {
-            // ponytail: NatsCommunicationService has no unsubscribe API (fire-and-forget loops),
-            // same as ManualControlViewModel — nothing to release here.
+            // ponytail: NatsCommunicationService에는 구독 해제 API가 없다(fire-and-forget 루프).
+            // ManualControlViewModel과 같은 상황이므로 여기서 해제할 것이 없다.
         }
     }
 }

@@ -9,6 +9,10 @@ using HeatingCameraSystem.Protocols.Cameras;
 
 namespace HeatingCameraSystem.AgentUI.ViewModels
 {
+    /// <summary>
+    /// CaptureStore에 저장된 캡처 이력을 조회·미리보기·삭제하고 보존 기간 기준으로 정리하는
+    /// 데이터 브라우저 뷰모델.
+    /// </summary>
     public partial class DataBrowserViewModel : ObservableObject
     {
         private readonly CaptureStore _store;

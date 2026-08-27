@@ -6,6 +6,11 @@ using OpenCvSharp;
 
 namespace HeatingCameraSystem.Protocols.Cameras
 {
+    /// <summary>
+    /// 캡처된 <see cref="ThermalFrame"/>을 Agent별 폴더에 방사 측정용 .y16 원본 + .json 메타데이터로
+    /// 기록한다. 파일명은 타임스탬프 기반이며 같은 이름이 이미 있으면 숫자 접미사를 붙여 덮어쓰지
+    /// 않는다. <see cref="CaptureImageFormat.Tiff16"/> 형식이면 열람용 16비트 .tif도 함께 남긴다.
+    /// </summary>
     public sealed class ThermalCaptureWriter
     {
         private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
@@ -20,6 +25,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             Directory.CreateDirectory(_rootDir);
         }
 
+        /// <summary>프레임을 .y16 + .json(형식에 따라 .tif 추가)으로 기록하고 생성 파일 경로를 반환한다.</summary>
         public CaptureFiles Write(ThermalFrame frame, string agentId, int cameraIndex, string? recipeStepId = null)
         {
             if (frame is null) throw new ArgumentNullException(nameof(frame));

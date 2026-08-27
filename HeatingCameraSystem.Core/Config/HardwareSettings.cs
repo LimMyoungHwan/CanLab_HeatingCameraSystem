@@ -2,6 +2,9 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Core.Config
 {
+    /// <summary>
+    /// 시스템 전역 하드웨어/런타임 설정. hardware.json 으로 직렬화되며, 최초 실행 시 기본값으로 자동 생성된다.
+    /// </summary>
     public class HardwareSettings
     {
         /// <summary>
@@ -17,6 +20,7 @@ namespace HeatingCameraSystem.Core.Config
         /// </summary>
         public int DataRetentionDays { get; set; } = 30;
 
+        /// <summary>카메라↔COM 포트 페어링 목록(S/N·ContainerId 기반). 부팅 시 실제 장치와 재조정된다.</summary>
         public List<CameraPairingEntry> CameraPairings { get; set; } = new();
 
         public PlcSettings Plc { get; set; } = new();
@@ -164,11 +168,15 @@ namespace HeatingCameraSystem.Core.Config
         public string AdminPairGlassBoundary { get; set; } = "D1930";  // ×10 ℃
     }
 
+    /// <summary>NATS 메시지 버스 접속 설정.</summary>
     public class NatsSettings
     {
         public string Url { get; set; } = "nats://127.0.0.1:4222";
     }
 
+    /// <summary>
+    /// 카메라 시리얼 셔터 기본 포트 설정(기본 COM3, 9600 8N1). 실제 가상 포트 구성에 맞게 조정한다.
+    /// </summary>
     public class SerialSettings
     {
         public string PortName { get; set; } = "COM3";
@@ -199,12 +207,14 @@ namespace HeatingCameraSystem.Core.Config
         };
     }
 
+    /// <summary>흑체(SR-800N) 유닛 연결 방식.</summary>
     public enum BlackBodyConnectionType
     {
         Serial,
         Ip
     }
 
+    /// <summary>흑체 유닛 1대의 연결 설정. Serial = RS-232(기본 115200 8N1), Ip = TCP.</summary>
     public class BlackBodyUnitSettings
     {
         public BlackBodyConnectionType ConnectionType { get; set; } = BlackBodyConnectionType.Serial;
@@ -217,6 +227,7 @@ namespace HeatingCameraSystem.Core.Config
         public int Port { get; set; } = 5000;
     }
 
+    /// <summary>레시피 실행 엔진 설정(온도 허용오차, 캡처 결과 타임아웃, 온도 램프 스텝 간격).</summary>
     public class RecipeEngineSettings
     {
         public float TemperatureTolerance { get; set; } = 0.5f;

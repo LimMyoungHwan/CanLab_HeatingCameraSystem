@@ -10,8 +10,8 @@ namespace HeatingCameraSystem.Master.Services
     /// </summary>
     public sealed class ChamberHistoryRecorder : IDisposable
     {
-        // ponytail: fixed 30s record interval — no per-deployment knob yet;
-        // promote to HardwareSettings if operators need to tune sampling density.
+        // ponytail: 기록 간격 30초 고정 — 아직 배포별 조정 노브가 없다.
+        // 운영자가 샘플링 밀도를 조절해야 하면 HardwareSettings로 올릴 것.
         private const int RecordIntervalSeconds = 30;
 
         private readonly IChamberHistoryRepository _repo;
@@ -32,6 +32,10 @@ namespace HeatingCameraSystem.Master.Services
         internal static bool ShouldRecord(DateTime? last, DateTime now, int intervalSeconds)
             => last is null || (now - last.Value).TotalSeconds >= intervalSeconds;
 
+        /// <summary>
+        /// Updated 이벤트 핸들러. 기록 간격을 통과한 샘플만 fire-and-forget으로 INSERT하며,
+        /// 저장 실패는 디버그 로그만 남긴다.
+        /// </summary>
         private void OnPlcStatusUpdated(object? sender, PlcStatusSnapshot snapshot)
         {
             var now = DateTime.UtcNow;

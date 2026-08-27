@@ -8,20 +8,20 @@ using HeatingCameraSystem.Core.Models;
 namespace HeatingCameraSystem.Protocols.Cameras
 {
     /// <summary>
-    /// Reads Serilog compact-JSON (CLEF) <c>.ndjson</c> log files for the AgentUI log viewer.
-    /// Pure parsing (no WPF, no Serilog dependency) so it is unit-testable off the UI thread.
-    /// Files are opened with <see cref="FileShare.ReadWrite"/> so the viewer can read a log that
-    /// the Serilog file sink is still writing to. Malformed / partial lines are skipped.
+    /// AgentUI 로그 뷰어용 Serilog compact-JSON(CLEF) <c>.ndjson</c> 로그 파일 리더.
+    /// 순수 파싱(WPF·Serilog 의존성 없음)이라 UI 스레드 밖에서 단위 테스트할 수 있다.
+    /// 파일을 <see cref="FileShare.ReadWrite"/>로 열므로 Serilog 파일 싱크가 아직 쓰고 있는
+    /// 로그도 읽을 수 있다. 손상되었거나 불완전한 줄은 건너뛴다.
     /// </summary>
     public static class NdjsonLogReader
     {
         /// <summary>
-        /// Reads entries from a single <c>.ndjson</c> file or every <c>.ndjson</c> in a directory,
-        /// keeping only entries at or above <paramref name="minLevel"/>, newest first, capped at
-        /// <paramref name="limit"/>.
+        /// 단일 <c>.ndjson</c> 파일 또는 디렉터리 안의 모든 <c>.ndjson</c>에서 항목을 읽는다.
+        /// <paramref name="minLevel"/> 이상만 남기고, 최신순으로 정렬하며 <paramref name="limit"/>개로
+        /// 자른다.
         /// </summary>
-        // ponytail: reads whole files into memory — fine for operator log volumes; add tailing
-        // (seek to last N KB) if daily logs ever grow to tens of MB.
+        // ponytail: 파일 전체를 메모리로 읽는다 — 운영자 로그 볼륨에는 충분하다. 일일 로그가
+        // 수십 MB로 커지면 테일링(마지막 N KB로 seek)을 추가한다.
         public static IReadOnlyList<LogEntry> Read(
             string logDirOrFile,
             LogEntryLevel minLevel = LogEntryLevel.Verbose,
@@ -87,11 +87,11 @@ namespace HeatingCameraSystem.Protocols.Cameras
             }
             catch (IOException)
             {
-                // best effort: file locked/rotating — skip this pass
+                // 최선 노력: 파일이 잠겼거나 롤링 중 — 이번 패스는 건너뛴다.
             }
             catch (UnauthorizedAccessException)
             {
-                // best effort
+                // 최선 노력
             }
 
             return lines;

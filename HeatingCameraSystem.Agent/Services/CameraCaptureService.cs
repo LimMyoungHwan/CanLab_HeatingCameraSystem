@@ -5,6 +5,10 @@ using HeatingCameraSystem.Core.Interfaces;
 
 namespace HeatingCameraSystem.Agent.Services
 {
+    /// <summary>
+    /// OpenCvSharp VideoCapture로 실제 USB 카메라에서 프레임을 잡아 JPEG로 저장하는 캡처 구현.
+    /// SimulationMode가 아닐 때 사용된다.
+    /// </summary>
     public class CameraCaptureService : ICameraCaptureService, IDisposable
     {
         private VideoCapture? _capture;
@@ -24,6 +28,10 @@ namespace HeatingCameraSystem.Agent.Services
             }
         }
 
+        /// <summary>
+        /// 지정 인덱스로 카메라를 연다. 모델 해상도가 지정된 경우에만 적용하며,
+        /// 해상도 설정 실패는 경고만 남기고 카메라는 그대로 사용한다.
+        /// </summary>
         public bool InitializeCamera(int cameraIndex)
         {
             try
@@ -54,6 +62,10 @@ namespace HeatingCameraSystem.Agent.Services
             }
         }
 
+        /// <summary>
+        /// 프레임 한 장을 읽어 저장 폴더에 <c>capture_yyyyMMdd_HHmmss_fff.jpg</c>로 저장한다.
+        /// 카메라가 열려 있지 않거나 빈 프레임이면 false를 반환한다.
+        /// </summary>
         public bool CaptureFrame(out string savedFilePath)
         {
             savedFilePath = string.Empty;
@@ -74,6 +86,7 @@ namespace HeatingCameraSystem.Agent.Services
             return frame.SaveImage(savedFilePath);
         }
 
+        /// <summary>카메라 핸들을 해제한다. 이후 캡처는 실패를 반환한다.</summary>
         public void Stop()
         {
             _capture?.Release();

@@ -6,6 +6,14 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Protocols.Simulation
 {
+    /// <summary>
+    /// 하드웨어 없이 동작하는 가짜 PLC 컨트롤러. SimulationMode=true 시
+    /// PlcXgtClient(LS XGT FEnet, TCP 2004) 대신 사용한다.
+    /// 네트워크 I/O 없이 모든 명령이 즉시 성공하고 상태는 인메모리로만 유지된다:
+    /// 습도·흑체는 타겟 설정 시 현재값이 즉시 스냅하고, 서보 이동은 즉시 도착 처리된다
+    /// (챔버 온도만 예외 — 타겟과 현재가 분리되어 RecipeEngine의 램프 로직을 검증할 수 있다).
+    /// 연결 전에 명령을 호출하면 InvalidOperationException을 던진다.
+    /// </summary>
     public class FakePlcController : IPlcController, IDisposable
     {
         private readonly object _gate = new();
@@ -30,6 +38,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             get { lock (_gate) return _isConnected; }
         }
 
+        /// <summary>실제 접속 없이 즉시 연결 상태가 되고, 온도 25.0℃·습도 50.0%RH로 초기화한다.</summary>
         public Task ConnectAsync(string ipAddress, int port = 2004)
         {
             lock (_gate)
@@ -50,6 +59,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             Log("Disconnect() -> OK (simulated)");
         }
 
+        /// <summary>로그만 남긴다. 내부 상태 변화는 없다.</summary>
         public Task StartChamberAsync()
         {
             EnsureConnected();
@@ -57,6 +67,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>로그만 남긴다. 내부 상태 변화는 없다.</summary>
         public Task StopChamberAsync()
         {
             EnsureConnected();
@@ -64,6 +75,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>타겟(SV)만 기록한다. 현재 온도(PV)는 변하지 않는다 — 램프는 RecipeEngine이 <see cref="SetControlTemperatureAsync"/>로 밀어 올린다.</summary>
         public Task SetTargetTemperatureAsync(float temperature)
         {
             EnsureConnected();
@@ -72,6 +84,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>현재 온도(PV)가 제어 온도로 즉시 스냅한다. 실 챔버의 승온 지연은 시뮬레이션하지 않는다.</summary>
         public Task SetControlTemperatureAsync(float temperature)
         {
             EnsureConnected();
@@ -88,6 +101,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.FromResult(v);
         }
 
+        /// <summary>목표 설정과 동시에 현재 습도가 목표로 즉시 스냅한다.</summary>
         public Task SetTargetHumidityAsync(float humidity)
         {
             EnsureConnected();
@@ -112,6 +126,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>흑체 현재 온도(PV)가 타겟으로 즉시 스냅한다.</summary>
         public Task SetBlackBodyTemperatureAsync(int blackBodyIndex, float temperature)
         {
             EnsureConnected();
@@ -120,12 +135,14 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>한 번도 설정하지 않은 흑체 인덱스는 25.0℃를 반환한다.</summary>
         public Task<float> GetCurrentBlackBodyTemperatureAsync(int blackBodyIndex)
         {
             EnsureConnected();
             return Task.FromResult(_bbCurrent.GetOrAdd(blackBodyIndex, 25.0f));
         }
 
+        /// <summary>현재 온도만 기록하고 목표 온도는 저장하지 않는다.</summary>
         public Task WriteBlackBodyTemperaturesAsync(int blackBodyIndex, float currentTemperature, float targetTemperature)
         {
             EnsureConnected();
@@ -133,6 +150,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>이동 시간 없이 즉시 도착 처리하고 현재 포인트를 갱신한다.</summary>
         public Task MoveServoToPositionAsync(int positionIndex)
         {
             EnsureConnected();
@@ -141,6 +159,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>마지막 이동 명령의 포인트 인덱스와 비교한 결과를 반환한다. 이동이 즉시 완료되므로 구동 중 상태는 없다.</summary>
         public Task<bool> IsServoAtPositionAsync(int positionIndex)
         {
             EnsureConnected();
@@ -157,6 +176,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>로그만 남긴다. 서보 좌표는 변하지 않는다.</summary>
         public Task JogAsync(ServoAxis axis, bool positive, bool on)
         {
             EnsureConnected();
@@ -164,6 +184,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>해당 축 좌표를 즉시 0으로 되돌린다.</summary>
         public Task HomeAsync(ServoAxis axis)
         {
             EnsureConnected();
@@ -183,12 +204,14 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>한 번도 쓰지 않은 포인트는 (0, 0)을 반환한다.</summary>
         public Task<(float X, float Y)> GetPointCoordinateAsync(int positionIndex)
         {
             EnsureConnected();
             return Task.FromResult(_pointCoords.GetOrAdd(positionIndex, (0f, 0f)));
         }
 
+        /// <summary>이동 시간 없이 서보 좌표를 즉시 목표로 옮기고 현재 포인트를 0으로 둔다.</summary>
         public Task MoveToCoordinateAsync(float x, float y)
         {
             EnsureConnected();
@@ -221,6 +244,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>인메모리 상태를 스냅샷으로 만들어 반환한다. Heater는 항상 true이고 에러 플래그는 채우지 않는다.</summary>
         public Task<PlcStatusSnapshot> ReadStatusAsync()
         {
             EnsureConnected();
@@ -250,6 +274,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.FromResult(snap);
         }
 
+        /// <summary>로그만 남긴다. 내부 상태 변화는 없다.</summary>
         public Task TriggerEmergencyStopAsync()
         {
             EnsureConnected();
@@ -257,6 +282,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>로그만 남긴다. 내부 상태 변화는 없다.</summary>
         public Task ResetErrorAsync()
         {
             EnsureConnected();
@@ -264,6 +290,7 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>로그만 남긴다. 내부 상태 변화는 없다.</summary>
         public Task BuzzerOffAsync()
         {
             EnsureConnected();

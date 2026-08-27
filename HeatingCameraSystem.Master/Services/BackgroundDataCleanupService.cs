@@ -7,8 +7,8 @@ using HeatingCameraSystem.Core.Interfaces;
 namespace HeatingCameraSystem.Master.Services
 {
     /// <summary>
-    /// 주기적으로 오래된 캡처 이미지와 DB 기록을 정리합니다.
-    /// 앱 시작 1분 후 첫 실행, 이후 24시간마다 반복.
+    /// 주기적으로 오래된 캡처 이미지와 DB 기록을 정리한다.
+    /// 앱 시작 1분 후 첫 실행, 이후 24시간마다 반복한다.
     /// </summary>
     public sealed class BackgroundDataCleanupService : IDisposable
     {
@@ -30,6 +30,7 @@ namespace HeatingCameraSystem.Master.Services
             _retentionDays = retentionDays;
         }
 
+        /// <summary>정리 타이머를 건다. 콜백은 UI와 무관하게 스레드풀에서 실행된다.</summary>
         public void Start()
         {
             _timer = new Timer(
@@ -39,8 +40,13 @@ namespace HeatingCameraSystem.Master.Services
                 TimeSpan.FromHours(24));
         }
 
+        /// <summary>타이머를 해제해 이후 정리를 멈춘다. <see cref="Dispose"/>와 동일하다.</summary>
         public void Stop() => _timer?.Dispose();
 
+        /// <summary>
+        /// 보존 기한을 지난 DB 레코드(캡처·챔버 이력)와 저장 루트 아래의 *.jpg 파일을 지운다.
+        /// 파일 기준 시각은 생성 시각(UTC)이며, 잠긴 파일 등 개별 삭제 실패는 무시한다.
+        /// </summary>
         private async Task RunCleanupAsync()
         {
             var cutoff = DateTime.UtcNow.AddDays(-_retentionDays);

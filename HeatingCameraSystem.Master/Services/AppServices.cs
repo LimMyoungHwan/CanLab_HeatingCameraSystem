@@ -14,6 +14,12 @@ using JsonSerializerOptions = System.Text.Json.JsonSerializerOptions;
 
 namespace HeatingCameraSystem.Master.Services
 {
+    /// <summary>
+    /// Master 전체가 공유하는 정적 서비스 로케이터 — 의도적으로 DI 컨테이너를 두지 않는다.
+    /// 서비스를 추가할 때는 여기에 프로퍼티를 더하고 <see cref="Initialize"/>에
+    /// SimulationMode 분기와 실제 하드웨어 분기를 각각 등록한다.
+    /// 테스트가 이 정적 상태를 공유하므로 테스트 스위트는 병렬 실행하지 않는다.
+    /// </summary>
     public static class AppServices
     {
         private static readonly JsonSerializerOptions _jsonOpts = new()
@@ -55,6 +61,11 @@ namespace HeatingCameraSystem.Master.Services
 
         private static string _hardwareJsonPath = string.Empty;
 
+        /// <summary>
+        /// 설정 로드 → LiteDB 열기 → 저장소·마이그레이션 → 프로토콜·엔진·상태 서비스 순으로
+        /// 조립한다. <c>App.OnStartup</c>에서 가장 먼저 호출되며, SimulationMode면 PLC·카메라를
+        /// Fake 구현으로 대체한다. 네트워크 접속은 여기서 하지 않고 <see cref="TryConnectServicesAsync"/>가 맡는다.
+        /// </summary>
         public static void Initialize()
         {
             _disposed = false;
@@ -70,12 +81,12 @@ namespace HeatingCameraSystem.Master.Services
 
             Db = new LiteDatabase(Path.Combine(dir, "data.db"));
 
-            // Recipes now persist as one JSON file each under <dir>/recipe (+ <dir>/recipe bak backups).
+            // 레시피는 이제 <dir>/recipe 아래 JSON 파일 하나씩으로 영속된다(백업은 <dir>/recipe bak).
             var fileRecipeRepo = new FileRecipeRepository(dir);
             try
             {
-                // One-time seed from legacy LiteDB, tracked by a persistent _migrations marker so
-                // recipes the operator later deletes do not resurrect on a later empty-folder startup.
+                // 레거시 LiteDB에서 1회만 시드한다. 영속 _migrations 마커로 추적하므로 운영자가
+                // 나중에 삭제한 레시피가 이후 빈 폴더 기동에서 되살아나지 않는다.
                 MigrationService.MigrateRecipesToFiles(Db, fileRecipeRepo);
             }
             catch (Exception ex)
@@ -130,12 +141,18 @@ namespace HeatingCameraSystem.Master.Services
             _captureRecorder = new CaptureResultHistoryRecorder(HistoryRepo, ImageCacheDir, () => PlcStatus?.Snapshot);
         }
 
+        /// <summary>흑체 컨트롤러를 만든다. SimulationMode면 Fake, 아니면 PLC 경유 SR 실물 구현이다.</summary>
         public static IBlackBodyController CreateBlackBodyController(HardwareSettings settings, IPlcController plc)
         {
             if (settings.SimulationMode) return new FakeBlackBodyController();
             return new SrBlackBodyController(settings.BlackBody, plc: plc);
         }
 
+        /// <summary>
+        /// NATS → PLC → 흑체 순으로 접속을 시도한다. 각 실패는 <see cref="AlarmSink"/> 경고로만
+        /// 보고하고 다음 접속을 계속하므로 일부만 연결된 상태로도 앱은 뜬다.
+        /// NATS 접속 성공 시 Agent 상태·캡처 결과 구독까지 여기서 건다.
+        /// </summary>
         public static async Task TryConnectServicesAsync()
         {
             try
@@ -174,6 +191,10 @@ namespace HeatingCameraSystem.Master.Services
             }
         }
 
+        /// <summary>
+        /// 앱 종료 시 챔버 정지 후 서비스들을 순차 정리한다. <c>_disposed</c> 가드로
+        /// 재진입해도 한 번만 수행한다. 실제 시퀀스는 <see cref="RunShutdownAsync"/>에 있다.
+        /// </summary>
         public static async Task DisposeAsync()
         {
             if (_disposed) return;
@@ -237,11 +258,16 @@ namespace HeatingCameraSystem.Master.Services
             }
         }
 
+        /// <summary>현재 <see cref="Settings"/>를 %LOCALAPPDATA%의 hardware.json에 덮어쓴다.</summary>
         public static void SaveHardwareSettings()
         {
             File.WriteAllText(_hardwareJsonPath, JsonSerializer.Serialize(Settings, _jsonOpts));
         }
 
+        /// <summary>
+        /// hardware.json이 있으면 읽고, 없거나 예외로 읽지 못하면 기본값 파일을 새로 써서 반환한다
+        /// (손상된 파일은 기본값으로 덮어써진다).
+        /// </summary>
         private static HardwareSettings LoadOrCreateSettings(string dir)
         {
             string path = Path.Combine(dir, "hardware.json");

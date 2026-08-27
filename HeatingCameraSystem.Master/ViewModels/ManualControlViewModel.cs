@@ -17,6 +17,7 @@ using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
+    /// <summary>수동 조작 화면 카메라 타일 1칸. 라이브 프레임과 마지막 카메라 제어 ACK 상태를 보여 준다.</summary>
     public partial class CameraTileModel : ObservableObject
     {
         public string AgentId { get; }
@@ -34,6 +35,12 @@ namespace HeatingCameraSystem.Master.ViewModels
         }
     }
 
+    /// <summary>
+    /// 수동 조작 화면. 챔버 기동/정지, 서보 이동·JOG, 온·습도/램프/팬/흑체 설정, 개별 카메라
+    /// 제어(NATS)를 담당한다. 서보 위치 등 현재값은 직접 PLC를 읽지 않고 공용 PlcStatusService
+    /// 스냅샷을 1초 타이머로 복사한다. NATS 콜백은 백그라운드 스레드로 오므로 UI 갱신은
+    /// Dispatcher.Invoke로 마샬링한다.
+    /// </summary>
     public partial class ManualControlViewModel : ObservableObject
     {
         private readonly DispatcherTimer _timer;
@@ -93,7 +100,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private CancellationTokenSource? _rampCts;
         private bool _blackBodyPolling;
 
-        // AppServices does not expose RecipeEngineSettings; use the required local fallback.
+        // AppServices는 RecipeEngineSettings를 노출하지 않으므로 필요한 값을 로컬 기본값으로 둔다.
         private const int RampStepIntervalSeconds = 30;
 
         public int[] PointNumbers { get; } = Enumerable.Range(1, 20).ToArray();
@@ -136,6 +143,10 @@ namespace HeatingCameraSystem.Master.ViewModels
             Application.Current?.Dispatcher.Invoke(() => EnsureTile(msg.AgentId, msg.CameraIndex));
         }
 
+        /// <summary>
+        /// (AgentId, CameraIndex) 타일을 찾거나 새로 만든다. 새 Agent면 카메라 제어 ACK 구독을
+        /// 1회만 등록한다(해제 API가 없으므로 중복 구독 금지). UI 스레드에서만 호출해야 한다.
+        /// </summary>
         private CameraTileModel EnsureTile(string agentId, int cameraIndex)
         {
             var tile = Cameras.FirstOrDefault(c => c.AgentId == agentId && c.CameraIndex == cameraIndex);
@@ -187,6 +198,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             });
         }
 
+        /// <summary>JPEG 바이트를 디코드한다. Freeze로 스레드 간 전달을 허용하며, 손상 데이터는 null을 반환한다.</summary>
         private static BitmapSource? Decode(byte[] jpeg)
         {
             try
@@ -218,29 +230,37 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         partial void OnHumidityControlChanged(bool value) => _ = RunAsync(p => p.SetHumidityControlAsync(value), LocalizationManager.Instance["Manual_HumidityControlLabel"]);
 
+        /// <summary>챔버 기동.</summary>
         [RelayCommand]
         private Task StartChamber() => RunAsync(p => p.StartChamberAsync(), LocalizationManager.Instance["Manual_StartChamber"]);
 
+        /// <summary>챔버 정지.</summary>
         [RelayCommand]
         private Task StopChamber() => RunAsync(p => p.StopChamberAsync(), LocalizationManager.Instance["Manual_StopChamber"]);
 
+        /// <summary>비상정지 트리거.</summary>
         [RelayCommand]
         private Task EmergencyStop() => RunAsync(p => p.TriggerEmergencyStopAsync(), LocalizationManager.Instance["Equip_EStop"]);
 
+        /// <summary>X축 원점 복귀.</summary>
         [RelayCommand]
         private Task HomeX() => RunAsync(p => p.HomeAsync(ServoAxis.X), LocalizationManager.Instance["Manual_HomeXLabel"]);
 
+        /// <summary>Y축 원점 복귀.</summary>
         [RelayCommand]
         private Task HomeY() => RunAsync(p => p.HomeAsync(ServoAxis.Y), LocalizationManager.Instance["Manual_HomeYLabel"]);
 
+        /// <summary>저장된 포인트 번호(1~20)로 서보를 이동시킨다.</summary>
         [RelayCommand]
         private Task MoveToPoint(int index) => RunAsync(p => p.MoveServoToPositionAsync(index), L("Manual_MovePointLabel", index));
 
+        /// <summary>한 축만 절대좌표(mm)로 이동한다. 나머지 축은 현재 위치를 유지한다.</summary>
         [RelayCommand]
         private Task MoveAbsolute(string axis) => axis == "Y"
             ? RunAsync(p => p.MoveToCoordinateAsync(ServoXPosition, AbsoluteTargetY), LocalizationManager.Instance["Manual_MoveYAbs"])
             : RunAsync(p => p.MoveToCoordinateAsync(AbsoluteTargetX, ServoYPosition), LocalizationManager.Instance["Manual_MoveXAbs"]);
 
+        /// <summary>현재 위치 기준 상대 이동(mm). dir은 "X+"/"X-"/"Y+"/"Y-"만 인정한다.</summary>
         [RelayCommand]
         private Task MoveRelative(string dir)
         {
@@ -256,6 +276,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             return RunAsync(p => p.MoveToCoordinateAsync(x, y), L("Manual_RelMoveLabel", dir));
         }
 
+        /// <summary>목표 온도(℃)를 목표값·제어값 두 워드에 함께 쓴다.</summary>
         [RelayCommand]
         private Task ApplyTemperature() => RunAsync(async p =>
         {
@@ -263,11 +284,16 @@ namespace HeatingCameraSystem.Master.ViewModels
             await p.SetControlTemperatureAsync(TargetTemperature);
         }, LocalizationManager.Instance["Manual_TargetTempLabel"]);
 
+        /// <summary>목표 습도(%)를 적용한다.</summary>
         [RelayCommand]
         private Task ApplyHumidity() => RunAsync(p => p.SetTargetHumidityAsync(TargetHumidity), LocalizationManager.Instance["Manual_TargetHumLabel"]);
 
         private bool CanStartRamp() => !IsRamping;
 
+        /// <summary>
+        /// 현재 온도에서 목표 온도까지 <see cref="RampMinutes"/>분에 걸쳐 선형 스텝으로 올린다
+        /// (히터 급출력 방지). 실행 중 재시작은 CanExecute로 막고, 정지는 <see cref="StopRamp"/>가 취소한다.
+        /// </summary>
         [RelayCommand(CanExecute = nameof(CanStartRamp))]
         private async Task StartRampAsync()
         {
@@ -303,21 +329,30 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>진행 중인 온도 램프를 취소한다.</summary>
         [RelayCommand]
         private void StopRamp() => _rampCts?.Cancel();
 
+        /// <summary>서보 속도(%)를 적용한다.</summary>
         [RelayCommand]
         private Task ApplyServoSpeed() => RunAsync(p => p.SetServoSpeedAsync(ServoSpeedPercent), LocalizationManager.Instance["Manual_ServoSpeedLabel"]);
 
+        /// <summary>팬 속도 목표값(Hz)을 적용한다.</summary>
         [RelayCommand]
         private Task ApplyFanSpeed() => RunAsync(p => p.SetFanSpeedAsync(FanSpeedTargetHz), LocalizationManager.Instance["Status_FanSpeedLabel"]);
 
+        /// <summary>흑체 1 목표 온도(℃)를 적용한다.</summary>
         [RelayCommand]
         private Task ApplyBlackBody1() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(0, BlackBody1Target), LocalizationManager.Instance["Plc_Bb1Temp"]);
 
+        /// <summary>흑체 2 목표 온도(℃)를 적용한다.</summary>
         [RelayCommand]
         private Task ApplyBlackBody2() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(1, BlackBody2Target), LocalizationManager.Instance["Plc_Bb2Temp"]);
 
+        /// <summary>
+        /// 카메라 제어 명령(Run/Stop/셔터/NUC 등)을 해당 Agent에 발행한다.
+        /// 처리 결과는 ACK 구독이 타일의 <see cref="CameraTileModel.LastAckStatus"/>로 보고한다.
+        /// </summary>
         private async Task PublishCameraCommandAsync(CameraTileModel tile, string op)
         {
             if (tile == null || AppServices.NatsService == null) return;
@@ -346,6 +381,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand] private Task SendStop(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Stop);
         [RelayCommand] private Task SendShutterOpen(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.ShutterOpen);
         [RelayCommand] private Task SendShutterClose(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.ShutterClose);
+        /// <summary>수동 캡처 요청. 카메라 제어 채널이 아닌 캡처 명령 채널로 발행하며 Source는 Manual로 기록된다.</summary>
         [RelayCommand]
         private async Task SendCapture(CameraTileModel tile)
         {
@@ -371,6 +407,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand] private Task SendSaveConfig(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.SaveConfig);
         [RelayCommand] private Task SendRefreshInfo(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.RefreshInfo);
 
+        /// <summary>JOG 이동. 버튼 누름(on=true)/뗌(on=false)을 View 코드비하인드가 직접 호출한다.</summary>
         public Task Jog(ServoAxis axis, bool positive, bool on)
         {
             var plc = AppServices.PlcController;
@@ -381,6 +418,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         private Task EquipmentAsync(PlcEquipment equipment, bool on)
             => RunAsync(p => p.SetEquipmentAsync(equipment, on), equipment.ToString());
 
+        /// <summary>
+        /// 1초 타이머 틱. 서보 현재값은 공용 PlcStatusService 스냅샷에서 복사하고(직접 PLC 판독 없음),
+        /// 흑체 현재값만 별도로 폴링한다.
+        /// </summary>
         private async Task PollAsync()
         {
             var s = AppServices.PlcStatus?.Snapshot;
@@ -397,6 +438,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             await PollBlackBodyAsync();
         }
 
+        /// <summary>흑체 현재 온도(℃)를 폴링한다. 이전 폴링이 끝나지 않았으면 겹치지 않게 건너뛴다.</summary>
         private async Task PollBlackBodyAsync()
         {
             var bb = AppServices.BlackBodyController;
@@ -416,6 +458,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private static string L(string key, params object[] args) => string.Format(LocalizationManager.Instance[key], args);
 
+        /// <summary>흑체 제어 공통 실행기. 미초기화·실패를 <see cref="StatusMessage"/>로 보고한다.</summary>
         private async Task RunBlackBodyAsync(Func<IBlackBodyController, Task> action, string label)
         {
             var bb = AppServices.BlackBodyController;
@@ -432,6 +475,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>PLC 제어 공통 실행기. 미초기화·실패를 <see cref="StatusMessage"/>로 보고한다.</summary>
         private async Task RunAsync(Func<IPlcController, Task> action, string label)
         {
             var plc = AppServices.PlcController;

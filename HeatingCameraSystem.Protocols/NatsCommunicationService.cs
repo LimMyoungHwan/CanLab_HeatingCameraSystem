@@ -10,19 +10,25 @@ using NATS.Client.Serializers.Json;
 
 namespace HeatingCameraSystem.Protocols
 {
+    /// <summary>
+    /// <see cref="INatsCommunicationService"/>의 NATS.Net 구현. 토픽 문자열은 루트 AGENTS.md의
+    /// Master/Agent 계약을 그대로 따른다 — 한쪽만 바꾸면 통신이 조용히 끊긴다.
+    /// 구독은 자체 복구 루프(<see cref="RunSubscribeWithRetryAsync"/>)로 돌며 Dispose 시 일괄 취소된다.
+    /// 접속 재연결은 NATS.Net이 내부에서 처리한다.
+    /// </summary>
     public class NatsCommunicationService : INatsCommunicationService
     {
         private INatsConnection? _connection;
         private readonly NatsOpts _baseOpts;
 
-        // Subscription lifetime: cancelled on dispose so every self-healing retry loop stops cleanly.
+        // 구독 수명: Dispose 시 취소되어 모든 자체 복구 재시도 루프가 깨끗하게 멈춘다.
         private readonly CancellationTokenSource _subscriptionCts = new();
         private readonly List<Task> _subscriptionTasks = new();
         private readonly object _subscriptionLock = new();
 
         public NatsCommunicationService()
         {
-            // By default, use local NATS server and JSON serialization
+            // 기본값: 로컬 NATS 서버 + JSON 직렬화
             _baseOpts = NatsOpts.Default with { SerializerRegistry = NatsJsonSerializerRegistry.Default };
         }
 
@@ -193,6 +199,7 @@ namespace HeatingCameraSystem.Protocols
             return Task.CompletedTask;
         }
 
+        /// <summary>구독 하나를 자체 복구 루프로 백그라운드 실행하고 Dispose 대기 목록에 등록한다.</summary>
         private void RunSubscriptionLoop<T>(string subject, Action<T> onMessageReceived)
         {
             CancellationToken ct = _subscriptionCts.Token;
@@ -208,10 +215,10 @@ namespace HeatingCameraSystem.Protocols
             }
         }
 
-        // Self-healing subscription loop. A thrown enumerator (transient NATS disconnect) or a natural
-        // enumerator completion (connection drop) is NOT auto-re-issued by NATS.Net, so we re-issue it here
-        // with backoff and keep delivering until ct is cancelled (service disposed). attempt resets to 0 after
-        // any delivered message so unrelated later blips restart backoff from the bottom instead of compounding.
+        // 자체 복구 구독 루프. 열거자가 예외로 죽거나(일시적 NATS 단절) 자연 종료되면(연결 끊김)
+        // NATS.Net이 구독을 다시 걸어주지 않으므로, 여기서 백오프를 두고 재구독하며 ct가 취소될 때까지
+        // (서비스 Dispose) 계속 전달한다. attempt는 메시지가 하나라도 전달되면 0으로 리셋되어,
+        // 한참 뒤의 무관한 순단이 백오프를 누적하지 않고 바닥부터 다시 시작한다.
         internal static async Task RunSubscribeWithRetryAsync<T>(
             Func<CancellationToken, IAsyncEnumerable<T>> subscribeFactory,
             Action<T> onMessage,
@@ -257,6 +264,7 @@ namespace HeatingCameraSystem.Protocols
             }
         }
 
+        /// <summary>NatsMsg 껍데기를 벗겨 Data만 흘린다. 역직렬화 결과가 null인 메시지는 버린다.</summary>
         private static async IAsyncEnumerable<T> UnwrapAsync<T>(
             IAsyncEnumerable<NatsMsg<T>> src,
             [EnumeratorCancellation] CancellationToken ct)
@@ -342,6 +350,7 @@ namespace HeatingCameraSystem.Protocols
             return Task.CompletedTask;
         }
 
+        /// <summary>구독 루프를 모두 취소하고 최대 3초 대기한 뒤, 성패와 무관하게 연결을 정리한다.</summary>
         public async ValueTask DisposeAsync()
         {
             _subscriptionCts.Cancel();
@@ -358,8 +367,8 @@ namespace HeatingCameraSystem.Protocols
             }
             catch
             {
-                // Best-effort: a loop may exceed the bound or surface a stray error on shutdown;
-                // dispose the connection regardless so we never hang or leak on exit.
+                // 최선 노력: 종료 중 루프가 제한 시간을 넘기거나 잡음 오류를 낼 수 있다.
+                // 어느 쪽이든 연결은 반드시 정리해 종료 시 멈추거나 누수되지 않게 한다.
             }
 
             if (_connection != null)

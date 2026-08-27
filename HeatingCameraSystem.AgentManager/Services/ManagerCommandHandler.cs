@@ -11,6 +11,10 @@ using Microsoft.Extensions.Logging;
 
 namespace HeatingCameraSystem.AgentManager.Services
 {
+    /// <summary>
+    /// <c>server.cmd.mgr.{PCId}</c>로 들어오는 서버 명령(Approve/Reject/Rename/SetSerial/Restart/Disable)을
+    /// 처리한다. 대상 카메라는 안정 식별자인 HardwareId로 지정되며, 처리 후 매번 인벤토리를 재발행한다.
+    /// </summary>
     public class ManagerCommandHandler
     {
         private readonly INatsCommunicationService _nats;
@@ -32,11 +36,16 @@ namespace HeatingCameraSystem.AgentManager.Services
             _logger    = logger;
         }
 
+        /// <summary><c>server.cmd.mgr.{PCId}</c> 구독을 시작한다.</summary>
         public void Subscribe()
         {
             _nats.SubscribeManagerCommandAsync(_settings.PCId, cmd => _ = HandleAsync(cmd));
         }
 
+        /// <summary>
+        /// 명령 한 건을 Op별로 분기 처리한다. Approve를 제외하면 미지의 HardwareId는 경고만 남기고 버린다.
+        /// SetSerial은 Payload의 시리얼 설정을 <c>master.config.serial.{AgentId}</c>로 전달한다.
+        /// </summary>
         private async Task HandleAsync(ManagerCommandMessage cmd)
         {
             _logger.LogInformation("ManagerCommand: {Op} for {HwId}", cmd.Op, cmd.HardwareId);
@@ -91,8 +100,8 @@ namespace HeatingCameraSystem.AgentManager.Services
                     break;
 
                 case ManagerCommandOp.Restart:
-                    // [S7] runtimeLoad is an idempotent reload, so a restart is a single Load
-                    // message to AgentUI — no unload->load NATS race.
+                    // [S7] runtimeLoad는 멱등한 재로드이므로 재시작은 AgentUI로 보내는 Load 메시지
+                    // 한 건이면 된다 — unload->load NATS 경합이 없다.
                     if (entry is not null)
                         _supervisor.Spawn(entry);
                     break;
@@ -107,6 +116,10 @@ namespace HeatingCameraSystem.AgentManager.Services
             await _inventory.PublishAsync();
         }
 
+        /// <summary>
+        /// 승인 처리: 승인·활성화 표시하고, Payload가 있으면 Alias로 쓰며, AgentId가 없으면
+        /// <see cref="BuildAgentId"/>로 만들어 붙인 뒤 런타임 로드를 요청한다.
+        /// </summary>
         private async Task ApproveAsync(ManagerCommandMessage cmd)
         {
             var entry = _store.GetByHardwareId(cmd.HardwareId);
@@ -130,6 +143,7 @@ namespace HeatingCameraSystem.AgentManager.Services
             await _inventory.PublishAsync();
         }
 
+        /// <summary>HardwareId의 SHA-256 앞 8자리(hex 소문자)를 붙여 <c>{PCId}_{hash8}</c> 형태의 안정적인 AgentId를 만든다.</summary>
         public static string BuildAgentId(string pcId, string hardwareId)
         {
             byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(hardwareId));

@@ -6,6 +6,15 @@ using HeatingCameraSystem.Protocols.Simulation;
 
 namespace HeatingCameraSystem.E2EDriver;
 
+/// <summary>
+/// 레시피 E2E 드라이버. 4스텝 레시피(카메라 0/1 교대, 포인트 1~4, 흑체 35~50℃)를 실제 순서대로
+/// 몰아간다: 챔버 기동·온습도 안정화 → 스텝마다 포인트 좌표 설정·서보 이동 대기·흑체 설정 후
+/// 캡처 명령 발행·결과 대기. 검증: 캡처 4건 수신, Agent_0/Agent_1 각 2건, 이미지 파일 전부 존재,
+/// 외부 모드에서는 최종 PLC/흑체 상태까지 확인한다.
+/// 모드: 기본은 in-process FakePlcController, <c>--external-simulator</c>는 실 PlcXgtClient로
+/// 외부 Simulator(기본 <c>127.0.0.1:2004</c>)에 붙는다. <c>--live-capture</c>는
+/// <see cref="LiveCaptureProof"/>로 위임한다. 종료 코드는 아래 상수와 같다.
+/// </summary>
 internal static class Program
 {
     private const int ExitPass = 0;

@@ -19,7 +19,7 @@ using Microsoft.Extensions.Logging;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// ── Settings ─────────────────────────────────────────────────────────────────
+// ── 설정 ─────────────────────────────────────────────────────────────────────
 var installRoot  = args.Length > 0 ? args[0] : @"C:\HeatingCameraSystem";
 var settingsPath = Path.Combine(installRoot, "Manager", "manager-settings.json");
 var settings = File.Exists(settingsPath)
@@ -38,7 +38,7 @@ builder.Services.AddSingleton<ManagerStateStore>(sp =>
 // ── NATS ─────────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<INatsCommunicationService, NatsCommunicationService>();
 
-// ── Camera Enumerator ─────────────────────────────────────────────────────────
+// ── 카메라 열거기 ─────────────────────────────────────────────────────────────
 // [SC-12 범위 2] Design Ref: §4.2 — SimulationMode → SimulateEnumeration.
 // SimulateEnumeration=true 이면 실 카메라 없이 가상 카메라 2대를 반환하는 FakeCameraEnumerator 사용.
 // false 이면 WMI로 실제 연결된 USB 카메라를 탐지하는 WmiCameraEnumerator 사용.
@@ -47,7 +47,7 @@ builder.Services.AddSingleton<ICameraEnumerator>(sp =>
         ? (ICameraEnumerator)new FakeCameraEnumerator()
         : new WmiCameraEnumerator());
 
-// ── Services ──────────────────────────────────────────────────────────────────
+// ── 서비스 ────────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<AgentSupervisor>();
 builder.Services.AddSingleton<InventoryPublisher>();
 builder.Services.AddSingleton<LogTailService>();
@@ -58,8 +58,13 @@ builder.Services.AddHostedService<ManagerWorker>();
 var host = builder.Build();
 await host.RunAsync();
 
-// ── Worker ────────────────────────────────────────────────────────────────────
+// ── 워커 ──────────────────────────────────────────────────────────────────────
 
+/// <summary>
+/// AgentManager의 메인 백그라운드 워커. NATS 연결 후 명령/로그 덤프 구독을 걸고,
+/// 카메라를 열거해 상태 저장소와 병합하며, 승인된 카메라의 런타임 로드를 요청하고
+/// PnP 변경을 감시한다. 인벤토리는 <c>agent-mgr.inventory.{PCId}</c>로 발행한다.
+/// </summary>
 public class ManagerWorker : BackgroundService
 {
     private readonly INatsCommunicationService _nats;
@@ -96,14 +101,14 @@ public class ManagerWorker : BackgroundService
         await _nats.ConnectAsync(_settings.NatsUrl);
         _logger.LogInformation("Manager started. PCId={PCId}", _settings.PCId);
 
-        // Subscribe for inbound commands + log dump requests
+        // 수신 명령 + 로그 덤프 요청 구독
         _cmdHandler.Subscribe();
         _logDump.Subscribe();
 
-        // [S7] Feed AgentUI per-camera heartbeats into the supervisor for liveness + disable reconcile.
+        // [S7] AgentUI의 카메라별 하트비트를 supervisor에 공급한다 — 생존 판정 + disable 재조정용.
         await _nats.SubscribeAgentStatusAsync(status => _supervisor.NoteHeartbeat(status.AgentId));
 
-        // Initial camera enumeration: merge discovered with stored state
+        // 최초 카메라 열거: 탐지 결과를 저장된 상태와 병합한다
         var discovered = _enumerator.Enumerate();
         foreach (var cam in discovered)
         {
@@ -128,10 +133,10 @@ public class ManagerWorker : BackgroundService
             }
         }
 
-        // Spawn approved cameras
+        // 승인된 카메라의 런타임 로드 요청
         _supervisor.SpawnAll();
 
-        // Start log tailing for all running agents
+        // 실행 중인 모든 Agent의 로그 tail 시작
         foreach (var entry in _store.GetAll())
         {
             if (!string.IsNullOrEmpty(entry.AgentId))
@@ -141,11 +146,11 @@ public class ManagerWorker : BackgroundService
             }
         }
 
-        // PnP change watcher
+        // PnP 변경 감시 시작
         _enumerator.Changed += OnPnpChanged;
         _enumerator.StartWatching();
 
-        // Publish initial inventory
+        // 초기 인벤토리 발행
         await _inventory.PublishAsync();
 
         // 주기적 재방송: core NATS는 발행 시점의 활성 구독자에게만 전달하므로, Master가 이 초기 방송
@@ -159,6 +164,11 @@ public class ManagerWorker : BackgroundService
         }
     }
 
+    /// <summary>
+    /// PnP 도착이면 신규 카메라를 등록하거나 LastSeen/OpenCvIndex를 갱신한다(승인된 카메라가
+    /// 죽어 있으면 다시 로드 요청). 제거이면 런타임 언로드를 요청한다.
+    /// 어느 쪽이든 인벤토리를 즉시 재발행한다.
+    /// </summary>
     private void OnPnpChanged(PnpChange change)
     {
         var cam = change.Camera;
@@ -197,8 +207,8 @@ public class ManagerWorker : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        // [S7] Do NOT unload AgentUI cameras on service stop — AgentUI runs independently
-        // (logon Scheduled Task) and must keep serving standalone when the Manager is down.
+        // [S7] 서비스 중지 시 AgentUI 카메라를 언로드하지 않는다 — AgentUI는 로그온 예약 작업으로
+        // 독립 실행되며 Manager가 내려가도 단독으로 계속 서비스해야 한다.
         _enumerator.StopWatching();
         _logTail.Dispose();
         await _nats.DisposeAsync();

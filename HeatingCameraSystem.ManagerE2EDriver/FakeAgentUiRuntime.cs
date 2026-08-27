@@ -5,11 +5,11 @@ using HeatingCameraSystem.Core.Models;
 namespace HeatingCameraSystem.ManagerE2EDriver;
 
 /// <summary>
-/// [S8] In-process stand-in for the WPF AgentUI's NATS surface, so the Manager E2E can prove the
-/// redefined per-camera runtime IPC without launching WPF. It opens ("loads") every camera on
-/// start — mirroring AgentUI, which opens all of its configured cameras at launch — heartbeats on
-/// <c>agent.status.{AgentId}</c> while a camera is loaded, and honours the Manager's
-/// <c>runtimeLoad</c>/<c>runtimeUnload</c> commands on <c>master.cmd.camera.{AgentId}</c>.
+/// [S8] WPF AgentUI의 NATS 표면을 인프로세스로 대체하는 스탠드인. WPF 실행 없이 Manager E2E가
+/// 재정의된 카메라별 런타임 IPC를 증명할 수 있게 한다. 시작 시 모든 카메라를 열고("load") —
+/// 실행 시 설정된 카메라를 모두 여는 AgentUI를 흉내낸다 — 카메라가 로드된 동안
+/// <c>agent.status.{AgentId}</c> 로 하트비트하며, <c>master.cmd.camera.{AgentId}</c> 의
+/// Manager <c>runtimeLoad</c>/<c>runtimeUnload</c> 명령을 따른다.
 /// </summary>
 internal sealed class FakeAgentUiRuntime : IAsyncDisposable
 {

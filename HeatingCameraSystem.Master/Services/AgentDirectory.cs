@@ -4,15 +4,19 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Master.Services
 {
-    // Live alias -> current AgentId map, fed by agent.status heartbeats, so recipes route by the
-    // operator's stable alias instead of the volatile host_Agent_n slot the camera runs under.
-    // Last-write-wins by alias: a re-slotted camera (same alias, new AgentId) self-corrects on its
-    // next heartbeat. No eviction — a stale entry only routes to an offline agent, which fails the
-    // capture the same as an unknown alias would.
+    /// <summary>
+    /// agent.status 하트비트로 채워지는 alias → 현재 AgentId 실시간 매핑.
+    /// 레시피가 카메라가 실제로 돌아가는 가변 host_Agent_n 슬롯 대신 운영자의 안정적인 alias로
+    /// 라우팅할 수 있게 한다.
+    /// alias 기준 last-write-wins: 슬롯이 바뀐 카메라(같은 alias, 새 AgentId)는 다음 하트비트에서
+    /// 스스로 교정된다. 항목 제거(eviction)는 없다 — 오래된 항목은 오프라인 Agent로 라우팅될 뿐이며,
+    /// 이는 모르는 alias와 똑같이 캡처 실패로 끝난다.
+    /// </summary>
     public sealed class AgentDirectory
     {
         private readonly ConcurrentDictionary<string, string> _byAlias = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>하트비트 한 건에서 alias → AgentId 매핑을 갱신한다. alias나 AgentId가 비면 무시한다.</summary>
         public void Note(AgentStatusMessage message)
         {
             if (message is null ||
@@ -25,6 +29,7 @@ namespace HeatingCameraSystem.Master.Services
             _byAlias[message.Alias] = message.AgentId;
         }
 
+        /// <summary>alias로 현재 AgentId를 찾는다. 모르는 alias면 null을 돌려준다.</summary>
         public string? ResolveByAlias(string? alias) =>
             !string.IsNullOrWhiteSpace(alias) && _byAlias.TryGetValue(alias, out string? agentId)
                 ? agentId

@@ -4,23 +4,22 @@ using HeatingCameraSystem.Core.Models;
 namespace HeatingCameraSystem.Protocols.Cameras
 {
     /// <summary>
-    /// Turns a 14-bit Y16 <see cref="ThermalFrame"/> into a BGR24 byte buffer via plateau
-    /// histogram equalization (thermal AGC, ported from the reference Python
-    /// two_point_viewer.thresh_plateau_hist_eq) followed by an iron palette LUT. Single source of
-    /// the live thermal look — shared by the AgentUI preview and the NATS color-JPEG encoder so the
-    /// two never drift.
+    /// 14비트 Y16 <see cref="ThermalFrame"/>을 plateau 히스토그램 평활화(열화상 AGC, 레퍼런스
+    /// Python two_point_viewer.thresh_plateau_hist_eq 포팅)와 iron 팔레트 LUT를 거쳐 BGR24 바이트
+    /// 버퍼로 만든다. 라이브 열화상 룩의 단일 소스 — AgentUI 미리보기와 NATS 컬러 JPEG 인코더가
+    /// 공유하므로 둘의 표시가 서로 어긋나지 않는다.
     /// </summary>
     public static class ThermalColorizer
     {
         private const int Bins = 1 << 14;
 
-        // ponytail: AGC plateau (per-bin count cap). 100 = Python parity. The display-contrast knob —
-        // raise if flat scenes wash out, lower if noise is over-amplified.
+        // ponytail: AGC plateau(빈당 카운트 상한). 100 = Python 파리티. 표시 대비 조절 노브 —
+        // 평탄한 장면이 씻겨 보이면 올리고, 노이즈가 과증폭되면 내린다.
         private const int PlateauLimit = 100;
 
         private static readonly uint[] IronLut = BuildIronLut();
 
-        /// <summary>Returns a BGR24 buffer (stride = <c>Width * 3</c>) for the frame.</summary>
+        /// <summary>프레임을 BGR24 버퍼(stride = <c>Width * 3</c>)로 변환해 반환한다.</summary>
         public static byte[] ToBgr24(ThermalFrame f)
         {
             if (f is null) throw new ArgumentNullException(nameof(f));
@@ -37,7 +36,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 hist[px[i] & 0x3FFF]++;
             }
 
-            // Plateau-clipped cumulative histogram (the AGC transfer function).
+            // plateau로 잘라낸 누적 히스토그램(AGC 전달 함수).
             var cdf = new long[Bins];
             long cum = 0;
             for (int i = 0; i < Bins; i++)
@@ -47,8 +46,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 cdf[i] = cum;
             }
 
-            // Normalize the CDF over its populated range (leading zero bins stay black),
-            // producing a 14-bit -> 8-bit grayscale LUT.
+            // CDF를 값이 존재하는 구간 기준으로 정규화해(선행 0 빈은 검정 유지)
+            // 14비트 → 8비트 그레이스케일 LUT를 만든다.
             long cdfLast = cdf[Bins - 1];
             long cdfMin = 0;
             for (int i = 0; i < Bins; i++)
@@ -81,8 +80,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
             return bgr;
         }
 
-        // Classic ironbow palette: black -> purple -> magenta -> red -> orange -> amber -> white,
-        // built by linearly interpolating anchor colors into a 256-entry 0x00RRGGBB LUT.
+        // 고전 ironbow 팔레트: black → purple → magenta → red → orange → amber → white.
+        // 앵커 색을 선형 보간해 256 엔트리 0x00RRGGBB LUT를 만든다.
         private static uint[] BuildIronLut()
         {
             (int Pos, int R, int G, int B)[] anchors =

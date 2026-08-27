@@ -16,6 +16,10 @@ namespace HeatingCameraSystem.Protocols
     [SupportedOSPlatform("windows")]
     public class WmiUsbSerialEnumerator : IUsbSerialEnumerator
     {
+        /// <summary>
+        /// 현재 존재하는 COM 포트를 전부 열거한다. WMI 메타데이터를 찾지 못한 포트도
+        /// 빈 메타데이터로 포함한다 — 포트가 목록에서 누락되지 않는다.
+        /// </summary>
         public IReadOnlyList<DiscoveredSerialPort> Enumerate()
         {
             // WMI: Name에 "(COMx)"를 포함하는 PnP 엔터티만 수집 → PortName 기준 인덱싱

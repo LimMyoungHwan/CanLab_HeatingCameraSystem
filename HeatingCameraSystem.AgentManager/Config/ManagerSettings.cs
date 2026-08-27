@@ -1,7 +1,12 @@
 namespace HeatingCameraSystem.AgentManager.Config
 {
+    /// <summary>
+    /// manager-settings.json에서 읽는 AgentManager 설정. 파일이 없으면 기본값을 쓰고,
+    /// InstallRoot는 실행 시 첫 번째 CLI 인수로 항상 덮어써진다.
+    /// </summary>
     public class ManagerSettings
     {
+        /// <summary>이 카메라 PC의 라우팅 키. <c>agent-mgr.*</c>/<c>server.*</c> 토픽의 {PCId} 자리에 쓰인다.</summary>
         public string PCId                { get; set; } = Environment.MachineName;
         public string NatsUrl             { get; set; } = "nats://127.0.0.1:4222";
         // [SC-12 범위 2] Design Ref: §4.1 — SimulationMode 단일 플래그를 두 독립 플래그로 분리.
@@ -23,14 +28,16 @@ namespace HeatingCameraSystem.AgentManager.Config
         /// </summary>
         public bool SimulateAgentMode   { get; set; } = false;
         public int    LogRetentionDays    { get; set; } = 7;
+        /// <summary>true이면 Error/Fatal 외에 Warning 로그도 LogAlert로 승격한다.</summary>
         public bool   WarnAlertEnabled    { get; set; } = false;
         public string InstallRoot         { get; set; } = @"C:\HeatingCameraSystem";
+        /// <summary>콘솔 Agent 실행 파일 경로. [S7] 이후 Manager는 프로세스를 spawn하지 않으므로 현재 코드에서는 사용되지 않는다.</summary>
         public string AgentExePath        { get; set; } = @"C:\HeatingCameraSystem\Agent\HeatingCameraSystem.Agent.exe";
 
-        // [S7] Path to the single WPF AgentUI that now owns all local cameras. Retained alongside
-        // AgentExePath (console Agent) during migration. NOTE: the Manager service does NOT launch
-        // this itself (session-0 isolation + UVC single-handle) — a logon Scheduled Task (S8) does.
-        // Kept in settings for S8 deployment/diagnostics and future interactive-mode launch.
+        // [S7] 이제 로컬 카메라 전부를 소유하는 단일 WPF AgentUI의 경로. 마이그레이션 동안
+        // AgentExePath(콘솔 Agent)와 나란히 유지한다. 주의: Manager 서비스가 직접 실행하지 않는다
+        // (세션 0 격리 + UVC 단일 핸들 문제) — 로그온 예약 작업(S8)이 실행한다.
+        // S8 배포/진단과 향후 대화형 모드 실행을 위해 설정에 남겨 둔다.
         public string AgentUiExePath      { get; set; } = @"C:\HeatingCameraSystem\AgentUI\HeatingCameraSystem.AgentUI.exe";
     }
 }

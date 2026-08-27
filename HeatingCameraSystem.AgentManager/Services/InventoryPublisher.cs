@@ -9,6 +9,10 @@ using Microsoft.Extensions.Logging;
 
 namespace HeatingCameraSystem.AgentManager.Services
 {
+    /// <summary>
+    /// 상태 저장소의 카메라 목록을 <see cref="CameraInventoryMessage"/>로 만들어
+    /// <c>agent-mgr.inventory.{PCId}</c>로 발행한다. IsRunning은 supervisor의 생존 판정을 따른다.
+    /// </summary>
     public class InventoryPublisher
     {
         private readonly INatsCommunicationService _nats;
@@ -28,6 +32,7 @@ namespace HeatingCameraSystem.AgentManager.Services
             _logger     = logger;
         }
 
+        /// <summary>현재 카메라 인벤토리 전체를 한 번 발행한다.</summary>
         public async Task PublishAsync()
         {
             var cameras = _store.GetAll()

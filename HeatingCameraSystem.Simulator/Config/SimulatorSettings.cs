@@ -3,21 +3,21 @@ using System.Text.Json;
 
 namespace HeatingCameraSystem.Simulator.Config;
 
-/// <summary>Thrown by <see cref="SimulatorSettings.Load"/> when a config value is invalid.
-/// The message always NAMES the offending property so operators can fix the JSON.</summary>
+/// <summary><see cref="SimulatorSettings.Load"/>가 잘못된 설정값을 만나면 던진다.
+/// 메시지에 항상 문제가 된 프로퍼티 이름을 담아 운영자가 JSON을 고칠 수 있게 한다.</summary>
 public sealed class SimulatorSettingsException : Exception
 {
     public SimulatorSettingsException(string message) : base(message) { }
     public SimulatorSettingsException(string message, Exception inner) : base(message, inner) { }
 }
 
-/// <summary>FEnet listen endpoint + NATS URL. Listen defaults to loopback:2004.</summary>
+/// <summary>FEnet listen 엔드포인트 + NATS URL. listen 기본값은 loopback:2004다.</summary>
 public sealed record EndpointSettings(
     string ListenAddress = "127.0.0.1",
     int ListenPort = 2004,
     string NatsUrl = "nats://127.0.0.1:4222");
 
-/// <summary>Deterministic dynamics — tick cadence and physical ramp rates. Never random.</summary>
+/// <summary>결정론적 동역학 설정 — tick 주기와 물리 램프 속도. 난수는 절대 쓰지 않는다.</summary>
 public sealed record DynamicsSettings(
     int TickMs = 100,
     double TemperatureRatePerSecond = 20.0,
@@ -26,20 +26,19 @@ public sealed record DynamicsSettings(
     int ServoBusyMs = 500,
     int HeartbeatSeconds = 5,
     int LiveFrameIntervalMs = 100,
-    // Jog ramp rate (mm/s). Last so existing positional constructions stay valid.
+    // 조그 램프 속도(mm/s). 기존 위치 기반 생성 호출이 깨지지 않도록 마지막에 둔다.
     double JogRatePerSecond = 50.0);
 
-/// <summary>Simulated live-frame geometry. Width/height must be positive AND even.</summary>
+/// <summary>시뮬레이션 라이브 프레임 크기. 가로/세로 모두 양수이면서 짝수여야 한다.</summary>
 public sealed record FrameSettings(int Width = 640, int Height = 480);
 
-/// <summary>One simulated camera identity (mirrors <c>CameraDescriptor</c> AgentId/index shape).</summary>
+/// <summary>시뮬레이션 카메라 1대의 신원(<c>CameraDescriptor</c>의 AgentId/index 형태를 그대로 따른다).</summary>
 public sealed record CameraSettings(string AgentId, int CameraIndex);
 
 /// <summary>
-/// Validated, immutable simulator configuration. <see cref="Load"/> reads JSON
-/// (System.Text.Json), or creates-with-defaults when the file is missing
-/// (AgentUiConfig precedent). Malformed JSON is surfaced as an actionable
-/// <see cref="SimulatorSettingsException"/> rather than swallowed.
+/// 검증 완료된 불변 Simulator 설정. <see cref="Load"/>가 JSON(System.Text.Json)을 읽고,
+/// 파일이 없으면 기본값으로 생성해 저장한다(AgentUiConfig 선례). 깨진 JSON은 삼키지 않고
+/// 조치 가능한 <see cref="SimulatorSettingsException"/>으로 드러낸다.
 /// </summary>
 public sealed record SimulatorSettings(
     EndpointSettings Endpoint,
@@ -56,9 +55,10 @@ public sealed record SimulatorSettings(
         PropertyNameCaseInsensitive = true
     };
 
-    /// <summary>Output lives under the simulator base dir — never %LOCALAPPDATA%.</summary>
+    /// <summary>출력은 Simulator 기준 디렉터리 아래에 둔다 — %LOCALAPPDATA%는 절대 쓰지 않는다.</summary>
     public static string DefaultOutputPath => Path.Combine(AppContext.BaseDirectory, "ImageStorage");
 
+    /// <summary>기본 구성: loopback:2004 + 카메라 2대(<c>Agent_0</c>, <c>Agent_1</c>).</summary>
     public static SimulatorSettings CreateDefaults() => new(
         new EndpointSettings(),
         new DynamicsSettings(),
@@ -70,6 +70,7 @@ public sealed record SimulatorSettings(
             new CameraSettings("Agent_1", 1),
         });
 
+    /// <summary>JSON 파일을 읽어 검증까지 마친 설정을 돌려준다. 파일이 없으면 기본값을 만들어 저장한다.</summary>
     public static SimulatorSettings Load(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -77,7 +78,7 @@ public sealed record SimulatorSettings(
 
         if (!File.Exists(path))
         {
-            // AgentUiConfig precedent: a missing file is created with defaults and persisted.
+            // AgentUiConfig 선례: 파일이 없으면 기본값으로 생성해 저장한다.
             SimulatorSettings defaults = CreateDefaults();
             defaults.Validate();
             string? dir = Path.GetDirectoryName(path);
@@ -96,7 +97,7 @@ public sealed record SimulatorSettings(
         }
         catch (JsonException ex)
         {
-            // Diverge from AgentUiConfig swallow-and-log: name where the JSON is bad.
+            // AgentUiConfig의 삼키고-로그 방식과는 다르게 간다: JSON의 어디가 깨졌는지 이름으로 알린다.
             string where = string.IsNullOrEmpty(ex.Path) ? "document root" : ex.Path;
             throw new SimulatorSettingsException(
                 $"Simulator settings file '{path}' contains invalid JSON at {where}: {ex.Message}", ex);
@@ -107,8 +108,8 @@ public sealed record SimulatorSettings(
         return settings;
     }
 
-    /// <summary>Resolves a relative <see cref="OutputPath"/> against the config file's directory,
-    /// so captures land deterministically regardless of the caller's working directory.</summary>
+    /// <summary>상대 <see cref="OutputPath"/>를 설정 파일 디렉터리 기준으로 풀어,
+    /// 호출자의 작업 디렉터리와 무관하게 캡처가 항상 같은 곳에 떨어지게 한다.</summary>
     private SimulatorSettings NormalizeOutputPath(string configPath)
     {
         if (string.IsNullOrWhiteSpace(OutputPath) || Path.IsPathRooted(OutputPath))
@@ -117,7 +118,7 @@ public sealed record SimulatorSettings(
         return this with { OutputPath = Path.GetFullPath(Path.Combine(baseDir, OutputPath)) };
     }
 
-    /// <summary>Throws <see cref="SimulatorSettingsException"/> naming the first invalid property.</summary>
+    /// <summary>처음 발견한 잘못된 프로퍼티 이름을 담아 <see cref="SimulatorSettingsException"/>을 던진다.</summary>
     public void Validate()
     {
         if (Endpoint is null) throw Bad(nameof(Endpoint), "is required.");

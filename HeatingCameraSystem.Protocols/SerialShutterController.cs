@@ -6,6 +6,11 @@ using HeatingCameraSystem.Core.Interfaces;
 
 namespace HeatingCameraSystem.Protocols
 {
+    /// <summary>
+    /// 카메라 셔터 시리얼 제어. ASCII 문자열이 아니라 raw binary 7바이트 고정 프레임을 전송한다
+    /// (열기 04 00 01 00 00 00 00, 닫기 04 00 00 00 00 00 00). 하드웨어에 상태 조회 명령이
+    /// 없으므로 셔터 상태는 마지막 명령 기준 소프트웨어 캐시로만 안다.
+    /// </summary>
     public class SerialShutterController : ISerialShutterController
     {
         // 실제 카메라 셔터 바이트 프로토콜 (7바이트 고정)
@@ -23,6 +28,7 @@ namespace HeatingCameraSystem.Protocols
             _s = settings ?? new SerialSettings();
         }
 
+        /// <summary>포트를 연다. Parity/StopBits 문자열 파싱에 실패하면 None/One으로 조용히 대체한다.</summary>
         public Task ConnectAsync()
         {
             if (IsConnected) return Task.CompletedTask;
@@ -45,7 +51,7 @@ namespace HeatingCameraSystem.Protocols
             _port = null;
         }
 
-        // cameraIndex는 상위 레이어 식별자 전용 — 바이트 버퍼에는 미사용
+        /// <summary>셔터 열기 프레임을 전송한다. cameraIndex는 상위 레이어 식별자 전용 — 바이트 버퍼에는 미사용.</summary>
         public Task OpenShutterAsync(int cameraIndex)
         {
             EnsureConnected();
@@ -54,6 +60,7 @@ namespace HeatingCameraSystem.Protocols
             return Task.CompletedTask;
         }
 
+        /// <summary>셔터 닫기 프레임을 전송한다. cameraIndex 취급은 <see cref="OpenShutterAsync"/>와 같다.</summary>
         public Task CloseShutterAsync(int cameraIndex)
         {
             EnsureConnected();
@@ -62,7 +69,7 @@ namespace HeatingCameraSystem.Protocols
             return Task.CompletedTask;
         }
 
-        // 하드웨어 상태 조회 명령 없음 → 마지막 명령 기준 소프트웨어 상태 반환
+        /// <summary>하드웨어 상태 조회 명령이 없으므로 마지막 명령 기준 소프트웨어 상태를 반환한다.</summary>
         public Task<bool> GetShutterStateAsync(int cameraIndex)
         {
             EnsureConnected();

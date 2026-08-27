@@ -6,9 +6,9 @@ using HeatingCameraSystem.Core.Models;
 namespace HeatingCameraSystem.Protocols.Simulation
 {
     /// <summary>
-    /// Deterministic synthetic thermal frame source for SimulationMode and tests.
-    /// Produces a 640x480 14-bit frame with a moving hot spot on each read
-    /// (same pattern as <see cref="FakeLiveThermalCamera"/>).
+    /// SimulationMode와 테스트를 위한 결정적 합성 열화상 프레임 소스.
+    /// CltcThermalFrameSource(OpenCV 캡처) 대신 사용한다. 읽을 때마다 이동 핫스팟이 있는
+    /// 640x480 14-bit 프레임을 생성한다(<see cref="FakeLiveThermalCamera"/>와 동일한 패턴).
     /// </summary>
     public sealed class FakeThermalFrameSource : IThermalFrameSource
     {
@@ -16,12 +16,15 @@ namespace HeatingCameraSystem.Protocols.Simulation
         private const int Height = 480;
         private int _tick;
 
+        /// <summary>열 물리 핸들이 없으므로 아무 동작도 하지 않는다.</summary>
         public void Open()
         {
         }
 
+        /// <summary>호출마다 tick을 올려 새 합성 프레임을 만든다. 실제 하드웨어와 달리 null을 반환하거나 블록되는 일이 없다.</summary>
         public ThermalFrame? Read() => CreateFrame(Interlocked.Increment(ref _tick));
 
+        /// <summary>해제할 물리 핸들이 없으므로 아무 동작도 하지 않는다.</summary>
         public void Close()
         {
         }
@@ -30,6 +33,10 @@ namespace HeatingCameraSystem.Protocols.Simulation
         {
         }
 
+        /// <summary>
+        /// tick에서만 파생되는 결정적 합성 프레임을 만든다. 배경은 대각선 그라데이션,
+        /// 그 위에 반지름 42px의 핫스팟이 tick마다 (11, 7)픽셀씩 이동한다. 값 범위는 0~0x3FFF(14-bit).
+        /// </summary>
         private static ThermalFrame CreateFrame(int tick)
         {
             var pixels = new ushort[Width * Height];

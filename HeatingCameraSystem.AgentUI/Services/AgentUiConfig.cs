@@ -8,11 +8,10 @@ using HeatingCameraSystem.Core.Models;
 namespace HeatingCameraSystem.AgentUI.Services
 {
     /// <summary>
-    /// AgentUI-local configuration, stored under
-    /// %LOCALAPPDATA%\HeatingCameraSystem\AgentUI\agentui.json. Offline-first: AgentUI reads
-    /// this directly and never depends on Master/Manager to start (Manager approval state
-    /// overrides these fields later, in S6/S7). Defaults to SimulationMode so the UI runs on a
-    /// machine with no cameras attached.
+    /// AgentUI 로컬 설정. %LOCALAPPDATA%\HeatingCameraSystem\AgentUI\agentui.json에 저장된다.
+    /// 오프라인 우선: AgentUI는 이 파일을 직접 읽으며 시작할 때 Master/Manager에 절대 의존하지
+    /// 않는다(Manager 승인 상태가 나중에, S6/S7에서 이 필드들을 덮어쓴다). 카메라가 없는 PC에서도
+    /// UI가 돌도록 기본값은 SimulationMode다.
     /// </summary>
     public sealed class AgentUiConfig
     {
@@ -46,6 +45,7 @@ namespace HeatingCameraSystem.AgentUI.Services
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "HeatingCameraSystem", "AgentUI");
 
+        /// <summary>agentui.json이 있으면 읽고, 없거나 깨졌으면 기본값을 생성·저장해 반환한다.</summary>
         public static AgentUiConfig LoadOrCreate()
         {
             Directory.CreateDirectory(ConfigDir);
@@ -80,7 +80,7 @@ namespace HeatingCameraSystem.AgentUI.Services
             return defaults;
         }
 
-        /// <summary>Writes to agentui.json. Changes take effect on next launch (config is read once at startup).</summary>
+        /// <summary>agentui.json에 기록한다. 설정은 시작 시 한 번만 읽으므로 변경은 다음 실행부터 적용된다.</summary>
         public void Save()
         {
             Directory.CreateDirectory(ConfigDir);

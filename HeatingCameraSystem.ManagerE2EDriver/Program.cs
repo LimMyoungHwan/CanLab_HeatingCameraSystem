@@ -13,17 +13,17 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace HeatingCameraSystem.ManagerE2EDriver;
 
 /// <summary>
-/// Manager E2E driver — fully in-process, no WPF and no console Agent.exe (S7/S8).
+/// Manager E2E 드라이버 — 완전 인프로세스. WPF 없음, 콘솔 Agent.exe 없음(S7/S8).
 ///
-/// [Range 1] Approval loop: FakeCameraEnumerator finds 2 virtual cameras -> inventory -> the
-///   Driver approves each -> AgentId assigned + approval re-published -> manager-state.json persists.
+/// [범위 1] 승인 루프: FakeCameraEnumerator가 가상 카메라 2대를 발견 -> inventory -> 드라이버가
+///   각각 승인 -> AgentId 부여 + 승인 재발행 -> manager-state.json 에 영속.
 ///
-/// [Range 2] Redefined runtime IPC (S7): a <see cref="FakeAgentUiRuntime"/> opens both cameras and
-///   heartbeats; the Manager marks them running (heartbeat-fresh). Disabling ONE camera makes the
-///   Manager publish runtimeUnload for just that camera, so it goes not-running while the other
-///   stays running — proving one camera's rejection never drops the others and no process is killed.
+/// [범위 2] 재정의된 런타임 IPC(S7): <see cref="FakeAgentUiRuntime"/> 가 두 카메라를 열고
+///   하트비트한다; Manager가 running(하트비트 신선)으로 표시. 카메라 하나만 비활성화하면
+///   Manager가 그 카메라에 대해서만 runtimeUnload 를 발행 -> 해당 카메라만 not-running,
+///   나머지는 running 유지 — 한 카메라 거부가 나머지를 떨어뜨리지 않고 프로세스도 죽지 않음을 증명.
 ///
-/// Exit: 0 PASS, 1 verification failed, 2 NATS connect failed, 3 timeout.
+/// 종료 코드: 0 PASS, 1 검증 실패, 2 NATS 연결 실패, 3 타임아웃.
 /// </summary>
 internal static class Program
 {

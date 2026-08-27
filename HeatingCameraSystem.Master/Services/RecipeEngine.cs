@@ -8,6 +8,12 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Master.Services
 {
+    /// <summary>
+    /// 레시피를 스텝 단위로 실행하는 오케스트레이터: 챔버 기동 → 온도 램프·안정화 →
+    /// 스텝별(서보 이동 → 흑체 안정화 → NATS 캡처 명령 → 결과 대기) → 챔버 정지.
+    /// 레시피 캡처 이력은 동기 PLC 온습도까지 채워 여기서 직접 기록한다
+    /// (비레시피 캡처는 <see cref="CaptureResultHistoryRecorder"/> 담당).
+    /// </summary>
     public class RecipeEngine
     {
         private readonly IPlcController _plcController;
@@ -44,6 +50,12 @@ namespace HeatingCameraSystem.Master.Services
             _agentDirectory = agentDirectory;
         }
 
+        /// <summary>
+        /// 레시피 전체를 실행한다. 시작 시 캡처 결과 구독을 걸어 StepId별 TaskCompletionSource로
+        /// 결과를 기다리며, 스텝의 캡처 실패·타임아웃은 <see cref="AlarmSink"/>에 알리고 다음 스텝을
+        /// 계속한다. 정상 완료 시에만 StopChamberAsync를 호출한다 — 취소로 중단되면 챔버 정지는
+        /// AppServices 종료 시퀀스가 유일한 안전망이다.
+        /// </summary>
         public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null)
         {
             int totalSteps = recipe.Steps.Count;
@@ -171,6 +183,10 @@ namespace HeatingCameraSystem.Master.Services
             Console.WriteLine($"[RecipeEngine] Recipe '{recipe.Name}' completed.");
         }
 
+        /// <summary>
+        /// 램프 시작점을 현재 온도로 읽어(램프 미사용이면 목표값 그대로)
+        /// <see cref="TemperatureRampController"/>에 위임한다. 진행 문구는 RecipeProgress로 감싸 올린다.
+        /// </summary>
         private async Task RampTemperatureAsync(Recipe recipe, int totalSteps, IProgress<RecipeProgress>? progress, CancellationToken ct)
         {
             float target = recipe.GlobalTargetTemperature;
@@ -195,6 +211,10 @@ namespace HeatingCameraSystem.Master.Services
                 ct);
         }
 
+        /// <summary>
+        /// 캡처 대상 AgentId를 정한다: ① 라이브 하트비트 기반 <see cref="AgentDirectory"/>의 alias 매핑
+        /// ② 장치 저장소에 등록된 alias의 AgentId ③ 최후 폴백 <c>Agent_{CameraIndex}</c>.
+        /// </summary>
         private async Task<string> ResolveAgentIdAsync(RecipeStep step)
         {
             if (!string.IsNullOrEmpty(step.CameraAlias))

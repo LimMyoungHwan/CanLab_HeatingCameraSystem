@@ -6,8 +6,14 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Master.Services
 {
+    /// <summary>Y16 열화상 프레임(<see cref="ThermalFrame"/>)을 WPF에서 표시 가능한 비트맵으로 바꾸는 헬퍼.</summary>
     public static class ThermalFrameBitmapSourceConverter
     {
+        /// <summary>
+        /// 프레임의 min–max로 선형 정규화해 Gray8 비트맵을 만든다. 모든 픽셀이 같은 값이면 전부
+        /// 0(검정)이 된다. 결과는 Freeze되어 만든 스레드와 무관하게 바인딩에 쓸 수 있다.
+        /// 크기와 픽셀 수가 맞지 않으면 ArgumentException을 던진다.
+        /// </summary>
         public static BitmapSource ToBitmapSource(ThermalFrame f)
         {
             if (f.Width <= 0 || f.Height <= 0 || f.Pixels.Length != f.Width * f.Height)

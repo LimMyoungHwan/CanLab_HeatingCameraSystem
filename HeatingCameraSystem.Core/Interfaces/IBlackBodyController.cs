@@ -15,9 +15,13 @@ namespace HeatingCameraSystem.Core.Interfaces
         /// <summary>흑체 개수(일반적으로 2 — 촬영용/웜업용).</summary>
         int Count { get; }
 
+        /// <summary>흑체 컨트롤러와의 세션이 살아있으면 true.</summary>
         bool IsConnected { get; }
 
+        /// <summary>흑체 컨트롤러와 연결을 맺는다.</summary>
         Task ConnectAsync();
+
+        /// <summary>연결을 끊고 리소스를 정리한다.</summary>
         void Disconnect();
 
         /// <summary>흑체 타겟 온도(SV) 설정.</summary>

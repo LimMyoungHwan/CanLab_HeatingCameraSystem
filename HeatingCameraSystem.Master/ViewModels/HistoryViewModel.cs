@@ -15,6 +15,7 @@ using Microsoft.Win32;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
+    /// <summary>이력 화면 촬영 이력 목록의 한 행.</summary>
     public partial class HistoryLogItem : ObservableObject
     {
         [ObservableProperty]
@@ -33,6 +34,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private string _thumbnailUrl = string.Empty;
     }
 
+    /// <summary>이력 화면 챔버(온·습도·흑체) 이력 목록의 한 행.</summary>
     public partial class ChamberHistoryLogItem : ObservableObject
     {
         [ObservableProperty]
@@ -51,6 +53,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private float _blackBody2;
     }
 
+    /// <summary>이력 화면 알람 이력 목록의 한 행. 심각도는 번역된 표시 문자열로 담는다.</summary>
     public partial class AlarmHistoryLogItem : ObservableObject
     {
         [ObservableProperty]
@@ -66,11 +69,16 @@ namespace HeatingCameraSystem.Master.ViewModels
         private string _message = string.Empty;
     }
 
+    /// <summary>
+    /// 이력 화면. 촬영·챔버·알람 세 모드의 이력을 페이지 단위로 조회하고 CSV로 내보낸다.
+    /// 날짜 범위는 <see cref="HistoryQuery.NormalizeRange"/>로 하루 전체를 포함하도록 정규화한다
+    /// (WPF DatePicker가 시각을 잘라 버리기 때문).
+    /// </summary>
     public partial class HistoryViewModel : ObservableObject
     {
-        // Localized filter labels captured at construction (this VM is recreated on each navigation
-        // to History, so it always reflects the active language). Source/severity switches match by
-        // list index, which is language-stable, so localizing the labels never breaks the filter logic.
+        // 번역된 필터 라벨은 생성 시점에 캡처한다(이 VM은 이력 화면 진입 때마다 새로 만들어지므로
+        // 항상 현재 언어를 반영한다). 촬영 구분/심각도 switch는 언어와 무관하게 고정인 목록
+        // 인덱스로 매칭하므로 라벨을 번역해도 필터 로직은 깨지지 않는다.
         public static string AllCamerasFilter => LocalizationManager.Instance["Nav_AlarmsFilterAll"];
 
         [ObservableProperty]
@@ -95,7 +103,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             LocalizationManager.Instance["Hist_SourceAgentUi"]
         };
 
-        // Pagination properties
+        // 페이지네이션 속성
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(ShowingRecordsText))]
         private int _currentPage = 1;
@@ -122,14 +130,14 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
-        // Selected log and modal state
+        // 선택된 로그와 상세 모달 상태
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(IsModalOpen))]
         private HistoryLogItem? _selectedLog;
 
         public bool IsModalOpen => SelectedLog != null;
 
-        // Stats Footer
+        // 하단 상태 표시줄
         [ObservableProperty]
         private string _systemStatusText = "System Status: Nominal";
 
@@ -173,6 +181,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             LoadPage();
         }
 
+        /// <summary>현재 모드(촬영/챔버/알람)에 맞는 페이지 로더로 분기해 목록을 다시 채운다.</summary>
         private void LoadPage()
         {
             if (IsAlarmMode)
@@ -200,7 +209,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
             catch (Exception ex)
             {
-                // A DB read failure must not crash the operator app when opening History.
+                // 이력 화면을 여는 순간의 DB 읽기 실패가 운영자 앱을 죽여서는 안 된다.
                 System.Diagnostics.Debug.WriteLine($"[History] capture query failed: {ex.Message}");
                 TotalRecords = 0;
                 TotalPages = 1;
@@ -233,6 +242,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>챔버 이력(온·습도·흑체) 페이지를 조회해 채운다.</summary>
         private void LoadChamberPage()
         {
             ChamberItems.Clear();
@@ -262,6 +272,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>알람 이력 페이지를 조회해 채운다. 최소 심각도 필터는 콤보 인덱스로 매핑한다.</summary>
         private void LoadAlarmPage()
         {
             AlarmItems.Clear();
@@ -328,6 +339,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             SelectedCameraGroup = desired.Contains(previous) ? previous : AllCamerasFilter;
         }
 
+        /// <summary>필터·날짜 조건으로 1페이지부터 다시 조회한다.</summary>
         [RelayCommand]
         private void Search()
         {
@@ -335,6 +347,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             LoadPage();
         }
 
+        /// <summary>촬영 이력 모드로 전환한다.</summary>
         [RelayCommand]
         private void ShowCaptureMode()
         {
@@ -345,6 +358,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             LoadPage();
         }
 
+        /// <summary>챔버 이력 모드로 전환한다.</summary>
         [RelayCommand]
         private void ShowChamberMode()
         {
@@ -355,6 +369,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             LoadPage();
         }
 
+        /// <summary>알람 이력 모드로 전환한다.</summary>
         [RelayCommand]
         private void ShowAlarmMode()
         {
@@ -365,18 +380,24 @@ namespace HeatingCameraSystem.Master.ViewModels
             LoadPage();
         }
 
+        /// <summary>촬영 이력 상세 모달을 연다.</summary>
         [RelayCommand]
         private void OpenDetail(HistoryLogItem item)
         {
             SelectedLog = item;
         }
 
+        /// <summary>상세 모달을 닫는다.</summary>
         [RelayCommand]
         private void CloseDetail()
         {
             SelectedLog = null;
         }
 
+        /// <summary>
+        /// 페이지 이동. <paramref name="direction"/>은 "first"/"prev"/"next"/"last" 또는
+        /// 페이지 번호 문자열을 받는다. 범위를 벗어난 번호는 무시한다.
+        /// </summary>
         [RelayCommand]
         private void MovePage(string direction)
         {
@@ -405,6 +426,10 @@ namespace HeatingCameraSystem.Master.ViewModels
             LoadPage();
         }
 
+        /// <summary>
+        /// 현재 필터 조건의 촬영 이력 전체(페이지 무관)를 CSV로 내보낸다.
+        /// Excel 호환을 위해 UTF-8 BOM으로 저장한다.
+        /// </summary>
         [RelayCommand]
         private void ExportCsv()
         {
@@ -441,6 +466,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             SystemStatusText = $"Exported {records.Count} records to {Path.GetFileName(dlg.FileName)}";
         }
 
+        /// <summary>쉼표·따옴표·개행이 포함된 값을 CSV 규칙(따옴표 감싸기 + 이중 따옴표)으로 이스케이프한다.</summary>
         private static string CsvEscape(string s)
         {
             if (string.IsNullOrEmpty(s)) return string.Empty;

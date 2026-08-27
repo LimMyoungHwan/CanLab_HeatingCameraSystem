@@ -4,7 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace HeatingCameraSystem.AgentUI.ViewModels
 {
     /// <summary>
-    /// Root view model for the AgentUI window: a live-view panel per local camera.
+    /// AgentUI 창의 루트 뷰모델: 로컬 카메라마다 라이브 뷰 패널 하나를 가진다.
     /// </summary>
     public partial class MainViewModel : ObservableObject
     {

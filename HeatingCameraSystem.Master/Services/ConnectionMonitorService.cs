@@ -34,6 +34,7 @@ namespace HeatingCameraSystem.Master.Services
             _interval = interval ?? TimeSpan.FromSeconds(30);
         }
 
+        /// <summary>점검 타이머를 시작한다. 콜백은 스레드풀에서 돌며 UI 스레드를 쓰지 않는다.</summary>
         public void Start() =>
             _timer = new Timer(async _ => await TickAsync(), null, _interval, _interval);
 
@@ -41,6 +42,11 @@ namespace HeatingCameraSystem.Master.Services
 
         public void Dispose() => _timer?.Dispose();
 
+        /// <summary>
+        /// 점검 1회. Interlocked 가드로 재진입을 막아 이전 점검이 길어져도 겹치지 않는다.
+        /// PLC가 끊겨 있으면 백오프 일정(<see cref="ComputeBackoff"/>)에 도달한 경우에만 재연결을
+        /// 시도하고, 알람은 첫 실패와 복구 시에만 올려 반복 스팸을 막는다.
+        /// </summary>
         private async Task TickAsync()
         {
             if (Interlocked.CompareExchange(ref _running, 1, 0) != 0) return;
@@ -75,6 +81,7 @@ namespace HeatingCameraSystem.Master.Services
             }
         }
 
+        /// <summary>연속 실패 횟수에 따른 지수 백오프 대기 시간을 구한다(점검 간격 × 2^(n-1), 상한 5분).</summary>
         private TimeSpan ComputeBackoff(int failures)
         {
             double seconds = _interval.TotalSeconds * Math.Pow(2, Math.Min(failures - 1, 10));

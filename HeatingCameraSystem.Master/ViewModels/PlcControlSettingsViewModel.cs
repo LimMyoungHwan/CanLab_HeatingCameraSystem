@@ -11,6 +11,7 @@ using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
+    /// <summary>포인트 좌표 그리드의 한 행. 좌표 단위는 mm다.</summary>
     public partial class PointCoordRow : ObservableObject
     {
         public int Index { get; init; }
@@ -19,6 +20,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private float _y;
     }
 
+    /// <summary>
+    /// PLC 설정 화면. PLC/흑체 연결 정보(hardware.json), 포인트 좌표 1~20, 관리자 파라미터를
+    /// 읽고 쓴다. 흑체 목표 온도 즉시 적용 기능도 이 화면에 남아 있다.
+    /// </summary>
     public partial class PlcControlSettingsViewModel : ObservableObject
     {
         // 온/습도 제어 · 온도 램프 · 모터/팬은 수동 조작(ManualControlViewModel)으로 이동.
@@ -63,6 +68,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             BlackBody2 = blackBody.Units[1];
         }
 
+        /// <summary>PLC 연결 정보(IP/포트/국번)를 hardware.json에 저장한다. 적용에는 재시작이 필요하다.</summary>
         [RelayCommand]
         private void SavePlcConnection()
         {
@@ -74,6 +80,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             StatusMessage = L("Plc_ConnSaved", plc.IpAddress, plc.Port);
         }
 
+        /// <summary>흑체 연결 설정(사용 여부 포함)을 hardware.json에 저장한다. 유닛 설정은 바인딩으로 이미 반영된 상태다.</summary>
         [RelayCommand]
         private void SaveBlackBodyConnection()
         {
@@ -82,12 +89,15 @@ namespace HeatingCameraSystem.Master.ViewModels
             StatusMessage = LocalizationManager.Instance["Plc_BbConnSaved"];
         }
 
+        /// <summary>흑체 1 목표 온도(℃)를 적용한다.</summary>
         [RelayCommand]
         private Task ApplyBlackBody1() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(0, BlackBody1Target), LocalizationManager.Instance["Plc_Bb1Temp"]);
 
+        /// <summary>흑체 2 목표 온도(℃)를 적용한다.</summary>
         [RelayCommand]
         private Task ApplyBlackBody2() => RunBlackBodyAsync(bb => bb.SetTemperatureAsync(1, BlackBody2Target), LocalizationManager.Instance["Plc_Bb2Temp"]);
 
+        /// <summary>PLC에서 포인트 1~20의 좌표(mm)를 읽어 그리드에 채운다.</summary>
         [RelayCommand]
         private async Task LoadPoints()
         {
@@ -110,6 +120,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>그리드의 포인트 1~20 좌표(mm)를 PLC에 쓴다.</summary>
         [RelayCommand]
         private async Task SavePoints()
         {
@@ -128,6 +139,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>PLC 상태 스냅샷에서 관리자 파라미터(과열 한계·쿨러 경계 등)를 읽어 온다.</summary>
         [RelayCommand]
         private async Task LoadAdmin()
         {
@@ -153,6 +165,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>편집한 관리자 파라미터 전체를 PLC에 쓴다.</summary>
         [RelayCommand]
         private Task SaveAdmin() => RunAsync(p => p.WriteAdminSettingsAsync(new PlcAdminSettings
         {
@@ -168,6 +181,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private static string L(string key, params object[] args) => string.Format(LocalizationManager.Instance[key], args);
 
+        /// <summary>PLC 제어 공통 실행기. 미초기화·실패를 <see cref="StatusMessage"/>로 보고한다.</summary>
         private async Task RunAsync(Func<IPlcController, Task> action, string label)
         {
             var plc = AppServices.PlcController;
@@ -184,6 +198,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>흑체 제어 공통 실행기. 미초기화·실패를 <see cref="StatusMessage"/>로 보고한다.</summary>
         private async Task RunBlackBodyAsync(Func<IBlackBodyController, Task> action, string label)
         {
             var bb = AppServices.BlackBodyController;

@@ -1,5 +1,6 @@
 namespace HeatingCameraSystem.Protocols.Cameras.CL
 {
+    /// <summary>CL 시리얼 프로토콜 패킷의 메인 ID 바이트. 값은 하드웨어 계약이다.</summary>
     public enum ClMainId : byte
     {
         Detector    = 0x00,
@@ -9,12 +10,14 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
         Debug       = 0xF0,
     }
 
+    /// <summary>읽기/쓰기 구분 바이트.</summary>
     public enum ClRw : byte
     {
         Write = 0x00,
         Read  = 0x01,
     }
 
+    /// <summary><see cref="ClMainId.Detector"/>의 하위 ID: S/N 레지스터 4바이트와 FPA 온도 MSB/LSB.</summary>
     public enum ClDetectorSubId : byte
     {
         SerialNbA  = 0x00,
@@ -25,6 +28,7 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
         FpaTempLsb = 0x0B,
     }
 
+    /// <summary><see cref="ClMainId.OperateCtrl"/>의 하위 ID: 카메라·셔터 동작 제어와 설정 저장.</summary>
     public enum ClOperateCtrlSubId : byte
     {
         Camera     = 0x00,

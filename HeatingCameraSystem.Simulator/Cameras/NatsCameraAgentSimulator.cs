@@ -9,6 +9,12 @@ using HeatingCameraSystem.Simulator.State;
 
 namespace HeatingCameraSystem.Simulator.Cameras;
 
+/// <summary>
+/// 설정된 카메라 전부를 NATS Agent처럼 흉내 내는 단일 엔드포인트. 카메라별 캡처 명령을 구독하고,
+/// 하트비트(<c>agent.status.{AgentId}</c>)와 라이브 프레임을 주기 발행하며, 캡처 결과는
+/// 합성 프레임을 JPEG로 저장해 응답한다. <see cref="SimulatorState"/>의 카메라 모드에 따라
+/// Offline이면 무응답, Faulted면 <c>IsSuccess=false</c>로 응답해 장애 시나리오를 재현한다.
+/// </summary>
 public sealed class NatsCameraAgentSimulator : ICameraAgentEndpoint
 {
     private readonly SimulatorSettings _settings;
@@ -32,6 +38,7 @@ public sealed class NatsCameraAgentSimulator : ICameraAgentEndpoint
         _store = new SyntheticCaptureStore(settings.OutputPath);
     }
 
+    /// <summary>NATS 연결 후 카메라별 캡처 구독을 걸고 하트비트 타이머와 라이브 프레임 루프를 기동한다.</summary>
     public async Task StartAsync()
     {
         await _nats.ConnectAsync(_settings.Endpoint.NatsUrl).ConfigureAwait(false);
@@ -45,6 +52,10 @@ public sealed class NatsCameraAgentSimulator : ICameraAgentEndpoint
         _liveLoop = Task.Run(() => PublishLiveFramesAsync(_cts.Token));
     }
 
+    /// <summary>
+    /// 캡처 명령 1건 처리. Offline이면 무응답, Faulted면 실패 응답, Online이면 합성 프레임을
+    /// 저장하고 경로와 JPEG 바이트를 담아 성공 응답한다. public: 테스트가 직접 호출한다.
+    /// </summary>
     public async Task HandleCaptureAsync(CameraSettings camera, CaptureCommandMessage command)
     {
         CameraMode mode = _state.GetCameraMode(camera.AgentId);
@@ -86,6 +97,7 @@ public sealed class NatsCameraAgentSimulator : ICameraAgentEndpoint
         if (_ownsNats) await _nats.DisposeAsync().ConfigureAwait(false);
     }
 
+    // Offline이 아닌 카메라마다 하트비트를 발행한다. 발행 실패는 다음 주기가 만회하므로 삼킨다.
     private void PublishStatuses()
     {
         foreach (CameraSettings camera in _settings.Cameras)

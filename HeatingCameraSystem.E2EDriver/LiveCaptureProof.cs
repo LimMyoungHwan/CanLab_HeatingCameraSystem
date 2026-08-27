@@ -6,16 +6,16 @@ using HeatingCameraSystem.Protocols;
 namespace HeatingCameraSystem.E2EDriver;
 
 /// <summary>
-/// S5 early E2E proof (camera-only, no PLC). Drives an already-running AgentUI with a real
-/// camera and proves the integrated path end to end:
-///   live view flowing (agent.live.*) → NATS capture cmd → AgentUI tees the live loop →
-///   radiometric .y16 written → result published (agent.result.capture.*), while Manager-facing
-///   heartbeats (agent.status.*) keep flowing. Every observed event and the final verdict are
-///   appended as NDJSON to a log file for a real-run record.
+/// S5 조기 E2E 증명(카메라 전용, PLC 없음). 이미 실행 중인 AgentUI에 실제 카메라를 물려
+/// 통합 경로를 끝에서 끝까지 증명한다:
+///   라이브 뷰 흐름(agent.live.*) → NATS 캡처 명령 → AgentUI가 라이브 루프를 티(tee) →
+///   radiometric .y16 기록 → 결과 발행(agent.result.capture.*), 그동안 Manager 대상
+///   하트비트(agent.status.*)도 계속 흐른다. 관측된 모든 이벤트와 최종 판정은 실행 기록용으로
+///   NDJSON 형식으로 로그 파일에 append 된다.
 ///
-/// Fidelity is checked against the real .y16 on disk (this driver runs on the camera PC), using
-/// the self-describing sidecar .json for Width/Height. No message-schema change is needed.
-/// ponytail: reads .y16 locally; if the driver ever runs off-box, add y16 bytes to the result msg.
+/// 정합성은 디스크의 실제 .y16 로 검증한다(이 드라이버는 카메라 PC에서 실행). Width/Height 는
+/// 자기기술 사이드카 .json 에서 읽는다. 메시지 스키마 변경은 필요 없다.
+/// ponytail: .y16 를 로컬에서 읽는다; 드라이버가 다른 PC에서 실행되면 결과 메시지에 y16 바이트를 추가하라.
 /// </summary>
 internal static class LiveCaptureProof
 {

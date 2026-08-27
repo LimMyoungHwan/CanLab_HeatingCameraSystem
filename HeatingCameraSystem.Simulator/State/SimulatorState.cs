@@ -1,6 +1,6 @@
 namespace HeatingCameraSystem.Simulator.State;
 
-/// <summary>Per-camera runtime mode reported by the simulator.</summary>
+/// <summary>Simulator가 보고하는 카메라별 런타임 모드.</summary>
 public enum CameraMode
 {
     Online,
@@ -9,9 +9,9 @@ public enum CameraMode
 }
 
 /// <summary>
-/// Single thread-safe holder for simulator runtime: PLC online flag, fault bits 0-19,
-/// and per-AgentId camera mode. Every read and write takes one lock, so concurrent
-/// callers never observe torn state.
+/// Simulator 런타임 상태의 단일 스레드 안전 보관소: PLC 온라인 플래그, 장애 비트 0-19,
+/// AgentId별 카메라 모드. 읽기와 쓰기 전부가 락 하나를 잡으므로 동시 호출자가
+/// 찢어진 상태를 볼 수 없다.
 /// </summary>
 public sealed class SimulatorState
 {
@@ -22,7 +22,7 @@ public sealed class SimulatorState
     private readonly Dictionary<string, CameraMode> _cameras;
     private bool _plcOnline;
 
-    /// <summary>Seeds one <see cref="CameraMode.Online"/> entry per AgentId.</summary>
+    /// <summary>AgentId마다 <see cref="CameraMode.Online"/> 항목 하나씩을 심는다.</summary>
     public SimulatorState(IEnumerable<string> agentIds)
     {
         ArgumentNullException.ThrowIfNull(agentIds);
@@ -63,7 +63,7 @@ public sealed class SimulatorState
         lock (_gate) return _faults[index];
     }
 
-    /// <summary>Consistent copy of all fault bits taken under the lock.</summary>
+    /// <summary>락 아래에서 뜬 전체 장애 비트의 일관된 복사본.</summary>
     public IReadOnlyList<bool> SnapshotFaults()
     {
         lock (_gate) return (bool[])_faults.Clone();

@@ -18,6 +18,7 @@ namespace HeatingCameraSystem.Protocols
         public PlcBlackBodyAdapter(IPlcController plc)
             => _plc = plc ?? throw new ArgumentNullException(nameof(plc));
 
+        /// <summary>PLC에는 Bb1/Bb2 두 벌의 디바이스만 있으므로 대수가 고정이다.</summary>
         public int Count => 2;
         public bool IsConnected => _plc.IsConnected;
 
@@ -33,6 +34,7 @@ namespace HeatingCameraSystem.Protocols
         public Task<float> GetCurrentTemperatureAsync(int blackBodyIndex)
             => _plc.GetCurrentBlackBodyTemperatureAsync(blackBodyIndex);
 
+        /// <summary>PLC를 조회하지 않고 이 어댑터가 마지막으로 설정한 SV 캐시를 반환한다. 설정 이력이 없으면 25.0 ℃.</summary>
         public Task<float> GetTargetTemperatureAsync(int blackBodyIndex)
             => Task.FromResult(_sv.GetOrAdd(blackBodyIndex, 25.0f));
 

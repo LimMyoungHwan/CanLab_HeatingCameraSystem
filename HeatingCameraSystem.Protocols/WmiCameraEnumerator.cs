@@ -22,8 +22,13 @@ namespace HeatingCameraSystem.Protocols
         private readonly TimeSpan _debounce = TimeSpan.FromSeconds(1);
         private readonly object _debounceLock = new();
 
+        /// <summary>PnP 장치 증감 알림. 디바운스 후 전체 재열거 결과를 카메라별로 발화한다.</summary>
         public event Action<PnpChange>? Changed;
 
+        /// <summary>
+        /// PNPClass가 Image 또는 Camera인 PnP 엔터티를 열거한다.
+        /// OpenCvIndex는 WMI 열거 순서대로 0부터 부여한다.
+        /// </summary>
         public IReadOnlyList<DiscoveredCamera> Enumerate()
         {
             var results = new List<DiscoveredCamera>();
@@ -56,6 +61,7 @@ namespace HeatingCameraSystem.Protocols
         public IReadOnlyList<DiscoveredCamera> EnumerateThermal(string friendlyNamePrefix = "CLTC_T_VGA") =>
             Enumerate().Where(c => c.FriendlyName.StartsWith(friendlyNamePrefix, StringComparison.OrdinalIgnoreCase)).ToList();
 
+        /// <summary>Win32_PnPEntity 생성/삭제 이벤트 감시를 시작한다. 이벤트 폭주는 1초 디바운스로 묶는다.</summary>
         public void StartWatching()
         {
             var query = new WqlEventQuery(
@@ -78,6 +84,7 @@ namespace HeatingCameraSystem.Protocols
             _debounceTimer?.Dispose();
         }
 
+        /// <summary>타이머를 재장전해 마지막 이벤트로부터 1초 뒤 한 번만 재열거·통지한다.</summary>
         private void ScheduleDebounce(PnpChangeType changeType)
         {
             lock (_debounceLock)

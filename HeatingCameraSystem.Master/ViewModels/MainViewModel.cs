@@ -10,6 +10,10 @@ using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
+    /// <summary>
+    /// 알람 패널 심각도 필터 항목. Key는 번역 키, Severity가 null이면 "전체"다.
+    /// 라벨은 언어 전환 시 <see cref="UpdateLabel"/>로 갈아 끼운다.
+    /// </summary>
     public sealed class AlarmFilterOption : ObservableObject
     {
         private string _label;
@@ -32,6 +36,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         public void UpdateLabel(string label) => Label = label;
     }
 
+    /// <summary>
+    /// 메인 셸 화면. 좌측 내비게이션으로 각 화면 ViewModel을 전환하고, 상단 알람 패널
+    /// (필터·삭제)과 부저 정지·에러 리셋·원점 복귀·비상정지 등 전역 PLC 트리거를 담당한다.
+    /// </summary>
     public partial class MainViewModel : ObservableObject
     {
         [ObservableProperty]
@@ -82,6 +90,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 filter.UpdateLabel(LocalizationManager.Instance[filter.Key]);
         }
 
+        /// <summary>선택된 심각도 필터를 적용해 표시용 알람 목록을 다시 만든다.</summary>
         private void RefreshFilteredAlarms()
         {
             FilteredAlarms.Clear();
@@ -95,6 +104,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         partial void OnSelectedAlarmFilterChanged(AlarmFilterOption? value) => RefreshFilteredAlarms();
 
+        /// <summary>알람 1건을 목록에서 제거한다.</summary>
         [RelayCommand]
         private void DeleteAlarm(AlarmEntry? entry) => AlarmSink.Remove(entry);
 
@@ -104,12 +114,15 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty]
         private string _alarmActionMessage = string.Empty;
 
+        /// <summary>부저 정지 트리거.</summary>
         [RelayCommand]
         private Task BuzzerOff() => TriggerAsync(p => p.BuzzerOffAsync(), LocalizationManager.Instance["Nav_BuzzerOff"]);
 
+        /// <summary>PLC 에러 리셋 트리거.</summary>
         [RelayCommand]
         private Task ResetError() => TriggerAsync(p => p.ResetErrorAsync(), LocalizationManager.Instance["Nav_ErrorReset"]);
 
+        /// <summary>원점 복귀: 포인트 1 좌표를 (0,0)으로 쓰고 그 포인트로 이동시킨다.</summary>
         [RelayCommand]
         private Task PlcOrigin() => TriggerAsync(async p =>
         {
@@ -117,9 +130,11 @@ namespace HeatingCameraSystem.Master.ViewModels
             await p.MoveServoToPositionAsync(1);
         }, LocalizationManager.Instance["Plc_Origin"]);
 
+        /// <summary>비상정지 트리거.</summary>
         [RelayCommand]
         private Task EmergencyStop() => TriggerAsync(p => p.TriggerEmergencyStopAsync(), LocalizationManager.Instance["Equip_EStop"]);
 
+        /// <summary>전역 PLC 트리거 공통 실행기. 성공/실패를 <see cref="AlarmActionMessage"/>로 보고한다.</summary>
         private async Task TriggerAsync(Func<IPlcController, Task> action, string label)
         {
             var plc = AppServices.PlcController;
@@ -143,6 +158,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>대시보드로 전환한다. 대시보드 VM은 앱 수명 동안 1개를 재사용하며, 진입 시 레시피 목록만 새로고침한다.</summary>
         [RelayCommand]
         private void NavigateToDashboard()
         {
@@ -152,6 +168,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             UpdateTitle();
         }
 
+        /// <summary>레시피 편집 화면으로 전환한다. 진입할 때마다 VM을 새로 만든다.</summary>
         [RelayCommand]
         private void NavigateToRecipeEditor()
         {
@@ -160,6 +177,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             UpdateTitle();
         }
 
+        /// <summary>이력 화면으로 전환한다. 진입할 때마다 VM을 새로 만들어 현재 언어의 필터 라벨을 반영한다.</summary>
         [RelayCommand]
         private void NavigateToHistory()
         {
@@ -168,6 +186,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             UpdateTitle();
         }
 
+        /// <summary>Agent 설정 화면으로 전환한다.</summary>
         [RelayCommand]
         private void NavigateToAgentSettings()
         {
@@ -176,6 +195,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             UpdateTitle();
         }
 
+        /// <summary>PLC 상태 모니터 화면으로 전환한다. 이벤트 구독 중복을 막기 위해 VM을 캐시해 재사용한다.</summary>
         [RelayCommand]
         private void NavigateToStatusMonitor()
         {
@@ -184,6 +204,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             UpdateTitle();
         }
 
+        /// <summary>PLC 설정 화면으로 전환한다.</summary>
         [RelayCommand]
         private void NavigateToPlcControlSettings()
         {
@@ -192,6 +213,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             UpdateTitle();
         }
 
+        /// <summary>수동 조작 화면으로 전환한다.</summary>
         [RelayCommand]
         private void NavigateToManualControl()
         {

@@ -4,10 +4,10 @@ using OpenCvSharp;
 namespace HeatingCameraSystem.Protocols.Cameras
 {
     /// <summary>
-    /// Encodes a 14-bit Y16 <see cref="ThermalFrame"/> into a viewable 8-bit image (min/max
-    /// normalized) via OpenCV imgcodecs. Used for the NATS capture-result payload so the Master
-    /// keeps receiving displayable bytes exactly as it did from the console Agent's JPG. The
-    /// radiometric data is preserved separately in the local .y16 files.
+    /// 14비트 Y16 <see cref="ThermalFrame"/>을 OpenCV imgcodecs로 표시 가능한 8비트 이미지
+    /// (min/max 정규화)로 인코딩한다. NATS 캡처 결과 페이로드에 쓰여 Master가 콘솔 Agent의
+    /// JPG 시절과 똑같이 표시 가능한 바이트를 계속 받게 한다. 방사 측정 데이터는 로컬 .y16
+    /// 파일에 따로 보존된다.
     /// </summary>
     public static class ThermalPreviewEncoder
     {
@@ -16,8 +16,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
         public static byte[] EncodePng(ThermalFrame frame) => Encode(frame, ".png");
 
         /// <summary>
-        /// Encodes a frame as a false-color JPEG (plateau AGC + iron via <see cref="ThermalColorizer"/>)
-        /// for the NATS live-preview stream, so Master shows the same thermal look as the AgentUI preview.
+        /// NATS 라이브 미리보기 스트림용 false-color JPEG(plateau AGC + iron, <see cref="ThermalColorizer"/> 경유)로
+        /// 인코딩한다. Master가 AgentUI 미리보기와 같은 열화상 룩을 보게 하기 위해서다.
         /// </summary>
         public static byte[] EncodeColorJpeg(ThermalFrame frame)
         {

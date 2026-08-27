@@ -7,6 +7,10 @@ using HeatingCameraSystem.Protocols.Cameras;
 
 namespace HeatingCameraSystem.AgentUI.ViewModels
 {
+    /// <summary>
+    /// AgentUiLog가 남긴 .ndjson 로그 파일을 되읽어 보여주는 인앱 로그 뷰어 뷰모델.
+    /// 최소 레벨을 바꾸면 즉시 다시 읽는다.
+    /// </summary>
     public partial class LogViewerViewModel : ObservableObject
     {
         private readonly string _logDir;

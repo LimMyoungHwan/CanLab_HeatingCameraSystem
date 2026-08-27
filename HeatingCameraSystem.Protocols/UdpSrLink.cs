@@ -4,6 +4,10 @@ using HeatingCameraSystem.Core.Config;
 
 namespace HeatingCameraSystem.Protocols
 {
+    /// <summary>
+    /// SR-800N 흑체와의 UDP 링크. UDP는 데이터그램 단위라 시리얼과 달리 프레임 재조립이 필요 없다
+    /// — 수신 데이터그램 하나가 곧 응답 프레임 하나다.
+    /// </summary>
     public sealed class UdpSrLink : ISrLink
     {
         private readonly BlackBodyUnitSettings _cfg;
@@ -34,6 +38,7 @@ namespace HeatingCameraSystem.Protocols
 
         public void Write(byte[] data) => _client!.Send(data, data.Length);
 
+        /// <summary>데이터그램 하나를 수신해 그대로 반환한다. ReadTimeoutMs 안에 응답이 없으면 SocketException.</summary>
         public byte[] Read()
         {
             IPEndPoint endpoint = new(IPAddress.Any, 0);

@@ -7,6 +7,10 @@ using LiteDB;
 
 namespace HeatingCameraSystem.Master.Services
 {
+    /// <summary>
+    /// 카메라 장치 정보를 LiteDB <c>CameraDevice</c> 컬렉션에 보관하는 저장소.
+    /// HardwareId에 고유 인덱스를 걸어 같은 하드웨어가 중복 등록되지 않게 한다.
+    /// </summary>
     public class LiteDbCameraDeviceRepository : ICameraDeviceRepository
     {
         private readonly ILiteCollection<CameraDevice> _col;

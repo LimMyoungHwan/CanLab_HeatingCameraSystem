@@ -7,9 +7,9 @@ using HeatingCameraSystem.Core.Models;
 namespace HeatingCameraSystem.Protocols.Cameras
 {
     /// <summary>
-    /// Facade over <see cref="ThermalCaptureWriter"/> (files) and <see cref="ICaptureIndex"/>
-    /// (index): one <see cref="Save"/> writes the radiometric files and records the index entry;
-    /// <see cref="Delete"/> and <see cref="Purge"/> remove both files and index entry together.
+    /// <see cref="ThermalCaptureWriter"/>(파일)와 <see cref="ICaptureIndex"/>(인덱스)를 묶는 파사드.
+    /// <see cref="Save"/> 한 번으로 방사 측정 파일 기록과 인덱스 등록을 함께 하고,
+    /// <see cref="Delete"/>·<see cref="Purge"/>는 파일과 인덱스 항목을 같이 제거한다.
     /// </summary>
     public sealed class CaptureStore : IDisposable
     {
@@ -49,6 +49,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
         public IReadOnlyList<CaptureRecord> Query(string? agentId = null, int limit = 200)
             => _index.Query(agentId, limit);
 
+        /// <summary>레코드의 파일과 인덱스 항목을 함께 제거한다. 인덱스에 없는 id면 false를 반환한다.</summary>
         public bool Delete(Guid id)
         {
             CaptureRecord? record = _index.Get(id);
@@ -61,6 +62,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             return _index.Delete(id);
         }
 
+        /// <summary>cutoffUtc 이전 레코드를 파일까지 포함해 정리하고 제거한 건수를 반환한다.</summary>
         public int Purge(DateTime cutoffUtc)
         {
             int removed = 0;
@@ -98,11 +100,11 @@ namespace HeatingCameraSystem.Protocols.Cameras
             }
             catch (IOException)
             {
-                // best effort: file may be locked or already removed
+                // 최선 노력: 파일이 잠겨 있거나 이미 지워졌을 수 있다.
             }
             catch (UnauthorizedAccessException)
             {
-                // best effort
+                // 최선 노력
             }
         }
 

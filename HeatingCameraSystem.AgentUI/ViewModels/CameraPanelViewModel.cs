@@ -11,6 +11,11 @@ using HeatingCameraSystem.Protocols.Cameras;
 
 namespace HeatingCameraSystem.AgentUI.ViewModels
 {
+    /// <summary>
+    /// 카메라 한 대의 패널 뷰모델: 라이브 열영상 표시와 시리얼(RUN/셔터/NUC) 제어를 담당한다.
+    /// 영상 출력은 시리얼과 의도적으로 분리되어 있다 — 시리얼이 null이면(포트 열기 실패 등)
+    /// 시리얼 명령은 no-op이 되고 시리얼 패널만 숨겨질 뿐, 영상 스트리밍은 계속된다.
+    /// </summary>
     public partial class CameraPanelViewModel : ObservableObject, IDisposable
     {
         private ICameraRuntime _runtime;
@@ -43,6 +48,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         [ObservableProperty]
         private string _captureStatus = string.Empty;
 
+        /// <summary>시리얼 제어 가능 여부. 하트비트의 시리얼 건강 플래그(IsSerialConnected)가 이 값을 읽는다.</summary>
         public bool HasSerialControl => _serial is not null;
 
         public string AgentId => _agentId;
@@ -66,6 +72,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _runtime.StatusChanged += OnStatusChanged;
         }
 
+        /// <summary>카메라 루프 스레드에서 프레임을 변환해 UI 스레드로 넘긴다. 변환 실패 프레임은 조용히 버린다.</summary>
         private void OnFrameReady(object? sender, ThermalFrame frame)
         {
             BitmapSource bmp;
@@ -86,10 +93,10 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _dispatcher.InvokeAsync(() => Status = status.ToString());
         }
 
-        // [S7] Point the panel at a reloaded video runtime (Manager runtimeLoad), or clear it on
-        // runtimeUnload (runtime = null). Only the video runtime swaps — the serial client + NUC stay,
-        // so a per-camera unload/reload never churns the COM port. Call on the UI thread so the field
-        // swap is serialized with the capture commands that read _runtime.
+        // [S7] 패널을 재적재된 영상 런타임으로 향하게 하거나(Manager runtimeLoad), runtimeUnload 시
+        // 해제한다(runtime = null). 영상 런타임만 교체된다 — 시리얼 클라이언트 + NUC는 그대로이므로
+        // 카메라별 unload/reload가 COM 포트를 절대 흔들지 않는다. 필드 교체가 _runtime을 읽는 캡처
+        // 명령들과 직렬화되도록 UI 스레드에서 호출할 것.
         public void RebindRuntime(ICameraRuntime? runtime)
         {
             _runtime.FrameReady -= OnFrameReady;
@@ -115,6 +122,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             await _runtime.StartAsync();
         }
 
+        /// <summary>버스트 수만큼 스냅샷을 NUC 보정 후 저장하고, 마지막 장을 캡처 결과로 Master에 발행한다.</summary>
         [RelayCommand]
         private async Task CaptureSaveAsync()
         {
@@ -208,6 +216,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             }
         }
 
+        /// <summary>셔터를 닫아 평면필드를 캡처해 NUC 보정 테이블을 갱신한 뒤 셔터를 다시 연다.</summary>
         [RelayCommand(CanExecute = nameof(HasSerialControl))]
         private async Task RunNucAsync()
         {
@@ -237,6 +246,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             }
         }
 
+        /// <summary>라이브 프레임을 frameCount장 누적 평균해(14비트 마스킹) NUC 평면필드용 프레임을 만든다.</summary>
         private async Task<ThermalFrame?> AverageFramesAsync(int frameCount)
         {
             ThermalFrame? first = _runtime.LatestFrame;
@@ -277,6 +287,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             await s.SetCameraRunningAsync(false);
         }, "영상 종료 (셔터 닫힘+STOP)");
 
+        /// <summary>시리얼 명령 공통 실행기. _serial이 null이면 no-op — 영상 출력이 시리얼 성패에 좌우되지 않게 하는 지점이다.</summary>
         private async Task RunSerialAsync(Func<ICameraSerialClient, Task> action, string label)
         {
             if (_serial is null) return;

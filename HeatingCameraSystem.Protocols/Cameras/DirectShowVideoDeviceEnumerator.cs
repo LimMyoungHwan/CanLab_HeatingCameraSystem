@@ -7,11 +7,13 @@ using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Protocols.Cameras
 {
-    // Enumerates DirectShow video-input devices via DsDevice.GetDevicesOfCat — the SAME
-    // ICreateDevEnum / IEnumMoniker sequence OpenCV's cap_dshow walks (no sorting) — so the Nth device
-    // here is exactly VideoCapture(N, VideoCaptureAPIs.DSHOW). This alignment ONLY holds for the DSHOW
-    // backend; opening with MSMF would break it. ContainerId is derived from each DevicePath through the
-    // same registry lookup WmiCameraEnumerator uses, so it matches CameraDescriptor.UsbContainerId.
+    /// <summary>
+    /// DsDevice.GetDevicesOfCat로 DirectShow 비디오 입력 장치를 열거한다 — OpenCV cap_dshow가 걷는
+    /// 것과 동일한 ICreateDevEnum / IEnumMoniker 순서(정렬 없음)라서, 여기의 N번째 장치가 정확히
+    /// VideoCapture(N, VideoCaptureAPIs.DSHOW)다. 이 순서 일치는 DSHOW 백엔드에서만 성립하며
+    /// MSMF로 열면 깨진다. ContainerId는 WmiCameraEnumerator와 같은 레지스트리 조회로 각
+    /// DevicePath에서 파생되므로 CameraDescriptor.UsbContainerId와 맞아떨어진다.
+    /// </summary>
     [SupportedOSPlatform("windows")]
     public sealed class DirectShowVideoDeviceEnumerator : IVideoDeviceEnumerator
     {

@@ -7,9 +7,9 @@ using LiteDB;
 namespace HeatingCameraSystem.Protocols.Cameras
 {
     /// <summary>
-    /// Local LiteDB index over saved captures (fast browse/query/retention), mirroring the
-    /// Master capture-history pattern. Owns its own database file so AgentUI stays independent
-    /// of the Master project. The <c>.json</c> sidecars remain the portable source of truth.
+    /// 저장된 캡처를 빠르게 탐색·조회·정리하기 위한 로컬 LiteDB 인덱스. Master의 캡처 이력
+    /// 패턴을 그대로 따른다. 자체 데이터베이스 파일을 소유해 AgentUI가 Master 프로젝트에
+    /// 의존하지 않는다. 이식 가능한 원본 진실은 여전히 <c>.json</c> 사이드카다.
     /// </summary>
     public sealed class LiteDbCaptureIndex : ICaptureIndex
     {

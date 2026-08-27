@@ -7,6 +7,7 @@ using System.Linq;
 
 namespace HeatingCameraSystem.Master.Localization
 {
+    /// <summary>언어 선택 UI에 표시되는 항목. Code는 언어 파일 이름, DisplayName은 그 파일의 Lang_Name 키 값이다.</summary>
     public sealed class LanguageOption
     {
         public string Code { get; init; } = string.Empty;
@@ -15,9 +16,9 @@ namespace HeatingCameraSystem.Master.Localization
     }
 
     /// <summary>
-    /// Runtime i18n from external <c>Resources/Lang/&lt;code&gt;.txt</c> files (key=value, # comments).
-    /// Drop a new txt file next to the exe to add a language — no rebuild. English is the fallback
-    /// when the active language is missing a key. XAML binds via the <c>{loc:Loc Key}</c> extension.
+    /// 외부 <c>Resources/Lang/&lt;code&gt;.txt</c> 파일(key=value, # 주석) 기반 런타임 다국어 처리.
+    /// exe 옆에 새 txt 파일만 놓으면 다시 빌드하지 않고도 언어가 추가된다. 활성 언어에 키가 없으면
+    /// 영어가 fallback이다. XAML은 <c>{loc:Loc Key}</c> 확장으로 바인딩한다.
     /// </summary>
     public sealed class LocalizationManager : INotifyPropertyChanged
     {
@@ -48,6 +49,7 @@ namespace HeatingCameraSystem.Master.Localization
             SetLanguage(LoadPreferredCode(), persist: false);
         }
 
+        /// <summary>현재 언어 → fallback(en) → 키 자체 순으로 번역 문자열을 찾는다.</summary>
         public string this[string key]
         {
             get
@@ -59,9 +61,9 @@ namespace HeatingCameraSystem.Master.Localization
         }
 
         /// <summary>
-        /// Like the indexer, but returns <paramref name="fallback"/> (not the key) when the key is
-        /// undefined. Used for data-layer labels (e.g. PlcDeviceCatalog bit names) that live outside
-        /// the resource files: only the entries that need translating get a key; the rest fall back.
+        /// 인덱서와 같지만 키가 정의되어 있지 않으면 (키가 아니라) <paramref name="fallback"/>을
+        /// 돌려준다. 리소스 파일 밖에 사는 데이터 계층 라벨(예: PlcDeviceCatalog 비트 이름)에 쓴다.
+        /// 번역이 필요한 항목만 키를 갖고 나머지는 fallback으로 처리한다.
         /// </summary>
         public string GetOrDefault(string key, string fallback)
         {
@@ -70,23 +72,26 @@ namespace HeatingCameraSystem.Master.Localization
             return fallback;
         }
 
+        /// <summary>현재 언어 코드. set 하면 언어를 교체하고 선호 언어로도 저장한다.</summary>
         public string CurrentLanguage
         {
             get => _currentCode;
             set => SetLanguage(value, persist: true);
         }
 
+        /// <summary>언어를 교체하고 모든 <c>{loc:Loc}</c> 바인딩을 갱신한다. persist가 참이면 선호 언어 파일에도 저장한다.</summary>
         public void SetLanguage(string code, bool persist = true)
         {
             if (string.IsNullOrWhiteSpace(code)) return;
             _current = Load(code);
             _currentCode = code;
             if (persist) SavePreferredCode(code);
-            // "Item[]" is WPF's indexer-change token: refreshes every {loc:Loc} binding at once.
+            // "Item[]"는 WPF의 인덱서 변경 토큰: 모든 {loc:Loc} 바인딩을 한 번에 갱신한다.
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentLanguage)));
         }
 
+        /// <summary>Lang 폴더의 *.txt를 훑어 언어 목록을 만든다. 표시 이름은 각 파일의 Lang_Name 키이며 없으면 파일 이름이다.</summary>
         private void Discover()
         {
             var list = new List<LanguageOption>();
@@ -111,6 +116,7 @@ namespace HeatingCameraSystem.Master.Localization
             return File.Exists(path) ? Parse(path) : new Dictionary<string, string>(StringComparer.Ordinal);
         }
 
+        /// <summary>key=value 줄을 사전으로 읽는다. 빈 줄과 # 주석은 건너뛰고, 읽다가 실패하면 그때까지 읽은 것만 돌려준다.</summary>
         private static Dictionary<string, string> Parse(string path)
         {
             var dict = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -132,6 +138,7 @@ namespace HeatingCameraSystem.Master.Localization
             return dict;
         }
 
+        /// <summary>저장된 선호 언어 코드를 읽는다. 없거나 읽기에 실패하면 기본값(ko)이다.</summary>
         private static string LoadPreferredCode()
         {
             try
