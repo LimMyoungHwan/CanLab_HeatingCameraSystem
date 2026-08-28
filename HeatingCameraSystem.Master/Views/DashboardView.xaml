@@ -793,6 +793,13 @@
                             </Button>
                             <ProgressBar Value="{Binding RecipeProgressValue}" Height="6" Foreground="{StaticResource Secondary}" Background="{StaticResource BgSurface}" BorderThickness="0" Margin="0,0,0,4"/>
                             <TextBlock Text="{Binding RecipePhaseText}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,8"/>
+                            <Border Background="{StaticResource BgSurfaceVariant}" BorderBrush="{StaticResource Error}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,8"
+                                    Visibility="{Binding IsRecipePaused, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <StackPanel>
+                                    <TextBlock Text="{loc:Loc Dash_Paused}" Foreground="{StaticResource Error}" FontSize="11" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <Button Content="{loc:Loc Dash_Resume}" Background="{StaticResource Secondary}" Foreground="#00210c" FontSize="16" FontWeight="Bold" Padding="0,10" BorderThickness="0" Command="{Binding ResumeRecipeCommand}"/>
+                                </StackPanel>
+                            </Border>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>

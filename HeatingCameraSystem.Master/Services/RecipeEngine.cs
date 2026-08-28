@@ -56,7 +56,7 @@ namespace HeatingCameraSystem.Master.Services
         /// 계속한다. 정상 완료 시에만 StopChamberAsync를 호출한다 — 취소로 중단되면 챔버 정지는
         /// AppServices 종료 시퀀스가 유일한 안전망이다.
         /// </summary>
-        public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null)
+        public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null, Func<CancellationToken, Task>? waitForResumeAsync = null)
         {
             int totalSteps = recipe.Steps.Count;
             var resultWaiters = new ConcurrentDictionary<string, TaskCompletionSource<CaptureResultMessage>>();
@@ -78,7 +78,10 @@ namespace HeatingCameraSystem.Master.Services
             while (!cancellationToken.IsCancellationRequested)
             {
                 float currentTemp = await _plcController.GetCurrentTemperatureAsync();
-                if (Math.Abs(currentTemp - recipe.GlobalTargetTemperature) <= _tempTolerance) break;
+                float currentHumidity = await _plcController.GetCurrentHumidityAsync();
+                bool tempReached = Math.Abs(currentTemp - recipe.GlobalTargetTemperature) <= _tempTolerance;
+                bool humidityReached = Math.Abs(currentHumidity - recipe.GlobalTargetHumidity) <= recipe.SafetyHumidityTolerance;
+                if (tempReached && humidityReached) break;
                 await Task.Delay(2000, cancellationToken);
             }
 
@@ -108,6 +111,20 @@ namespace HeatingCameraSystem.Master.Services
                     float bbTemp = await _blackBody.GetCurrentTemperatureAsync(activeBB);
                     if (Math.Abs(bbTemp - step.TargetBlackBodyTemperature) <= _tempTolerance) break;
                     await Task.Delay(1000, cancellationToken);
+                }
+
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    var (inBand, curTemp, curHumidity) = await ReadSafetyBandAsync(recipe);
+                    if (inBand) break;
+
+                    // ponytail: 밴드 경계를 넘을 때마다 알람 — 스팸이면 디바운스 추가
+                    AlarmSink.Raise(AlarmSeverity.Error, "레시피",
+                        $"안전 밴드 이탈 (T={curTemp:F1}℃ 목표 {recipe.GlobalTargetTemperature:F1}±{recipe.SafetyTempTolerance:F1}, H={curHumidity:F1}%RH 목표 {recipe.GlobalTargetHumidity:F1}±{recipe.SafetyHumidityTolerance:F1}). 사용자 확인 대기.");
+                    progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = "안전조건 이탈 — 사용자 확인 대기" });
+
+                    if (waitForResumeAsync is null) break;
+                    await waitForResumeAsync(cancellationToken);
                 }
 
                 progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"캡처 ({i + 1}/{totalSteps})" });
@@ -209,6 +226,15 @@ namespace HeatingCameraSystem.Master.Services
                 recipe.TemperatureRampMinutes,
                 rampProgress,
                 ct);
+        }
+
+        private async Task<(bool InBand, float Temp, float Humidity)> ReadSafetyBandAsync(Recipe recipe)
+        {
+            float temp = await _plcController.GetCurrentTemperatureAsync();
+            float humidity = await _plcController.GetCurrentHumidityAsync();
+            bool inBand = Math.Abs(temp - recipe.GlobalTargetTemperature) <= recipe.SafetyTempTolerance
+                       && Math.Abs(humidity - recipe.GlobalTargetHumidity) <= recipe.SafetyHumidityTolerance;
+            return (inBand, temp, humidity);
         }
 
         /// <summary>

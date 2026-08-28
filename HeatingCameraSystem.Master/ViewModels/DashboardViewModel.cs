@@ -168,6 +168,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         [NotifyCanExecuteChangedFor(nameof(StartRecipeCommand))]
         private bool _recoveryLockActive;
 
+        [ObservableProperty]
+        [NotifyCanExecuteChangedFor(nameof(ResumeRecipeCommand))]
+        private bool _isRecipePaused;
+
         public ObservableCollection<DashboardSlot> CameraFeeds { get; } = new ObservableCollection<DashboardSlot>();
         public ObservableCollection<AgentNode> Agents { get; } = new ObservableCollection<AgentNode>();
         public ObservableCollection<Recipe> Recipes { get; } = new ObservableCollection<Recipe>();
@@ -195,6 +199,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private int _activeRecipeStepIndex = -1;
         private const float OriginToleranceMm = 0.5f;
         private CancellationTokenSource? _recipeCts;
+        private TaskCompletionSource<object?>? _pauseGate;
         private System.Windows.Threading.DispatcherTimer? _offlineCheckTimer;
 
         /// <summary>운영 진입점. <see cref="AppServices"/>의 실제 서비스로 조립한다.</summary>
@@ -894,7 +899,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             try
             {
-                await AppServices.RecipeEngine.ExecuteRecipeAsync(SelectedRecipe, _recipeCts.Token, progress);
+                await AppServices.RecipeEngine.ExecuteRecipeAsync(SelectedRecipe, _recipeCts.Token, progress, WaitForResumeAsync);
                 RecipeStatus = LocalizationManager.Instance["Dash_RecipeDone"];
             }
             catch (OperationCanceledException)
@@ -921,6 +926,28 @@ namespace HeatingCameraSystem.Master.ViewModels
             _recipeCts?.Cancel();
             RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopping"];
         }
+
+        private async Task WaitForResumeAsync(CancellationToken cancellationToken)
+        {
+            var gate = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pauseGate = gate;
+            RunOnUi(() => IsRecipePaused = true);
+            using var registration = cancellationToken.Register(() => gate.TrySetCanceled(cancellationToken));
+            try
+            {
+                await gate.Task.ConfigureAwait(false);
+            }
+            finally
+            {
+                _pauseGate = null;
+                RunOnUi(() => IsRecipePaused = false);
+            }
+        }
+
+        private bool CanResumeRecipe() => IsRecipePaused;
+
+        [RelayCommand(CanExecute = nameof(CanResumeRecipe))]
+        private void ResumeRecipe() => _pauseGate?.TrySetResult(null);
 
         /// <summary>드래그&amp;드롭으로 카메라를 슬롯에 배치하고 즉시 DB에 저장한다(모드 2~5 전용).</summary>
         [RelayCommand]
