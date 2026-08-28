@@ -22,6 +22,12 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>타겟 온도 도달 시간(분). 0이면 즉시 지정, 0보다 크면 현재 온도→타겟 선형 램프(히터 급출력 방지).</summary>
         public int TemperatureRampMinutes { get; set; } = 0;
 
+        /// <summary>안전 밴드: 챔버 현재 온도가 전역 목표에서 이만큼(℃) 벗어나면 촬영을 멈추고 알람 후 사용자 확인 대기.</summary>
+        public float SafetyTempTolerance { get; set; } = 1.0f;
+
+        /// <summary>안전 밴드: 챔버 현재 습도가 전역 목표에서 이만큼(%RH) 벗어나면 촬영을 멈추고 알람 후 사용자 확인 대기.</summary>
+        public float SafetyHumidityTolerance { get; set; } = 5.0f;
+
         /// <summary>순차적으로 실행될 스텝 목록.</summary>
         public List<RecipeStep> Steps { get; set; } = new();
     }

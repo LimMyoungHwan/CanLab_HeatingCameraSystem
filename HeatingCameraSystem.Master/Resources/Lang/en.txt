@@ -202,6 +202,8 @@ Recipe_AvailableCameras=Available Cameras
 Recipe_MappingInstruction=Select a camera and click on a slot.
 Recipe_UnmapTooltip=Unmap
 Recipe_OnlineAgentCameras=Online Agent Cameras
+Recipe_SafetyTempTolerance=Safety Temp Tolerance (℃)
+Recipe_SafetyHumidityTolerance=Safety Humidity Tolerance (%RH)
 
 # Hist
 Hist_From=From
@@ -314,6 +316,8 @@ Dash_RecipeDone=Done
 Dash_RecipeStopped=Stopped
 Dash_RecipeError=Error: {0}
 Dash_RecipeStopping=Stopping...
+Dash_Resume=Resume
+Dash_Paused=Safety band exceeded — awaiting operator confirmation
 
 # PLC settings status messages
 Common_Idle=Idle

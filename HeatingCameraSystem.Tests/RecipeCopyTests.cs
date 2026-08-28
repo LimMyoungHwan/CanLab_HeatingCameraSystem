@@ -1,3 +1,4 @@
+using System.Reflection;
 using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Master.ViewModels;
 
@@ -14,6 +15,8 @@ public class RecipeCopyTests
             GlobalTargetTemperature = 42.5f,
             GlobalTargetHumidity = 67.5f,
             TemperatureRampMinutes = 15,
+            SafetyTempTolerance = 2.5f,
+            SafetyHumidityTolerance = 7.5f,
             Steps = Enumerable.Range(1, 3).Select(i => new RecipeStep
             {
                 StepId = $"step-{i}",
@@ -47,6 +50,9 @@ public class RecipeCopyTests
             Assert.Equal(pair.First.TargetChamberHumidity, pair.Second.TargetChamberHumidity);
         });
 
+        Assert.Equal(2.5f, clone.SafetyTempTolerance);
+        Assert.Equal(7.5f, clone.SafetyHumidityTolerance);
+
         clone.Steps[0].CameraIndex = 64;
 
         Assert.Equal(1, source.Steps[0].CameraIndex);
@@ -62,5 +68,26 @@ public class RecipeCopyTests
         Assert.NotEqual(source.Id, clone.Id);
         Assert.Equal("빈 레시피 (복사)", clone.Name);
         Assert.Empty(clone.Steps);
+    }
+
+    [Fact]
+    public void VmRoundTripPreservesSafetyBand()
+    {
+        var fromDomain = typeof(RecipeEditorViewModel).GetMethod("FromDomain", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var toDomain   = typeof(RecipeEditorViewModel).GetMethod("ToDomain", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        var recipe = new Recipe
+        {
+            GlobalTargetTemperature = 20.0f,
+            GlobalTargetHumidity = 40.0f,
+            SafetyTempTolerance = 2.5f,
+            SafetyHumidityTolerance = 7.5f
+        };
+
+        var vm = fromDomain.Invoke(null, new object[] { recipe })!;
+        var back = (Recipe)toDomain.Invoke(null, new object[] { vm })!;
+
+        Assert.Equal(2.5f, back.SafetyTempTolerance);
+        Assert.Equal(7.5f, back.SafetyHumidityTolerance);
     }
 }

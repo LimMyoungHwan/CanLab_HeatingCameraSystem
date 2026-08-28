@@ -179,6 +179,35 @@
                                 </Border>
                             </StackPanel>
                         </Grid>
+
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="1.5*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                <TextBlock Text="{loc:Loc Recipe_SafetyTempTolerance}" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                <Border Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBox Text="{Binding SafetyTempTolerance}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="18" FontWeight="Bold" Width="60"/>
+                                        <TextBlock Text="°C" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="0,0,16,0">
+                                <TextBlock Text="{loc:Loc Recipe_SafetyHumidityTolerance}" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
+                                <Border Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBox Text="{Binding SafetyHumidityTolerance}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="18" FontWeight="Bold" Width="60"/>
+                                        <TextBlock Text="%RH" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </Border>
 

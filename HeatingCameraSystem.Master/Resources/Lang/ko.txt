@@ -202,6 +202,8 @@ Recipe_AvailableCameras=사용 가능한 카메라
 Recipe_MappingInstruction=카메라를 선택한 뒤 슬롯을 클릭하세요.
 Recipe_UnmapTooltip=맵핑 해제
 Recipe_OnlineAgentCameras=온라인 Agent 카메라
+Recipe_SafetyTempTolerance=안전 온도 허용치 (℃)
+Recipe_SafetyHumidityTolerance=안전 습도 허용치 (%RH)
 
 # Hist
 Hist_From=시작
@@ -314,6 +316,8 @@ Dash_RecipeDone=완료
 Dash_RecipeStopped=중지됨
 Dash_RecipeError=오류: {0}
 Dash_RecipeStopping=중지 중...
+Dash_Resume=재개
+Dash_Paused=안전조건 이탈 — 사용자 확인 대기
 
 # PLC settings status messages
 Common_Idle=대기
