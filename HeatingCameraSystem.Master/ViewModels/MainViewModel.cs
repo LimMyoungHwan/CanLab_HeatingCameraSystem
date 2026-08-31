@@ -132,7 +132,11 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         /// <summary>비상정지 트리거.</summary>
         [RelayCommand]
-        private Task EmergencyStop() => TriggerAsync(p => p.TriggerEmergencyStopAsync(), LocalizationManager.Instance["Equip_EStop"]);
+        private Task EmergencyStop()
+        {
+            AppServices.RecipeEngine?.RequestEmergencyStop();
+            return TriggerAsync(p => p.TriggerEmergencyStopAsync(), LocalizationManager.Instance["Equip_EStop"]);
+        }
 
         /// <summary>전역 PLC 트리거 공통 실행기. 성공/실패를 <see cref="AlarmActionMessage"/>로 보고한다.</summary>
         private async Task TriggerAsync(Func<IPlcController, Task> action, string label)

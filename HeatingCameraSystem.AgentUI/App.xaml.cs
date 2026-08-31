@@ -189,6 +189,9 @@ namespace HeatingCameraSystem.AgentUI
                             CameraControlOps.ShutterClose => panel.CloseShutterCommand,
                             CameraControlOps.Capture => panel.CaptureSaveCommand,
                             CameraControlOps.Nuc => panel.RunNucCommand,
+                            CameraControlOps.BiasLow => panel.RunBiasLowCommand,
+                            CameraControlOps.BiasMid => panel.RunBiasMidCommand,
+                            CameraControlOps.BiasHigh => panel.RunBiasHighCommand,
                             CameraControlOps.SaveConfig => panel.SaveConfigCommand,
                             CameraControlOps.RefreshInfo => panel.RefreshInfoCommand,
                             _ => null
@@ -209,7 +212,10 @@ namespace HeatingCameraSystem.AgentUI
                 // 패널이 핫플러그마다 재생성되므로 스냅샷이 아니라 매번 조회한다. 패널이 아직 없으면
                 // 시리얼 제어가 없다는 뜻이므로 false — 영상 전용 구성은 지원 대상이 아니다.
                 serialHealth: descriptor => _mainViewModel?.Cameras
-                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.HasSerialControl ?? false);
+                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.HasSerialControl ?? false,
+                readCameraTemperature: descriptor => _mainViewModel?.Cameras
+                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.ReadCameraTemperatureAsync()
+                    ?? Task.FromResult<double?>(null));
             _natsConnector.Start(config.NatsUrl);
 
             if (!config.SimulationMode)

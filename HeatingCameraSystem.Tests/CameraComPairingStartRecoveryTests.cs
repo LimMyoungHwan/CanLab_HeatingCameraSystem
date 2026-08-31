@@ -36,7 +36,9 @@ namespace HeatingCameraSystem.Tests
                 => Task.FromResult(_running ? _recovered : "000000000");
 
             public Task<double> ReadFpaTemperatureAsync(CancellationToken ct = default) => Task.FromResult(30.0);
-            public Task SetShutterAsync(bool open, CancellationToken ct = default) => Task.CompletedTask;
+        public Task SetShutterAsync(bool open, CancellationToken ct = default) => Task.CompletedTask;
+        public Task SetBiasAsync(byte value, CancellationToken ct = default) => Task.CompletedTask;
+        public Task SetBiasRegisterAsync(CameraBiasRegister register, byte value, CancellationToken ct = default) => Task.CompletedTask;
 
             public Task SetCameraRunningAsync(bool running, CancellationToken ct = default)
             {

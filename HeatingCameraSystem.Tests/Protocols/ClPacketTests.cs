@@ -20,6 +20,18 @@ namespace HeatingCameraSystem.Tests.Protocols
         }
 
         [Fact]
+        public void BuildRequest_BiasGskLsbWrite_BuildsGoldenPacket()
+        {
+            byte[] request = ClPacket.BuildRequest(
+                (byte)ClMainId.Detector,
+                (byte)ClDetectorSubId.GskLsb,
+                ClRw.Write,
+                0x7F);
+
+            Assert.True(request.SequenceEqual(new byte[] { 0x43, 0x4C, 0x00, 0x06, 0x00, 0x00, 0x7F }));
+        }
+
+        [Fact]
         public void ExtractPayload_ValidClPacket_ReturnsLastByte()
         {
             byte payload = ClPacket.ExtractPayload(new byte[] { 0x43, 0x4C, 0, 0, 0, 0, 0x2A });

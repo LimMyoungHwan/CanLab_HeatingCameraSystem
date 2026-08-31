@@ -16,6 +16,8 @@ namespace HeatingCameraSystem.Protocols.Simulation
         public bool IsOpen { get; private set; }
         public bool ShutterOpen { get; private set; }
         public bool CameraRunning { get; private set; }
+        public byte Bias { get; private set; }
+        public Dictionary<CameraBiasRegister, byte> BiasRegisters { get; } = new();
 
         public FakeCameraSerialClient(string portName)
         {
@@ -58,6 +60,20 @@ namespace HeatingCameraSystem.Protocols.Simulation
         public Task SetShutterAsync(bool open, CancellationToken ct = default)
         {
             ShutterOpen = open;
+            return Task.CompletedTask;
+        }
+
+        public Task SetBiasAsync(byte value, CancellationToken ct = default)
+        {
+            Bias = value;
+            BiasRegisters[CameraBiasRegister.GskLsb] = value;
+            return Task.CompletedTask;
+        }
+
+        public Task SetBiasRegisterAsync(CameraBiasRegister register, byte value, CancellationToken ct = default)
+        {
+            BiasRegisters[register] = value;
+            if (register == CameraBiasRegister.GskLsb) Bias = value;
             return Task.CompletedTask;
         }
 

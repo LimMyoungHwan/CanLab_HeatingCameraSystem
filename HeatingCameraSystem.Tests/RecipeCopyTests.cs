@@ -24,6 +24,8 @@ public class RecipeCopyTests
                 CameraAlias = $"CAM-{i:D2}",
                 TargetPositionIndex = i + 10,
                 TargetBlackBodyTemperature = 20 + i,
+                BlackBodyIndex = i % 2,
+                WaitForStabilization = i % 2 == 0,
                 PositionX = i * 100,
                 PositionY = i * 200,
                 TargetChamberTemperature = 30 + i,
@@ -44,6 +46,8 @@ public class RecipeCopyTests
             Assert.Equal(pair.First.CameraAlias, pair.Second.CameraAlias);
             Assert.Equal(pair.First.TargetPositionIndex, pair.Second.TargetPositionIndex);
             Assert.Equal(pair.First.TargetBlackBodyTemperature, pair.Second.TargetBlackBodyTemperature);
+            Assert.Equal(pair.First.BlackBodyIndex, pair.Second.BlackBodyIndex);
+            Assert.Equal(pair.First.WaitForStabilization, pair.Second.WaitForStabilization);
             Assert.Equal(pair.First.PositionX, pair.Second.PositionX);
             Assert.Equal(pair.First.PositionY, pair.Second.PositionY);
             Assert.Equal(pair.First.TargetChamberTemperature, pair.Second.TargetChamberTemperature);

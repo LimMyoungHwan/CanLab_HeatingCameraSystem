@@ -92,7 +92,7 @@ namespace HeatingCameraSystem.Protocols
             => FromScaled(await ReadWordAsync(_s.HumPv), 10);
 
         public Task SetHumidityControlAsync(bool on)
-            => WriteBitAsync(_s.BitHumidityControl, on);
+            => WriteWordAsync(_s.BitHumidityControl, 1);
 
         // ── 흑체 ──
         /// <summary>흑체 SV(℃)를 0.01℃ 단위 워드(x100)로 기록한다. blackBodyIndex 0 → Bb1, 그 외 → Bb2.</summary>
@@ -218,7 +218,10 @@ namespace HeatingCameraSystem.Protocols
                 PairGlass = await ReadBitAsync(_s.StatusPairGlass),
                 Mcf = await ReadBitAsync(_s.StatusMcf),
                 Blower1 = await ReadBitAsync(_s.StatusBlower1),
-                Blower2 = await ReadBitAsync(_s.StatusBlower2)
+                Blower2 = await ReadBitAsync(_s.StatusBlower2),
+                Chiller = await ReadBitAsync(_s.StatusChiller),
+                DoorLock = await ReadBitAsync(_s.StatusDoorLock),
+                Lighting = await ReadBitAsync(_s.StatusLighting)
             };
 
             s.ErrorBits = await ReadBitBlockAsync(_s.ErrorBitBase, s.ErrorBits.Length, hex: false);
@@ -240,8 +243,12 @@ namespace HeatingCameraSystem.Protocols
             return s;
         }
 
-        public Task TriggerEmergencyStopAsync()
-            => WriteBitAsync(_s.BitEmergencyStop, true);
+        public async Task TriggerEmergencyStopAsync()
+        {
+            await WriteBitRawAsync(_s.BitEmergencyStop, true);
+            await Task.Delay(100);
+            await WriteBitRawAsync(_s.BitEmergencyStop, false);
+        }
 
         // P 비트 → WriteBitAsync가 ON 후 PulseHoldMs 뒤 OFF까지 처리.
         public Task ResetErrorAsync() => WriteBitAsync(_s.BitErrorReset, true);

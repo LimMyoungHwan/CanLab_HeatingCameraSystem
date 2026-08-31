@@ -54,6 +54,7 @@ namespace HeatingCameraSystem.Master.Services
                     Timestamp = result.Timestamp,
                     Temperature = s?.CurrentTemperature ?? 0f,
                     Humidity = s?.CurrentHumidity ?? 0f,
+                    CameraTemperature = result.CameraTemperature,
                     ImagePath = imagePath
                 }).ConfigureAwait(false);
             }

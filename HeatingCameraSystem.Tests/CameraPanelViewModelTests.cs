@@ -15,6 +15,21 @@ namespace HeatingCameraSystem.Tests
 {
     public class CameraPanelViewModelTests
     {
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task FindBiasAsync_MonotonicResponse_SelectsTargetRange(bool increasing)
+        {
+            const double target = 4000;
+            Task<double> Measure(byte value) => Task.FromResult(
+                increasing ? 3000 + value * 8.0 : 5000 - value * 8.0);
+
+            (byte value, double error) = await CameraPanelViewModel.FindBiasAsync(target, Measure);
+
+            Assert.InRange(error, 0, 100);
+            Assert.InRange(value, (byte)110, (byte)140);
+        }
+
         [Fact]
         public async Task StartLiveAsync_WithNullSerial_CompletesAndControlDisabled()
         {

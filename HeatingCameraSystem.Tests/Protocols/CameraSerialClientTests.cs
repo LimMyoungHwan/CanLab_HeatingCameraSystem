@@ -19,6 +19,9 @@ namespace HeatingCameraSystem.Tests.Protocols
             Assert.True(double.IsFinite(temp));
 
             await c.SetShutterAsync(true);
+            await c.SetBiasAsync(0x7F);
+
+            Assert.Equal(0x7F, c.Bias);
         }
     }
 }

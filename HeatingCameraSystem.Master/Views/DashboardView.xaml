@@ -256,8 +256,8 @@
             <StackPanel Grid.Column="0" Margin="16,16,10,16">
                 <StackPanel Width="384">
 
-                    <!-- CHAMBER -->
-                    <Border Style="{StaticResource Card}">
+                    <!-- CHAMBER telemetry is shown in EQUIPMENT -->
+                    <Border Visibility="Collapsed" Style="{StaticResource Card}">
                         <StackPanel>
                             <TextBlock Text="{loc:Loc Dash_ChamberTitle}" Style="{StaticResource CardHeader}"/>
                             <Grid>
@@ -296,28 +296,6 @@
                                     </StackPanel>
                                 </StackPanel>
                             </Grid>
-                            <Border Height="64" Margin="0,12,0,0" Background="#0a1019" BorderBrush="{StaticResource CardEdge}" BorderThickness="1" CornerRadius="6" Padding="6">
-                                <Grid>
-                                    <TextBlock Text="{loc:Loc Dash_TrendLoading}" Foreground="{StaticResource Outline}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding TemperatureTrendPoints.Count}" Value="0">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <Viewbox Stretch="Fill">
-                                        <Canvas Width="100" Height="40">
-                                            <Polyline Points="{Binding TemperatureTrendPoints}" Stroke="#ffb4ab" StrokeThickness="1.4" StrokeLineJoin="Round"/>
-                                            <Polyline Points="{Binding HumidityTrendPoints}" Stroke="{StaticResource Primary}" StrokeThickness="1.4" StrokeLineJoin="Round"/>
-                                        </Canvas>
-                                    </Viewbox>
-                                </Grid>
-                            </Border>
                         </StackPanel>
                     </Border>
 
@@ -429,41 +407,21 @@
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="{loc:Loc Dash_YErrorCode}" Style="{StaticResource Lbl}"/>
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ServoYErrorCode}" Style="{StaticResource Val}"/>
                             </Grid>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- PROGRAM -->
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <TextBlock Text="{loc:Loc Dash_ProgramTitle}" Style="{StaticResource CardHeader}"/>
-                            <Grid Margin="0,0,0,8">
+                            <Grid Margin="0,8,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="{loc:Loc Dash_StepLabel}" Style="{StaticResource Lbl}"/>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding CurrentStep}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}"/>
-                                        <TextBlock Text="{Binding TotalSteps, StringFormat= / {0}}" FontSize="14" Foreground="{StaticResource Outline}" VerticalAlignment="Bottom" Margin="4,0,0,6"/>
-                                    </StackPanel>
-                                </StackPanel>
-                                <StackPanel Grid.Column="1" Margin="12,0,0,0">
-                                    <TextBlock Text="{loc:Loc Dash_FanLabel}" Style="{StaticResource Lbl}"/>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding FanSpeedHz, StringFormat={}{0:F2}}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}"/>
-                                        <TextBlock Text="Hz" Style="{StaticResource Unit}"/>
-                                    </StackPanel>
-                                </StackPanel>
+                                <TextBlock Grid.Column="0" Text="{loc:Loc Dash_StepLabel}" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding CurrentStep}" Style="{StaticResource Val}"/>
                             </Grid>
-                            <Border Height="1" Background="{StaticResource CardEdge}" Margin="0,0,0,8"/>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Loc Dash_GasLabel}" Style="{StaticResource Lbl}"/>
-                                <TextBlock Grid.Column="1" Text="{Binding GasFlow, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                                <TextBlock Grid.Column="0" Text="{loc:Loc Dash_FanLabel}" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding FanSpeedHz, StringFormat={}{0:F2} Hz}" Style="{StaticResource Val}"/>
                             </Grid>
                         </StackPanel>
                     </Border>
@@ -472,6 +430,30 @@
                     <Border Grid.Row="1" Grid.ColumnSpan="3" Style="{StaticResource Card}">
                         <StackPanel>
                             <TextBlock Text="{loc:Loc Dash_EquipTitle}" Style="{StaticResource CardHeader}"/>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{loc:Loc Dash_TempLabel}" Style="{StaticResource Lbl}"/>
+                                    <TextBlock Text="{Binding CurrentTemperature, StringFormat={}{0:F1} °C}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Error}"/>
+                                    <TextBlock Text="{Binding TargetTemperature, StringFormat=SV {0:F1} °C}" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{loc:Loc Dash_HumidityLabel}" Style="{StaticResource Lbl}"/>
+                                    <TextBlock Text="{Binding CurrentHumidity, StringFormat={}{0:F1} %RH}" FontSize="30" FontWeight="Bold" Foreground="{StaticResource Primary}"/>
+                                    <TextBlock Text="{Binding TargetHumidity, StringFormat=SV {0:F1} %RH}" Style="{StaticResource Lbl}"/>
+                                </StackPanel>
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Loc Dash_GasLabel}" Style="{StaticResource Lbl}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding GasFlow, StringFormat={}{0:F1}}" Style="{StaticResource Val}"/>
+                            </Grid>
                             <WrapPanel>
                                 <StackPanel Style="{StaticResource LampCell}">
                                     <Ellipse Width="10" Height="10" Fill="{Binding Heater, Converter={StaticResource Lamp}}"/>

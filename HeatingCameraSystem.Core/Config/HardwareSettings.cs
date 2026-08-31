@@ -79,9 +79,8 @@ namespace HeatingCameraSystem.Core.Config
         public string BitTempStopLamp { get; set; } = "M11";      // 온도제어 정지
         public string BitTempStop { get; set; } = "M21";      // 온도제어 정지
         public string BitChamberRun { get; set; } = "M1910";  // PC RUN 표시등
-        public string BitHumidityControl { get; set; } = "D281.0"; // 습도제어 켜짐
-        // ponytail: 문서엔 챔버 비상정지 '상태'만 존재. PC 트리거 쓰기비트는 임의 지정 — 실제 비트 확인 후 교체.
-        public string BitEmergencyStop { get; set; } = "M2000";
+        public string BitHumidityControl { get; set; } = "D281"; // 습도제어 ON/OFF 공통 트리거(값 1)
+        public string BitEmergencyStop { get; set; } = "M901";
         public string BitErrorReset { get; set; } = "P525";   // 에러 리셋(챔버 모터) — 모멘터리
         public string BitBuzzerOff { get; set; } = "P250";    // 부저 OFF — 모멘터리
 
@@ -151,6 +150,9 @@ namespace HeatingCameraSystem.Core.Config
         public string StatusMcf { get; set; } = "D60.8";
         public string StatusBlower1 { get; set; } = "D60.9";
         public string StatusBlower2 { get; set; } = "D61.0";
+        public string StatusChiller { get; set; } = "P460";
+        public string StatusDoorLock { get; set; } = "P461";
+        public string StatusLighting { get; set; } = "D280.0";
 
         // ── 에러/IO 블록 base ──
         public string ErrorBitBase { get; set; } = "M4001";  // M4001~M4020
@@ -224,7 +226,7 @@ namespace HeatingCameraSystem.Core.Config
         public string Parity { get; set; } = "None";
         public string StopBits { get; set; } = "One";
         public string IpAddress { get; set; } = "192.168.1.100";
-        public int Port { get; set; } = 5000;
+        public int Port { get; set; } = 5200;
     }
 
     /// <summary>레시피 실행 엔진 설정(온도 허용오차, 캡처 결과 타임아웃, 온도 램프 스텝 간격).</summary>

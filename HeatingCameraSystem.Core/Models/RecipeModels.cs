@@ -32,10 +32,40 @@ namespace HeatingCameraSystem.Core.Models
         public List<RecipeStep> Steps { get; set; } = new();
     }
 
-    /// <summary>레시피의 개별 스텝. 하나의 촬영 동작을 정의한다.</summary>
+    /// <summary>레시피 스텝의 실행 대상이다. 기본값은 이전 버전의 일괄 촬영 스텝과 호환된다.</summary>
+    public enum RecipeStepKind
+    {
+        LegacyCapture,
+        MotorMove,
+        ChamberControl,
+        CameraCommand,
+        BlackBodyControl
+    }
+
+    public enum MotorMoveType
+    {
+        Manual,
+        Automatic
+    }
+
+    public class RecipeCameraTarget
+    {
+        public string AgentId { get; set; } = string.Empty;
+        public int CameraIndex { get; set; }
+    }
+
+    /// <summary>레시피의 개별 스텝. PLC 또는 카메라의 한 동작을 정의한다.</summary>
     public class RecipeStep
     {
         public string StepId { get; set; } = Guid.NewGuid().ToString();
+
+        /// <summary>실행할 장치·동작 종류. 저장된 기존 레시피는 <see cref="LegacyCapture"/>로 실행된다.</summary>
+        public RecipeStepKind Kind { get; set; } = RecipeStepKind.LegacyCapture;
+
+        /// <summary><see cref="CameraControlOps"/>의 카메라 명령. <see cref="RecipeStepKind.CameraCommand"/>에서만 사용한다.</summary>
+        public string CameraOperation { get; set; } = CameraControlOps.Capture;
+
+        public List<RecipeCameraTarget> CameraTargets { get; set; } = new();
 
         /// <summary>대상 카메라 인덱스(1~64). <see cref="CameraAlias"/>가 설정되어 있으면 Alias 우선.</summary>
         public int CameraIndex { get; set; }
@@ -46,8 +76,18 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>서보 유닛이 이동해야 할 위치. 카메라 위치에 대응.</summary>
         public int TargetPositionIndex { get; set; }
 
+        public MotorMoveType MotorMoveType { get; set; } = MotorMoveType.Manual;
+
         /// <summary>스텝 수행 시 블랙바디가 도달해야 할 목표 온도(℃).</summary>
         public float TargetBlackBodyTemperature { get; set; }
+
+        public float TargetBlackBodyTemperature1 { get; set; }
+
+        /// <summary>제어할 블랙바디 인덱스(0=흑체1, 1=흑체2).</summary>
+        public int BlackBodyIndex { get; set; }
+
+        /// <summary>true면 목표 온도에 도달할 때까지 대기한다.</summary>
+        public bool WaitForStabilization { get; set; } = true;
 
         /// <summary>서보 유닛 직접 이동 X 좌표(direct-XY-move).</summary>
         public float PositionX { get; set; }

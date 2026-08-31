@@ -56,6 +56,23 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
         public Task SetShutterAsync(bool open, CancellationToken ct = default)
             => QueryAsync((byte)ClMainId.OperateCtrl, (byte)ClOperateCtrlSubId.Shutter, ClRw.Write, open ? (byte)1 : (byte)0, ct);
 
+        public Task SetBiasAsync(byte value, CancellationToken ct = default)
+            => SetBiasRegisterAsync(CameraBiasRegister.GskLsb, value, ct);
+
+        public Task SetBiasRegisterAsync(CameraBiasRegister register, byte value, CancellationToken ct = default)
+            => QueryAsync((byte)ClMainId.Detector, (byte)ToDetectorSubId(register), ClRw.Write, value, ct);
+
+        private static ClDetectorSubId ToDetectorSubId(CameraBiasRegister register) => register switch
+        {
+            CameraBiasRegister.Cint => ClDetectorSubId.Cint,
+            CameraBiasRegister.TintMsb => ClDetectorSubId.TintMsb,
+            CameraBiasRegister.TintLsb => ClDetectorSubId.TintLsb,
+            CameraBiasRegister.GskMsb => ClDetectorSubId.GskMsb,
+            CameraBiasRegister.GskLsb => ClDetectorSubId.GskLsb,
+            CameraBiasRegister.Gfid => ClDetectorSubId.Gfid,
+            _ => throw new ArgumentOutOfRangeException(nameof(register), register, null)
+        };
+
         public Task SetCameraRunningAsync(bool running, CancellationToken ct = default)
             => QueryAsync((byte)ClMainId.OperateCtrl, (byte)ClOperateCtrlSubId.Camera, ClRw.Write, running ? (byte)1 : (byte)0, ct);
 

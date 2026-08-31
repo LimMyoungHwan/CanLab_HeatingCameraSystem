@@ -181,6 +181,9 @@ namespace HeatingCameraSystem.Core.Models
 
         /// <summary>블로워 2 상태.</summary>
         public bool Blower2 { get; set; }
+        public bool Chiller { get; set; }
+        public bool DoorLock { get; set; }
+        public bool Lighting { get; set; }
 
         // ── 에러 (M4001~M4020) ──
         /// <summary>M4001~M4020 비트 상태(인덱스 0 = M4001).</summary>

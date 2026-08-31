@@ -4,6 +4,16 @@ using System.Threading.Tasks;
 
 namespace HeatingCameraSystem.Core.Interfaces
 {
+    public enum CameraBiasRegister
+    {
+        Cint,
+        TintMsb,
+        TintLsb,
+        GskMsb,
+        GskLsb,
+        Gfid
+    }
+
     /// <summary>
     /// 카메라와 직접 통신하는 시리얼 클라이언트. 셔터 제어, FPA 온도 읽기,
     /// 시리얼 번호 조회 등 카메라 고유 명령을 담당한다.
@@ -27,6 +37,11 @@ namespace HeatingCameraSystem.Core.Interfaces
 
         /// <summary>true이면 셔터를 열고, false이면 닫는다.</summary>
         Task SetShutterAsync(bool open, CancellationToken ct = default);
+
+        /// <summary>검출기 GSK LSB 바이어스 레지스터(0~255)를 설정한다.</summary>
+        Task SetBiasAsync(byte value, CancellationToken ct = default);
+
+        Task SetBiasRegisterAsync(CameraBiasRegister register, byte value, CancellationToken ct = default);
 
         /// <summary>true이면 카메라를 실행 상태로 만들고, false이면 중지한다.</summary>
         Task SetCameraRunningAsync(bool running, CancellationToken ct = default);

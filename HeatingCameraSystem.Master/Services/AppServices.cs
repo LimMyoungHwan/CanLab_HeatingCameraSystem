@@ -276,7 +276,10 @@ namespace HeatingCameraSystem.Master.Services
                 try
                 {
                     var json = File.ReadAllText(path);
-                    return JsonSerializer.Deserialize<HardwareSettings>(json, _jsonOpts) ?? new HardwareSettings();
+                    HardwareSettings settings = JsonSerializer.Deserialize<HardwareSettings>(json, _jsonOpts) ?? new HardwareSettings();
+                    if (CorrectLegacyHardwareSettings(settings))
+                        File.WriteAllText(path, JsonSerializer.Serialize(settings, _jsonOpts));
+                    return settings;
                 }
                 catch (Exception ex)
                 {
@@ -288,6 +291,30 @@ namespace HeatingCameraSystem.Master.Services
             File.WriteAllText(path, JsonSerializer.Serialize(defaults, _jsonOpts));
             System.Diagnostics.Debug.WriteLine($"[AppServices] Created default hardware.json at {path}");
             return defaults;
+        }
+
+        internal static bool CorrectLegacyHardwareSettings(HardwareSettings settings)
+        {
+            bool changed = false;
+            if (settings.Plc.BitEmergencyStop == "M2000")
+            {
+                settings.Plc.BitEmergencyStop = "M901";
+                changed = true;
+            }
+            if (settings.Plc.BitHumidityControl == "D281.0")
+            {
+                settings.Plc.BitHumidityControl = "D281";
+                changed = true;
+            }
+            foreach (BlackBodyUnitSettings unit in settings.BlackBody.Units)
+            {
+                if (unit.ConnectionType == BlackBodyConnectionType.Ip && unit.Port == 5000)
+                {
+                    unit.Port = 5200;
+                    changed = true;
+                }
+            }
+            return changed;
         }
     }
 }

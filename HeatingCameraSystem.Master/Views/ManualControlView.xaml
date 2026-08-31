@@ -613,6 +613,21 @@
                                             Content="NUC"
                                             Style="{StaticResource Btn}" />
                                         <Button
+                                            Command="{Binding DataContext.SendBiasLowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="BIAS LOW"
+                                            Style="{StaticResource Btn}" />
+                                        <Button
+                                            Command="{Binding DataContext.SendBiasMidCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="BIAS MID"
+                                            Style="{StaticResource Btn}" />
+                                        <Button
+                                            Command="{Binding DataContext.SendBiasHighCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="BIAS HIGH"
+                                            Style="{StaticResource Btn}" />
+                                        <Button
                                             Command="{Binding DataContext.SendSaveConfigCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
                                             Content="{loc:Loc Manual_SaveConfig}"

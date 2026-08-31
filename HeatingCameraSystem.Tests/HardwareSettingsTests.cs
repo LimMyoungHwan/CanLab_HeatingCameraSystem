@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HeatingCameraSystem.Core.Config;
+using HeatingCameraSystem.Master.Services;
 using Xunit;
 
 namespace HeatingCameraSystem.Tests
@@ -31,6 +32,9 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal("nats://127.0.0.1:4222", s.Nats.Url);
             Assert.Equal("COM3", s.Serial.PortName);
             Assert.Equal(0.5f, s.RecipeEngine.TemperatureTolerance);
+            Assert.All(s.BlackBody.Units, unit => Assert.Equal(5200, unit.Port));
+            Assert.Equal("M901", s.Plc.BitEmergencyStop);
+            Assert.Equal("D281", s.Plc.BitHumidityControl);
         }
 
         [Fact]
@@ -79,6 +83,26 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal(BlackBodyConnectionType.Ip, restored.BlackBody.Units[0].ConnectionType);
             Assert.Equal("10.0.1.80", restored.BlackBody.Units[0].IpAddress);
             Assert.Equal(4001, restored.BlackBody.Units[0].Port);
+        }
+
+        [Fact]
+        public void CorrectLegacyHardwareSettings_ReplacesOnlyLegacyHardwareDefaults()
+        {
+            var settings = new HardwareSettings
+            {
+                Plc = new PlcSettings { BitEmergencyStop = "M2000", BitHumidityControl = "D281.0" },
+                BlackBody = new BlackBodySettings
+                {
+                    Units = new() { new BlackBodyUnitSettings { ConnectionType = BlackBodyConnectionType.Ip, Port = 5000 } }
+                }
+            };
+
+            bool changed = AppServices.CorrectLegacyHardwareSettings(settings);
+
+            Assert.True(changed);
+            Assert.Equal("M901", settings.Plc.BitEmergencyStop);
+            Assert.Equal("D281", settings.Plc.BitHumidityControl);
+            Assert.Equal(5200, settings.BlackBody.Units[0].Port);
         }
 
         [Fact]

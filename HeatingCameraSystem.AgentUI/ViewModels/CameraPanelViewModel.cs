@@ -203,6 +203,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private async Task RefreshInfoAsync()
         {
             if (_serial is null) return;
+
             try
             {
                 SerialNumber = await _serial.ReadSerialNumberAsync();
@@ -214,6 +215,13 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             {
                 SerialStatus = $"읽기 실패: {ex.Message}";
             }
+        }
+
+        public async Task<double?> ReadCameraTemperatureAsync()
+        {
+            if (_serial is null) return null;
+            try { return await _serial.ReadFpaTemperatureAsync().ConfigureAwait(false); }
+            catch { return null; }
         }
 
         /// <summary>셔터를 닫아 평면필드를 캡처해 NUC 보정 테이블을 갱신한 뒤 셔터를 다시 연다.</summary>
@@ -244,6 +252,134 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 SerialStatus = $"NUC 오류: {ex.Message}";
                 try { await _serial.SetShutterAsync(true); } catch { }
             }
+        }
+
+        [RelayCommand(CanExecute = nameof(HasSerialControl))]
+        private Task RunBiasLowAsync() => RunAutoBiasAsync("LOW", 8400, 8500, 8600, 0x93);
+
+        [RelayCommand(CanExecute = nameof(HasSerialControl))]
+        private Task RunBiasMidAsync() => RunAutoBiasAsync("MID", 4900, 5000, 5100, 0xA3);
+
+        [RelayCommand(CanExecute = nameof(HasSerialControl))]
+        private Task RunBiasHighAsync() => RunAutoBiasAsync("HIGH", 4900, 5000, 5100, 0xD3);
+
+        private async Task RunAutoBiasAsync(string mode, double targetMin, double target, double targetMax, byte cint)
+        {
+            if (_serial is null) return;
+
+            await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintMsb, 0x02);
+            await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintLsb, 0x73);
+            await _serial.SetBiasRegisterAsync(CameraBiasRegister.Cint, cint);
+            await _serial.SetBiasRegisterAsync(CameraBiasRegister.GskMsb, 0x01);
+            await _serial.SetBiasRegisterAsync(CameraBiasRegister.Gfid, 0xAE);
+            SerialStatus = $"BIAS: {target:F0} 탐색 중";
+            (byte best, double bestError) = await FindBiasInRangeAsync(targetMin, targetMax, MeasureBiasAsync);
+            await _serial.SetBiasAsync(best);
+            SerialStatus = $"BIAS 완료: 0x{best:X2} (오차 {bestError:F0})";
+        }
+
+        private static async Task<(byte Value, double Error)> FindBiasInRangeAsync(
+            double targetMin, double targetMax, Func<byte, Task<double>> measure)
+        {
+            var readings = new Dictionary<byte, double>();
+            async Task<double> Read(byte value)
+            {
+                if (!readings.TryGetValue(value, out double result))
+                {
+                    result = await measure(value);
+                    readings[value] = result;
+                }
+                return result;
+            }
+
+            double atZero = await Read(0);
+            double atFull = await Read(byte.MaxValue);
+            bool increasing = atFull >= atZero;
+            byte best = 0;
+            double bestError = double.MaxValue;
+            void Consider(byte value, double level)
+            {
+                double error = level < targetMin ? targetMin - level : level > targetMax ? level - targetMax : 0;
+                if (error < bestError) { best = value; bestError = error; }
+            }
+
+            for (int value = 0; value <= 0xF0; value += 0x10)
+                Consider((byte)value, await Read((byte)value));
+            int coarse = best & 0xF0;
+            for (int value = coarse; value <= Math.Min(coarse + 0x0F, 0xFF); value++)
+                Consider((byte)value, await Read((byte)value));
+
+            int low = 0;
+            int high = 0xFF;
+            while (low <= high && bestError != 0)
+            {
+                byte value = (byte)((low + high) / 2);
+                double level = await Read(value);
+                Consider(value, level);
+                if (level >= targetMin && level <= targetMax) break;
+                bool tooLow = level < targetMin;
+                if (tooLow == increasing) low = value + 1;
+                else high = value - 1;
+            }
+            return (best, bestError);
+        }
+
+        internal static async Task<(byte Value, double Error)> FindBiasAsync(
+            double target,
+            Func<byte, Task<double>> measure)
+        {
+            byte best = 0;
+            double bestError = double.MaxValue;
+            double atZero = await measure(0);
+            double atFull = await measure(byte.MaxValue);
+            bool increasing = atFull >= atZero;
+            int low = 0;
+            int high = byte.MaxValue;
+
+            while (low <= high)
+            {
+                byte value = (byte)((low + high) / 2);
+                double level = await measure(value);
+                double error = Math.Abs(level - target);
+                if (error < bestError)
+                {
+                    best = value;
+                    bestError = error;
+                }
+                if (error <= 100) break;
+
+                bool tooLow = level < target;
+                if (tooLow == increasing) low = value + 1;
+                else high = value - 1;
+            }
+
+            return (best, bestError);
+        }
+
+        private async Task<double> MeasureBiasAsync(byte value)
+        {
+            await _serial!.SetBiasAsync(value);
+            ThermalFrame frame = await _runtime.CaptureSnapshotAsync(
+                maxAge: TimeSpan.Zero,
+                nextFrameTimeout: TimeSpan.FromSeconds(2))
+                ?? throw new InvalidOperationException("BIAS 측정 프레임이 없습니다.");
+            var measurements = new double[5];
+            for (int sample = 0; sample < measurements.Length; sample++)
+            {
+                if (sample > 0)
+                {
+                    frame = await _runtime.CaptureSnapshotAsync(
+                        maxAge: TimeSpan.Zero,
+                        nextFrameTimeout: TimeSpan.FromSeconds(2))
+                        ?? throw new InvalidOperationException("BIAS measurement frame is missing.");
+                }
+                long sum = 0;
+                foreach (ushort pixel in frame.Pixels) sum += pixel & 0x3FFF;
+                measurements[sample] = (double)sum / frame.Pixels.Length;
+                await Task.Delay(30);
+            }
+            Array.Sort(measurements);
+            return measurements[2];
         }
 
         /// <summary>라이브 프레임을 frameCount장 누적 평균해(14비트 마스킹) NUC 평면필드용 프레임을 만든다.</summary>

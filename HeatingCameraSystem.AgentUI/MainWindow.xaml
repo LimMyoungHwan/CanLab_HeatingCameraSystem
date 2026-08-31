@@ -290,6 +290,9 @@
                                                     <Button Command="{Binding RunNucCommand}" Margin="0,0,4,4" Padding="8,3">
                                                         <materialIcons:MaterialIconText Kind="Tune" Text="{loc:Loc Cam_Nuc}" Spacing="6"/>
                                                     </Button>
+                                                    <Button Command="{Binding RunBiasLowCommand}" Content="BIAS LOW" Margin="0,0,4,4" Padding="8,3"/>
+                                                    <Button Command="{Binding RunBiasMidCommand}" Content="BIAS MID" Margin="0,0,4,4" Padding="8,3"/>
+                                                    <Button Command="{Binding RunBiasHighCommand}" Content="BIAS HIGH" Margin="0,0,4,4" Padding="8,3"/>
                                                 </WrapPanel>
                                             </StackPanel>
                                         </Border>

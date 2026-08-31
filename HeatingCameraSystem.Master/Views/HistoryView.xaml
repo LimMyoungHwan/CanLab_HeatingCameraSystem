@@ -281,6 +281,7 @@
                                 <ColumnDefinition Width="1.5*"/>
                                 <ColumnDefinition Width="1.5*"/>
                                 <ColumnDefinition Width="1.5*"/>
+                                <ColumnDefinition Width="1.5*"/>
                                 <ColumnDefinition Width="2*"/>
                                 <ColumnDefinition Width="1.5*"/>
                             </Grid.ColumnDefinitions>
@@ -288,8 +289,9 @@
                             <TextBlock Grid.Column="1" Text="{loc:Loc Hist_ColCameraId}" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold"/>
                             <TextBlock Grid.Column="2" Text="{loc:Loc Hist_ColTemp}" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold" HorizontalAlignment="Right"/>
                             <TextBlock Grid.Column="3" Text="{loc:Loc Hist_ColHumidity}" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold" HorizontalAlignment="Right"/>
-                            <TextBlock Grid.Column="4" Text="{loc:Loc Hist_ColThumbnail}" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center"/>
-                            <TextBlock Grid.Column="5" Text="{loc:Loc Hist_ColAction}" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Column="4" Text="Camera °C" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold" HorizontalAlignment="Right"/>
+                            <TextBlock Grid.Column="5" Text="{loc:Loc Hist_ColThumbnail}" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Column="6" Text="{loc:Loc Hist_ColAction}" Foreground="{StaticResource Outline}" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center"/>
                         </Grid>
                     </Border>
 
@@ -312,8 +314,9 @@
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="2*"/>
-                                                <ColumnDefinition Width="1.5*"/>
-                                                <ColumnDefinition Width="1.5*"/>
+                                            <ColumnDefinition Width="1.5*"/>
+                                            <ColumnDefinition Width="1.5*"/>
+                                            <ColumnDefinition Width="1.5*"/>
                                                 <ColumnDefinition Width="1.5*"/>
                                                 <ColumnDefinition Width="2*"/>
                                                 <ColumnDefinition Width="1.5*"/>
@@ -331,13 +334,15 @@
                                             <!-- Humidity -->
                                             <TextBlock Grid.Column="3" Text="{Binding Humidity, StringFormat={}{0:F1}}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Right"/>
 
+                                            <TextBlock Grid.Column="4" Text="{Binding CameraTemperature, StringFormat={}{0:F1}}" Foreground="{StaticResource Secondary}" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+
                                             <!-- Thumbnail -->
-                                            <Border Grid.Column="4" CornerRadius="4" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Width="64" Height="40" Background="{StaticResource BgSurfaceContainerHighest}" ClipToBounds="True" HorizontalAlignment="Center">
+                                            <Border Grid.Column="5" CornerRadius="4" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Width="64" Height="40" Background="{StaticResource BgSurfaceContainerHighest}" ClipToBounds="True" HorizontalAlignment="Center">
                                                 <Image Source="{Binding ThumbnailUrl}" Stretch="UniformToFill"/>
                                             </Border>
 
                                             <!-- Action Button -->
-                                            <Button Grid.Column="5" Content="{loc:Loc Hist_Open}" Command="{Binding DataContext.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                            <Button Grid.Column="6" Content="{loc:Loc Hist_Open}" Command="{Binding DataContext.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
                                                     Background="Transparent" BorderThickness="0" Foreground="{StaticResource Outline}" Padding="8,4" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                 <Button.Style>
                                                     <Style TargetType="Button">

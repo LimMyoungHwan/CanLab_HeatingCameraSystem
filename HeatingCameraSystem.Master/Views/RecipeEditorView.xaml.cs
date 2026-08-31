@@ -146,6 +146,15 @@ namespace HeatingCameraSystem.Master.Views
             }
         }
 
+        private void CameraTargetCheckBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is CheckBox checkBox)
+            {
+                checkBox.IsChecked = checkBox.IsChecked != true;
+                e.Handled = true;
+            }
+        }
+
         /// <summary>JOG 버튼을 누르면 Tag가 가리키는 축·방향으로 StartJog를 호출한다. 예외는 무시한다.</summary>
         private void Jog_Down(object sender, MouseButtonEventArgs e)
         {

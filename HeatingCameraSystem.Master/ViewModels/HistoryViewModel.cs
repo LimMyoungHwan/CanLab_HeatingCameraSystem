@@ -31,6 +31,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         private float _humidity;
 
         [ObservableProperty]
+        private double? _cameraTemperature;
+
+        [ObservableProperty]
         private string _thumbnailUrl = string.Empty;
     }
 
@@ -237,6 +240,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     CameraId = r.CameraId,
                     Temperature = r.Temperature,
                     Humidity = r.Humidity,
+                    CameraTemperature = r.CameraTemperature,
                     ThumbnailUrl = r.ImagePath
                 });
             }
@@ -451,12 +455,13 @@ namespace HeatingCameraSystem.Master.ViewModels
                 cameraId, sourceFilter).ToList();
 
             using var writer = new StreamWriter(dlg.FileName, false, new UTF8Encoding(true));
-            writer.WriteLine("Timestamp,CameraId,Temperature,Humidity,RecipeStepId,ImagePath");
+            writer.WriteLine("Timestamp,CameraId,CameraTemperature,Temperature,Humidity,RecipeStepId,ImagePath");
             foreach (var r in records)
             {
                 writer.WriteLine(string.Join(',',
                     r.Timestamp.ToString("o", CultureInfo.InvariantCulture),
                     CsvEscape(r.CameraId),
+                    r.CameraTemperature?.ToString("F2", CultureInfo.InvariantCulture) ?? string.Empty,
                     r.Temperature.ToString("F2", CultureInfo.InvariantCulture),
                     r.Humidity.ToString("F2", CultureInfo.InvariantCulture),
                     CsvEscape(r.RecipeStepId),

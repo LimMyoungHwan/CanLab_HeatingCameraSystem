@@ -31,6 +31,7 @@ namespace HeatingCameraSystem.Core.Models
 
         /// <summary>촬영 시점 챔버 습도(%RH).</summary>
         public float Humidity { get; set; }
+        public double? CameraTemperature { get; set; }
 
         /// <summary>Agent PC에 저장된 원본 이미지 경로.</summary>
         public string ImagePath { get; set; } = string.Empty;

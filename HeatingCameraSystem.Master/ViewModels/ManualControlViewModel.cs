@@ -99,6 +99,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private CancellationTokenSource? _rampCts;
         private bool _blackBodyPolling;
+        private bool _syncingEquipmentFromPlc;
 
         // AppServices는 RecipeEngineSettings를 노출하지 않으므로 필요한 값을 로컬 기본값으로 둔다.
         private const int RampStepIntervalSeconds = 30;
@@ -218,15 +219,15 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
-        partial void OnCooler1stChanged(bool value) => _ = EquipmentAsync(PlcEquipment.Cooler1st, value);
-        partial void OnCooler2ndChanged(bool value) => _ = EquipmentAsync(PlcEquipment.Cooler2nd, value);
-        partial void OnCoolerRoomChanged(bool value) => _ = EquipmentAsync(PlcEquipment.CoolerRoom, value);
-        partial void OnBlower1Changed(bool value) => _ = EquipmentAsync(PlcEquipment.Blower1, value);
-        partial void OnBlower2Changed(bool value) => _ = EquipmentAsync(PlcEquipment.Blower2, value);
-        partial void OnChillerChanged(bool value) => _ = EquipmentAsync(PlcEquipment.Chiller, value);
-        partial void OnDoorLockChanged(bool value) => _ = EquipmentAsync(PlcEquipment.DoorLock, value);
-        partial void OnLightingChanged(bool value) => _ = EquipmentAsync(PlcEquipment.Lighting, value);
-        partial void OnPairGlassChanged(bool value) => _ = EquipmentAsync(PlcEquipment.PairGlass, value);
+        partial void OnCooler1stChanged(bool value) => SyncEquipment(PlcEquipment.Cooler1st, value);
+        partial void OnCooler2ndChanged(bool value) => SyncEquipment(PlcEquipment.Cooler2nd, value);
+        partial void OnCoolerRoomChanged(bool value) => SyncEquipment(PlcEquipment.CoolerRoom, value);
+        partial void OnBlower1Changed(bool value) => SyncEquipment(PlcEquipment.Blower1, value);
+        partial void OnBlower2Changed(bool value) => SyncEquipment(PlcEquipment.Blower2, value);
+        partial void OnChillerChanged(bool value) => SyncEquipment(PlcEquipment.Chiller, value);
+        partial void OnDoorLockChanged(bool value) => SyncEquipment(PlcEquipment.DoorLock, value);
+        partial void OnLightingChanged(bool value) => SyncEquipment(PlcEquipment.Lighting, value);
+        partial void OnPairGlassChanged(bool value) => SyncEquipment(PlcEquipment.PairGlass, value);
 
         partial void OnHumidityControlChanged(bool value) => _ = RunAsync(p => p.SetHumidityControlAsync(value), LocalizationManager.Instance["Manual_HumidityControlLabel"]);
 
@@ -240,7 +241,11 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         /// <summary>비상정지 트리거.</summary>
         [RelayCommand]
-        private Task EmergencyStop() => RunAsync(p => p.TriggerEmergencyStopAsync(), LocalizationManager.Instance["Equip_EStop"]);
+        private Task EmergencyStop()
+        {
+            AppServices.RecipeEngine?.RequestEmergencyStop();
+            return RunAsync(p => p.TriggerEmergencyStopAsync(), LocalizationManager.Instance["Equip_EStop"]);
+        }
 
         /// <summary>X축 원점 복귀.</summary>
         [RelayCommand]
@@ -404,6 +409,9 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
         [RelayCommand] private Task SendNuc(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Nuc);
+        [RelayCommand] private Task SendBiasLow(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.BiasLow);
+        [RelayCommand] private Task SendBiasMid(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.BiasMid);
+        [RelayCommand] private Task SendBiasHigh(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.BiasHigh);
         [RelayCommand] private Task SendSaveConfig(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.SaveConfig);
         [RelayCommand] private Task SendRefreshInfo(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.RefreshInfo);
 
@@ -413,6 +421,11 @@ namespace HeatingCameraSystem.Master.ViewModels
             var plc = AppServices.PlcController;
             if (plc == null) return Task.CompletedTask;
             return SafeAsync(() => plc.JogAsync(axis, positive, on));
+        }
+
+        private void SyncEquipment(PlcEquipment equipment, bool on)
+        {
+            if (!_syncingEquipmentFromPlc) _ = EquipmentAsync(equipment, on);
         }
 
         private Task EquipmentAsync(PlcEquipment equipment, bool on)
@@ -433,6 +446,20 @@ namespace HeatingCameraSystem.Master.ViewModels
                 ServoXBusy = s.ServoXBusy;
                 ServoYBusy = s.ServoYBusy;
                 FanSpeedHz = s.FanSpeedHz;
+                _syncingEquipmentFromPlc = true;
+                try
+                {
+                    Cooler1st = s.Cooler1st;
+                    Cooler2nd = s.Cooler2nd;
+                    CoolerRoom = s.CoolerRoom;
+                    Blower1 = s.Blower1;
+                    Blower2 = s.Blower2;
+                    Chiller = s.Chiller;
+                    DoorLock = s.DoorLock;
+                    Lighting = s.Lighting;
+                    PairGlass = s.PairGlass;
+                }
+                finally { _syncingEquipmentFromPlc = false; }
             }
 
             await PollBlackBodyAsync();

@@ -115,6 +115,7 @@ namespace HeatingCameraSystem.Core.Models
 
         /// <summary>Master에서 바로 볼 수 있는 JPEG 미리보기.</summary>
         public byte[]? ImageBytes { get; set; }
+        public double? CameraTemperature { get; set; }
     }
 
     /// <summary>Agent → Master 라이브 미리보기 프레임(<c>agent.live.{AgentId}</c>).</summary>

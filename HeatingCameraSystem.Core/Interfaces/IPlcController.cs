@@ -41,7 +41,7 @@ namespace HeatingCameraSystem.Core.Interfaces
         /// <summary>챔버 현재 습도를 %RH로 읽는다.</summary>
         Task<float> GetCurrentHumidityAsync();
 
-        /// <summary>습도 제어를 켜거나 끈다(D281.0).</summary>
+        /// <summary>습도 제어 ON/OFF 요청 시 D281에 트리거 값 1을 쓴다.</summary>
         Task SetHumidityControlAsync(bool on);
 
         // ── 흑체 온도 제어 (index 0=흑체1, 1=흑체2) ──

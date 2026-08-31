@@ -64,8 +64,7 @@ namespace HeatingCameraSystem.Protocols
         public bool IsConnected => _connected;
 
         /// <summary>
-        /// 모든 유닛을 열고 Absolute 모드로 맞춘다. 유닛 하나가 실패해도 나머지는 계속 진행하고,
-        /// 전체는 연결됨으로 표시한다 — 죽은 유닛은 이후 개별 호출에서 드러난다.
+        /// 모든 유닛을 열고 Absolute 모드로 맞춘다. 하나라도 열리지 않으면 연결 실패를 호출자에게 알린다.
         /// </summary>
         public async Task ConnectAsync()
         {
@@ -76,10 +75,6 @@ namespace HeatingCameraSystem.Protocols
                 {
                     if (!u.Link.IsOpen) u.Link.Open();
                     await SendNoReplyLocked(u, SrProtocol.SetMode(1)).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[SrBlackBody] connect unit {Describe(u.Config)} failed: {ex.Message}");
                 }
                 finally { u.Gate.Release(); }
             }

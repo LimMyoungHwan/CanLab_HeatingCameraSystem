@@ -24,6 +24,12 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
         SerialNbB  = 0x01,
         SerialNbC  = 0x02,
         SerialNbD  = 0x03,
+        Gfid       = 0x04,
+        GskMsb     = 0x05,
+        GskLsb     = 0x06,
+        TintMsb    = 0x07,
+        TintLsb    = 0x08,
+        Cint       = 0x09,
         FpaTempMsb = 0x0A,
         FpaTempLsb = 0x0B,
     }

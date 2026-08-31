@@ -6,6 +6,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:HeatingCameraSystem.Master.Views"
              xmlns:vm="clr-namespace:HeatingCameraSystem.Master.ViewModels"
+             xmlns:model="clr-namespace:HeatingCameraSystem.Core.Models;assembly=HeatingCameraSystem.Core"
              mc:Ignorable="d" 
              d:DesignHeight="768" d:DesignWidth="1024" Background="#0e1321" Foreground="#dee2f7">
     
@@ -40,6 +41,129 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <DataTemplate x:Key="MotorStepTemplate">
+            <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
+                    AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
+                        <TextBlock Text="PLC 모터 이동" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
+                        <StackPanel Margin="0,0,16,0" Width="100"><TextBlock Text="이동 타입" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><ComboBox ItemsSource="{Binding DataContext.MotorMoveTypeOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Value" SelectedValue="{Binding MotorMoveType}" DisplayMemberPath="Label" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0" Width="100" Visibility="{Binding ShowsManualCoordinates, Converter={StaticResource BooleanToVisibilityConverter}}"><TextBlock Text="X (mm)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding PositionX}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0" Width="100" Visibility="{Binding ShowsManualCoordinates, Converter={StaticResource BooleanToVisibilityConverter}}"><TextBlock Text="Y (mm)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding PositionY}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Width="100" Visibility="{Binding ShowsAutomaticPoint, Converter={StaticResource BooleanToVisibilityConverter}}"><TextBlock Text="POINT (1-20)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><ComboBox ItemsSource="{Binding DataContext.ServoPointOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding TargetPositionIndex}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/></StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ChamberStepTemplate">
+            <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
+                    AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
+                        <TextBlock Text="PLC 온습도 설정" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
+                        <StackPanel Margin="0,0,16,0"><TextBlock Text="CHAMBER °C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding TargetChamberTemperature}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel><TextBlock Text="CHAMBER %RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding TargetChamberHumidity}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CameraStepTemplate">
+            <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
+                    AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
+                        <TextBlock Text="카메라 명령" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
+                        <StackPanel Margin="0,0,16,0" Width="170">
+                            <TextBlock Text="CAMERA COMMAND" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <ComboBox ItemsSource="{Binding DataContext.CameraOperationOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Value" SelectedValue="{Binding CameraOperation}" DisplayMemberPath="Label" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
+                        </StackPanel>
+                        <StackPanel Width="260">
+                            <TextBlock Text="대상 카메라 (복수 선택)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <ComboBox ItemsSource="{Binding CameraTargets}" IsEditable="True" IsReadOnly="True" Text="{Binding SelectedCameraSummary, Mode=OneWay}" StaysOpenOnEdit="True" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate><CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Foreground="{StaticResource TextOnSurface}" PreviewMouseDown="CameraTargetCheckBox_PreviewMouseDown"/></DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="BlackBodyStepTemplate">
+            <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
+                    AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
+                        <TextBlock Text="블랙바디 온도 제어" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
+                        <StackPanel Margin="0,0,16,0" Width="80">
+                            <TextBlock Text="BB 0 설정" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <TextBox Text="{Binding BlackbodyRef}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,16,0" Width="100">
+                            <TextBlock Text="BB 1 설정 °C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <TextBox Text="{Binding BlackbodyRef1}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                        </StackPanel>
+                        <StackPanel VerticalAlignment="Bottom" Margin="0,0,0,4">
+                            <CheckBox Content="안정화 대기" IsChecked="{Binding WaitForStabilization}" Foreground="{StaticResource TextOnSurface}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="LegacyStepTemplate">
+            <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
+                    AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
+                        <TextBlock Text="기존 일괄 촬영" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
+                        <StackPanel Margin="0,0,16,0" Width="220"><TextBlock Text="NODE ASSIGNMENT" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding NodeAssignment}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0"><TextBlock Text="BLACKBODY REF" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding BlackbodyRef}" Width="80" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0"><TextBlock Text="X (mm)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding PositionX}" Width="80" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel><TextBlock Text="Y (mm)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding PositionY}" Width="80" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid>
@@ -127,13 +251,13 @@
                         
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="0"/>
                                 <ColumnDefinition Width="1.5*"/>
                             </Grid.ColumnDefinitions>
                             
-                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Grid.Column="0" Margin="0,0,16,0" Visibility="Collapsed">
                                 <TextBlock Text="TARGET CHAMBER TEMP" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
                                 <Border Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8">
                                     <StackPanel Orientation="Horizontal">
@@ -143,7 +267,7 @@
                                 </Border>
                             </StackPanel>
                             
-                            <StackPanel Grid.Column="1" Margin="0,0,16,0">
+                            <StackPanel Grid.Column="1" Margin="0,0,16,0" Visibility="Collapsed">
                                 <TextBlock Text="{loc:Loc Recipe_TempRampTime}" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
                                 <Border Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8">
                                     <StackPanel Orientation="Horizontal">
@@ -153,7 +277,7 @@
                                 </Border>
                             </StackPanel>
 
-                            <StackPanel Grid.Column="2" Margin="0,0,16,0">
+                            <StackPanel Grid.Column="2" Margin="0,0,16,0" Visibility="Collapsed">
                                 <TextBlock Text="TARGET CHAMBER HUMIDITY" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
                                 <Border Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8">
                                     <StackPanel Orientation="Horizontal">
@@ -219,92 +343,29 @@
                         <ItemsControl ItemsSource="{Binding Steps}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
-                                            AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                            </Grid.RowDefinitions>
-                                            
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="=" FontSize="20" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="0,0,16,0" Cursor="SizeAll"
-                                                       PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown"
-                                                       MouseMove="Step_MouseMove"/>
-                                            
-                                            <Border Grid.Row="0" Grid.Column="1" Background="{StaticResource BgSurface}" BorderBrush="{StaticResource Primary}" BorderThickness="1" CornerRadius="4" Width="40" Height="40" Margin="0,0,16,0">
-                                                <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold"/>
-                                            </Border>
-                                            
-                                            <StackPanel Grid.Row="0" Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal">
-                                                <StackPanel Margin="0,0,16,0">
-                                                    <TextBlock Text="NODE ASSIGNMENT" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                                                    <Border BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,0,1">
-                                                        <TextBox Text="{Binding NodeAssignment}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
-                                                    </Border>
-                                                </StackPanel>
-                                                <StackPanel Margin="0,0,16,0" Width="100">
-                                                    <TextBlock Text="BLACKBODY REF" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                                                    <Border BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,0,1">
-                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                                            <TextBox Text="{Binding BlackbodyRef, StringFormat={}{0:F1}}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14" FontWeight="Bold" TextAlignment="Right" Width="60"/>
-                                                            <TextBlock Text="°C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Bottom" Margin="4,0,0,2"/>
-                                                        </StackPanel>
-                                                    </Border>
-                                                </StackPanel>
-                                            </StackPanel>
-                                            
-                                            <Button Grid.Row="0" Grid.Column="3" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" VerticalAlignment="Center" Margin="8,0,0,0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
-
-                                            <!-- Second Row: X, Y, Chamber Temp, Chamber RH, Camera -->
-                                            <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,12,0,0">
-                                                <StackPanel Margin="0,0,16,0">
-                                                    <TextBlock Text="X (mm)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                                                    <Border BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,0,1">
-                                                        <TextBox Text="{Binding PositionX, StringFormat={}{0:F1}}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
-                                                    </Border>
-                                                </StackPanel>
-                                                <StackPanel Margin="0,0,16,0">
-                                                    <TextBlock Text="Y (mm)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                                                    <Border BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,0,1">
-                                                        <TextBox Text="{Binding PositionY, StringFormat={}{0:F1}}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
-                                                    </Border>
-                                                </StackPanel>
-                                                <StackPanel Margin="0,0,16,0">
-                                                    <TextBlock Text="CHAMBER °C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                                                    <Border BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,0,1">
-                                                        <TextBox Text="{Binding TargetChamberTemperature, StringFormat={}{0:F1}}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
-                                                    </Border>
-                                                </StackPanel>
-                                                <StackPanel Margin="0,0,16,0">
-                                                    <TextBlock Text="CHAMBER %RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                                                    <Border BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,0,0,1">
-                                                        <TextBox Text="{Binding TargetChamberHumidity, StringFormat={}{0:F1}}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" FontSize="14"/>
-                                                    </Border>
-                                                </StackPanel>
-                                                <StackPanel Margin="0,0,16,0">
-                                                    <TextBlock Text="CAMERA" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                                                    <ComboBox ItemsSource="{Binding DataContext.OnlineAgentCameras, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="CameraIndex" SelectedValue="{Binding CameraIndex}" DisplayMemberPath="Label" Width="120" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
+                                    <ContentControl Content="{Binding}">
+                                        <ContentControl.Style>
+                                            <Style TargetType="ContentControl">
+                                                <Setter Property="ContentTemplate" Value="{StaticResource LegacyStepTemplate}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.MotorMove}"><Setter Property="ContentTemplate" Value="{StaticResource MotorStepTemplate}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.ChamberControl}"><Setter Property="ContentTemplate" Value="{StaticResource ChamberStepTemplate}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.CameraCommand}"><Setter Property="ContentTemplate" Value="{StaticResource CameraStepTemplate}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.BlackBodyControl}"><Setter Property="ContentTemplate" Value="{StaticResource BlackBodyStepTemplate}"/></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ContentControl.Style>
+                                    </ContentControl>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         
-                        <!-- Add Step Button -->
-                        <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="0,24" Margin="0,16,0,0" Cursor="Hand">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="+" FontSize="20" FontWeight="Bold" Margin="0,0,8,0"/>
-                                <TextBlock Text="ADD NEW RECIPE STEP" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
+                        <WrapPanel Margin="0,16,0,0">
+                            <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.MotorMove}" Content="+ PLC 모터 이동" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
+                            <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.ChamberControl}" Content="+ PLC 온습도 설정" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
+                            <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.CameraCommand}" Content="+ 카메라 명령" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
+                            <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.BlackBodyControl}" Content="+ 블랙바디 온도 제어" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
+                        </WrapPanel>
                     </StackPanel>
                 </ScrollViewer>
 
@@ -381,6 +442,10 @@
                             <Button Content="SHUTTER CLOSE" Command="{Binding CloseShutterCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="0,0,8,0"/>
                             <Button Content="CAMERA START" Command="{Binding StartCameraCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="0,0,8,0"/>
                             <Button Content="CAMERA STOP" Command="{Binding StopCameraCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4"/>
+                            <Button Content="CAPTURE" Command="{Binding CaptureCameraCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="8,0,0,0"/>
+                            <Button Content="NUC" Command="{Binding RunNucCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="8,0,0,0"/>
+                            <Button Content="BIAS LOW" Command="{Binding RunBiasLowCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="8,0,0,0"/>
+                            <Button Content="BIAS MID" Command="{Binding RunBiasMidCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="8,0,0,0"/>
                         </StackPanel>
                     </StackPanel>
 

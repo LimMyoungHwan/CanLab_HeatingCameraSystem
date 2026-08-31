@@ -25,7 +25,7 @@ public class CameraControlProtocolTests
     }
 
     [Fact]
-    public void CameraControlMessage_RoundTrips_AllEightOpValuesPreserved()
+    public void CameraControlMessage_RoundTrips_AllSupportedOpValuesAndRequestId()
     {
         string[] allOps =
         {
@@ -35,11 +35,13 @@ public class CameraControlProtocolTests
             CameraControlOps.ShutterClose,
             CameraControlOps.Capture,
             CameraControlOps.Nuc,
+            CameraControlOps.BiasLow,
+            CameraControlOps.BiasMid,
             CameraControlOps.SaveConfig,
             CameraControlOps.RefreshInfo,
         };
 
-        Assert.Equal(8, allOps.Length);
+        Assert.Equal(10, allOps.Length);
 
         foreach (string op in allOps)
         {
@@ -48,6 +50,7 @@ public class CameraControlProtocolTests
                 AgentId = "Agent_3",
                 CameraIndex = 2,
                 Op = op,
+                RequestId = "recipe-step-42",
                 Timestamp = new DateTime(2026, 7, 29, 8, 15, 30, DateTimeKind.Utc)
             };
 
@@ -56,6 +59,7 @@ public class CameraControlProtocolTests
             Assert.Equal(original.AgentId, round.AgentId);
             Assert.Equal(original.CameraIndex, round.CameraIndex);
             Assert.Equal(original.Op, round.Op);
+            Assert.Equal(original.RequestId, round.RequestId);
             Assert.Equal(original.Timestamp, round.Timestamp);
         }
     }
@@ -68,6 +72,7 @@ public class CameraControlProtocolTests
             AgentId = "Agent_4",
             CameraIndex = 1,
             Op = CameraControlOps.Capture,
+            RequestId = "capture-step",
             IsSuccess = true,
             Message = "캡처 완료",
             Timestamp = new DateTime(2026, 7, 29, 9, 0, 0, DateTimeKind.Utc)
@@ -77,6 +82,7 @@ public class CameraControlProtocolTests
             AgentId = "Agent_5",
             CameraIndex = 0,
             Op = CameraControlOps.Nuc,
+            RequestId = "nuc-step",
             IsSuccess = false,
             Message = "NUC 실패: 셔터 응답 없음",
             Timestamp = new DateTime(2026, 7, 29, 9, 5, 0, DateTimeKind.Utc)
@@ -88,10 +94,12 @@ public class CameraControlProtocolTests
         Assert.True(roundSuccess.IsSuccess);
         Assert.Equal(success.Message, roundSuccess.Message);
         Assert.Equal(success.Op, roundSuccess.Op);
+        Assert.Equal(success.RequestId, roundSuccess.RequestId);
         Assert.Equal(success.CameraIndex, roundSuccess.CameraIndex);
 
         Assert.False(roundFailure.IsSuccess);
         Assert.Equal(failure.Message, roundFailure.Message);
         Assert.Equal(failure.Op, roundFailure.Op);
+        Assert.Equal(failure.RequestId, roundFailure.RequestId);
     }
 }

@@ -14,6 +14,9 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary><see cref="CameraControlOps"/>의 상수 중 하나.</summary>
         public string Op { get; set; } = string.Empty;
 
+        /// <summary>명령 완료 ACK를 해당 레시피 스텝과 안전하게 연결하는 요청 식별자.</summary>
+        public string RequestId { get; set; } = string.Empty;
+
         public DateTime Timestamp { get; set; }
     }
 
@@ -29,6 +32,9 @@ namespace HeatingCameraSystem.Core.Models
         public const string ShutterClose = "shutterClose";
         public const string Capture = "capture";
         public const string Nuc = "nuc";
+        public const string BiasLow = "biasLow";
+        public const string BiasMid = "biasMid";
+        public const string BiasHigh = "biasHigh";
         public const string SaveConfig = "saveConfig";
         public const string RefreshInfo = "refreshInfo";
 
@@ -49,6 +55,9 @@ namespace HeatingCameraSystem.Core.Models
         public string AgentId { get; set; } = string.Empty;
         public int CameraIndex { get; set; }
         public string Op { get; set; } = string.Empty;
+
+        /// <summary>원본 <see cref="CameraControlMessage.RequestId"/>. 수동 명령은 비어 있을 수 있다.</summary>
+        public string RequestId { get; set; } = string.Empty;
         public bool IsSuccess { get; set; }
         public string Message { get; set; } = string.Empty;
         public DateTime Timestamp { get; set; }

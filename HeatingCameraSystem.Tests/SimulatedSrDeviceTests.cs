@@ -6,6 +6,17 @@ namespace HeatingCameraSystem.Tests;
 
 public class SimulatedSrDeviceTests
 {
+    private sealed class FailingSrLink : ISrLink
+    {
+        public bool IsOpen => false;
+        public void Open() => throw new InvalidOperationException("port unavailable");
+        public void Close() { }
+        public void Write(byte[] data) { }
+        public byte[] Read() => Array.Empty<byte>();
+        public void DiscardInBuffer() { }
+        public void Dispose() { }
+    }
+
     private static BlackBodySettings Sim(double ramp = 100000) => new()
     {
         Enabled = true,
@@ -48,6 +59,18 @@ public class SimulatedSrDeviceTests
 
         Assert.Equal(40f, await bb.GetTargetTemperatureAsync(0), precision: 1);
         Assert.Equal(70f, await bb.GetTargetTemperatureAsync(1), precision: 1);
+    }
+
+    [Fact]
+    public async Task ConnectAsync_WhenUnitCannotOpen_ThrowsAndStaysDisconnected()
+    {
+        var settings = Sim();
+        settings.Units = new() { new BlackBodyUnitSettings() };
+        using var bb = new SrBlackBodyController(settings, _ => new FailingSrLink());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => bb.ConnectAsync());
+
+        Assert.False(bb.IsConnected);
     }
 
     [Fact]

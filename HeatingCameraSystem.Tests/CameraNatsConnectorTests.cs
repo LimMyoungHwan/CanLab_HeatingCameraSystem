@@ -144,6 +144,7 @@ namespace HeatingCameraSystem.Tests
                         AgentId = descriptor.AgentId,
                         CameraIndex = descriptor.OpenCvIndex,
                         Op = CameraControlOps.Run,
+                        RequestId = "request-1",
                         Timestamp = DateTime.UtcNow
                     });
                 }
@@ -153,6 +154,7 @@ namespace HeatingCameraSystem.Tests
                 Assert.NotNull(published);
                 Assert.Equal(descriptor.AgentId, published!.AgentId);
                 Assert.Equal(CameraControlOps.Run, published.Op);
+                Assert.Equal("request-1", published.RequestId);
                 Assert.True(published.IsSuccess);
                 Assert.Equal("ok", published.Message);
                 natsMock.Verify(n => n.PublishCameraControlAckAsync(It.Is<CameraControlAckMessage>(m =>

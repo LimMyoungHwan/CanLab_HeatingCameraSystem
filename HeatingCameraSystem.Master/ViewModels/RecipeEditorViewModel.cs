@@ -1,6 +1,8 @@
 using HeatingCameraSystem.Core.Interfaces;
 using System;
+using System.Collections.Specialized;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -22,13 +24,102 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private int _stepNumber;
         [ObservableProperty] private string _nodeAssignment = string.Empty;
         [ObservableProperty] private float _blackbodyRef;
+        [ObservableProperty] private int _blackBodyIndex;
+        [ObservableProperty] private float _blackbodyRef1;
+        [ObservableProperty] private bool _waitForStabilization = true;
         [ObservableProperty] private float _positionX;
         [ObservableProperty] private float _positionY;
         [ObservableProperty] private double _targetChamberTemperature;
         [ObservableProperty] private double _targetChamberHumidity;
+        [ObservableProperty] private RecipeStepKind _kind = RecipeStepKind.LegacyCapture;
+        [ObservableProperty] private MotorMoveType _motorMoveType = MotorMoveType.Manual;
+        [ObservableProperty] private string _cameraOperation = CameraControlOps.Capture;
+
+        public RecipeStepModel()
+        {
+            CameraTargets.CollectionChanged += OnCameraTargetsChanged;
+        }
 
         public int CameraIndex { get; set; }
         public int TargetPositionIndex { get; set; }
+        public bool ShowsAutomaticPoint => Kind == RecipeStepKind.MotorMove && MotorMoveType == MotorMoveType.Automatic;
+        public bool ShowsManualCoordinates => Kind == RecipeStepKind.MotorMove && MotorMoveType == MotorMoveType.Manual;
+        public ObservableCollection<CameraTargetModel> CameraTargets { get; } = new();
+        public string SelectedCameraSummary => string.Join(", ", CameraTargets.Where(target => target.IsSelected).Select(target => target.Label).DefaultIfEmpty("카메라 선택"));
+        public bool ShowsLegacyFields => Kind == RecipeStepKind.LegacyCapture;
+        public bool ShowsMotorFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.MotorMove;
+        public bool ShowsChamberFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.ChamberControl;
+        public bool ShowsCameraFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.CameraCommand;
+        public bool ShowsCameraOperation => Kind == RecipeStepKind.CameraCommand;
+        public bool ShowsBlackBodyFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.BlackBodyControl;
+        public bool ShowsBlackBodyStabilization => Kind == RecipeStepKind.BlackBodyControl;
+
+        partial void OnKindChanged(RecipeStepKind value)
+        {
+            OnPropertyChanged(nameof(ShowsLegacyFields));
+            OnPropertyChanged(nameof(ShowsMotorFields));
+            OnPropertyChanged(nameof(ShowsChamberFields));
+            OnPropertyChanged(nameof(ShowsCameraFields));
+            OnPropertyChanged(nameof(ShowsCameraOperation));
+            OnPropertyChanged(nameof(ShowsBlackBodyFields));
+            OnPropertyChanged(nameof(ShowsBlackBodyStabilization));
+            OnPropertyChanged(nameof(ShowsAutomaticPoint));
+            OnPropertyChanged(nameof(ShowsManualCoordinates));
+        }
+
+        partial void OnMotorMoveTypeChanged(MotorMoveType value)
+        {
+            OnPropertyChanged(nameof(ShowsAutomaticPoint));
+            OnPropertyChanged(nameof(ShowsManualCoordinates));
+        }
+
+        private void OnCameraTargetsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+                foreach (CameraTargetModel target in e.OldItems)
+                    target.PropertyChanged -= OnCameraTargetPropertyChanged;
+
+            if (e.NewItems != null)
+                foreach (CameraTargetModel target in e.NewItems)
+                    target.PropertyChanged += OnCameraTargetPropertyChanged;
+
+            OnPropertyChanged(nameof(SelectedCameraSummary));
+        }
+
+        private void OnCameraTargetPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is nameof(CameraTargetModel.IsSelected) or nameof(CameraTargetModel.AgentId) or nameof(CameraTargetModel.CameraIndex))
+                OnPropertyChanged(nameof(SelectedCameraSummary));
+        }
+    }
+
+    public sealed class RecipeStepKindOption
+    {
+        public RecipeStepKind Value { get; init; }
+        public string Label { get; init; } = string.Empty;
+    }
+
+    public sealed class CameraOperationOption
+    {
+        public string Value { get; init; } = string.Empty;
+        public string Label { get; init; } = string.Empty;
+    }
+
+    public sealed class MotorMoveTypeOption
+    {
+        public MotorMoveType Value { get; init; }
+        public string Label { get; init; } = string.Empty;
+    }
+
+    public partial class CameraTargetModel : ObservableObject
+    {
+        [ObservableProperty] private string _agentId = string.Empty;
+        [ObservableProperty] private int _cameraIndex;
+        [ObservableProperty] private bool _isSelected;
+        public string Label => $"{AgentId} (CAM-{CameraIndex:D2})";
+
+        partial void OnAgentIdChanged(string value) => OnPropertyChanged(nameof(Label));
+        partial void OnCameraIndexChanged(int value) => OnPropertyChanged(nameof(Label));
     }
 
     /// <summary>미리보기 카메라 선택 콤보의 항목(온라인 Agent 카메라 1대).</summary>
@@ -65,6 +156,36 @@ namespace HeatingCameraSystem.Master.ViewModels
     public partial class RecipeEditorViewModel : ObservableObject, IDisposable
     {
         public ObservableCollection<RecipeModel> Recipes { get; } = new ObservableCollection<RecipeModel>();
+        public RecipeStepKindOption[] StepKindOptions { get; } =
+        {
+            new() { Value = RecipeStepKind.LegacyCapture, Label = "기존 일괄 촬영" },
+            new() { Value = RecipeStepKind.MotorMove, Label = "PLC 모터 이동" },
+            new() { Value = RecipeStepKind.ChamberControl, Label = "PLC 온습도 설정" },
+            new() { Value = RecipeStepKind.CameraCommand, Label = "카메라 명령" },
+            new() { Value = RecipeStepKind.BlackBodyControl, Label = "블랙바디 온도 제어" }
+        };
+        public CameraOperationOption[] CameraOperationOptions { get; } =
+        {
+            new() { Value = CameraControlOps.Capture, Label = "캡처" },
+            new() { Value = CameraControlOps.ShutterOpen, Label = "셔터 열기" },
+            new() { Value = CameraControlOps.ShutterClose, Label = "셔터 닫기" },
+            new() { Value = CameraControlOps.BiasLow, Label = "BIAS LOW" },
+            new() { Value = CameraControlOps.BiasMid, Label = "BIAS MID" },
+            new() { Value = CameraControlOps.BiasHigh, Label = "BIAS HIGH" },
+            new() { Value = CameraControlOps.Nuc, Label = "NUC 실행" },
+            new() { Value = CameraControlOps.Run, Label = "카메라 RUN" },
+            new() { Value = CameraControlOps.Stop, Label = "카메라 STOP" },
+            new() { Value = CameraControlOps.SaveConfig, Label = "설정 저장" },
+            new() { Value = CameraControlOps.RefreshInfo, Label = "정보 갱신" }
+        };
+
+        public int[] BlackBodyIndexOptions { get; } = { 0, 1 };
+        public MotorMoveTypeOption[] MotorMoveTypeOptions { get; } =
+        {
+            new() { Value = MotorMoveType.Manual, Label = "수동" },
+            new() { Value = MotorMoveType.Automatic, Label = "자동" }
+        };
+        public int[] ServoPointOptions { get; } = Enumerable.Range(1, 20).ToArray();
 
         [ObservableProperty]
         private RecipeModel? _selectedRecipe;
@@ -136,20 +257,33 @@ namespace HeatingCameraSystem.Master.ViewModels
                 SelectedRecipe = Recipes.FirstOrDefault();
         }
 
-        /// <summary>다음 번호의 스텝을 추가한다. 기본값은 "Position N -> CAM-N" 짝이다.</summary>
         [RelayCommand]
-        private void AddStep()
+        private void AddStep(RecipeStepKind kind)
         {
             if (SelectedRecipe == null) return;
             int n = SelectedRecipe.Steps.Count + 1;
-            SelectedRecipe.Steps.Add(new RecipeStepModel
+            var step = new RecipeStepModel
             {
                 StepNumber = n,
-                NodeAssignment = $"Position {n:D2} -> CAM-{n:D2}",
+                Kind = kind,
+                NodeAssignment = kind == RecipeStepKind.LegacyCapture ? $"Position {n:D2} -> CAM-{n:D2}" : string.Empty,
                 CameraIndex = n,
                 TargetPositionIndex = n,
-                BlackbodyRef = 25.0f
-            });
+                BlackbodyRef = 25.0f,
+                BlackbodyRef1 = 25.0f,
+                TargetChamberTemperature = 25.0,
+                TargetChamberHumidity = 50.0,
+                CameraOperation = CameraControlOps.Capture
+            };
+            step.CameraTargets.Add(new CameraTargetModel { CameraIndex = n, IsSelected = true });
+            if (kind == RecipeStepKind.BlackBodyControl)
+            {
+                step.BlackbodyRef = 25.0f;
+                step.BlackBodyIndex = 0;
+                step.WaitForStabilization = true;
+            }
+            SyncCameraTargets(step);
+            SelectedRecipe.Steps.Add(step);
         }
 
         /// <summary>스텝을 삭제하고 남은 스텝 번호를 1부터 다시 매긴다.</summary>
@@ -249,8 +383,19 @@ namespace HeatingCameraSystem.Master.ViewModels
                     StepId = s.StepId,
                     CameraIndex = s.CameraIndex,
                     CameraAlias = s.CameraAlias,
+                    Kind = s.Kind,
+                    CameraOperation = s.CameraOperation,
+                    CameraTargets = s.CameraTargets.Select(target => new RecipeCameraTarget
+                    {
+                        AgentId = target.AgentId,
+                        CameraIndex = target.CameraIndex
+                    }).ToList(),
                     TargetPositionIndex = s.TargetPositionIndex,
                     TargetBlackBodyTemperature = s.TargetBlackBodyTemperature,
+                    BlackBodyIndex = s.BlackBodyIndex,
+                    TargetBlackBodyTemperature1 = s.TargetBlackBodyTemperature1,
+                    MotorMoveType = s.MotorMoveType,
+                    WaitForStabilization = s.WaitForStabilization,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
@@ -276,16 +421,29 @@ namespace HeatingCameraSystem.Master.ViewModels
                 SafetyHumidityTolerance = vm.SafetyHumidityTolerance
             };
             foreach (var s in vm.Steps)
+            {
+                var targets = s.CameraTargets
+                    .Where(target => target.IsSelected)
+                    .Select(target => new RecipeCameraTarget { AgentId = target.AgentId, CameraIndex = target.CameraIndex })
+                    .ToList();
                 r.Steps.Add(new RecipeStep
                 {
-                    CameraIndex = s.CameraIndex > 0 ? s.CameraIndex : ParseCameraIndex(s.NodeAssignment),
+                    CameraIndex = targets.FirstOrDefault()?.CameraIndex ?? (s.CameraIndex > 0 ? s.CameraIndex : ParseCameraIndex(s.NodeAssignment)),
                     TargetPositionIndex = s.TargetPositionIndex > 0 ? s.TargetPositionIndex : ParsePositionIndex(s.NodeAssignment),
+                    Kind = s.Kind,
+                    CameraOperation = s.CameraOperation,
+                    CameraTargets = targets,
                     TargetBlackBodyTemperature = s.BlackbodyRef,
+                    BlackBodyIndex = s.BlackBodyIndex,
+                    TargetBlackBodyTemperature1 = s.BlackbodyRef1,
+                    MotorMoveType = s.MotorMoveType,
+                    WaitForStabilization = s.WaitForStabilization,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
                     TargetChamberHumidity = s.TargetChamberHumidity
                 });
+            }
             return r;
         }
 
@@ -295,18 +453,31 @@ namespace HeatingCameraSystem.Master.ViewModels
             var vm = new RecipeModel { Id = r.Id, Name = r.Name, TargetChamberTemp = r.GlobalTargetTemperature, RampMinutes = r.TemperatureRampMinutes, TargetChamberHumidity = r.GlobalTargetHumidity, SafetyTempTolerance = r.SafetyTempTolerance, SafetyHumidityTolerance = r.SafetyHumidityTolerance, LastModified = DateTime.Now.ToString("g") };
             int n = 1;
             foreach (var s in r.Steps)
-                vm.Steps.Add(new RecipeStepModel
+            {
+                var step = new RecipeStepModel
                 {
                     StepNumber = n++,
                     NodeAssignment = $"Position {s.TargetPositionIndex:D2} -> CAM-{s.CameraIndex:D2}",
                     CameraIndex = s.CameraIndex,
                     TargetPositionIndex = s.TargetPositionIndex,
+                    Kind = s.Kind,
+                    CameraOperation = s.CameraOperation,
                     BlackbodyRef = s.TargetBlackBodyTemperature,
+                    BlackBodyIndex = s.BlackBodyIndex,
+                    BlackbodyRef1 = s.TargetBlackBodyTemperature1,
+                    MotorMoveType = s.MotorMoveType,
+                    WaitForStabilization = s.WaitForStabilization,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
                     TargetChamberHumidity = s.TargetChamberHumidity
-                });
+                };
+                foreach (var target in s.CameraTargets)
+                    step.CameraTargets.Add(new CameraTargetModel { AgentId = target.AgentId, CameraIndex = target.CameraIndex, IsSelected = true });
+                if (step.CameraTargets.Count == 0 && s.CameraIndex > 0)
+                    step.CameraTargets.Add(new CameraTargetModel { CameraIndex = s.CameraIndex, IsSelected = true });
+                vm.Steps.Add(step);
+            }
             return vm;
         }
 
@@ -354,7 +525,24 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 if (!OnlineAgentCameras.Any(a => a.AgentId == msg.AgentId && a.CameraIndex == msg.CameraIndex))
                     OnlineAgentCameras.Add(new AgentCameraOption { AgentId = msg.AgentId, CameraIndex = msg.CameraIndex });
+                foreach (var step in Recipes.SelectMany(recipe => recipe.Steps))
+                    SyncCameraTargets(step);
             });
+        }
+
+        private void SyncCameraTargets(RecipeStepModel step)
+        {
+            foreach (var camera in OnlineAgentCameras)
+            {
+                var fallback = step.CameraTargets.FirstOrDefault(target => target.AgentId.Length == 0 && target.CameraIndex == camera.CameraIndex);
+                if (fallback is not null)
+                {
+                    fallback.AgentId = camera.AgentId;
+                    continue;
+                }
+                if (!step.CameraTargets.Any(target => target.AgentId == camera.AgentId && target.CameraIndex == camera.CameraIndex))
+                    step.CameraTargets.Add(new CameraTargetModel { AgentId = camera.AgentId, CameraIndex = camera.CameraIndex });
+            }
         }
 
         /// <summary>선택된 미리보기 카메라의 프레임만 디코드해 표시한다. 나머지 카메라 프레임은 버린다.</summary>
@@ -466,6 +654,11 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand] private System.Threading.Tasks.Task CloseShutterAsync() => SendCameraOpAsync(CameraControlOps.ShutterClose);
         [RelayCommand] private System.Threading.Tasks.Task StartCameraAsync() => SendCameraOpAsync(CameraControlOps.Run);
         [RelayCommand] private System.Threading.Tasks.Task StopCameraAsync() => SendCameraOpAsync(CameraControlOps.Stop);
+        [RelayCommand] private System.Threading.Tasks.Task CaptureCameraAsync() => SendCameraOpAsync(CameraControlOps.Capture);
+        [RelayCommand] private System.Threading.Tasks.Task RunNucAsync() => SendCameraOpAsync(CameraControlOps.Nuc);
+        [RelayCommand] private System.Threading.Tasks.Task RunBiasLowAsync() => SendCameraOpAsync(CameraControlOps.BiasLow);
+        [RelayCommand] private System.Threading.Tasks.Task RunBiasMidAsync() => SendCameraOpAsync(CameraControlOps.BiasMid);
+        [RelayCommand] private System.Threading.Tasks.Task RunBiasHighAsync() => SendCameraOpAsync(CameraControlOps.BiasHigh);
 
         /// <summary>JOG 이동 시작(버튼 누름). View 코드비하인드가 직접 호출한다.</summary>
         public System.Threading.Tasks.Task StartJog(ServoAxis axis, bool positive) => AppServices.PlcController?.JogAsync(axis, positive, true) ?? System.Threading.Tasks.Task.CompletedTask;
@@ -479,4 +672,3 @@ namespace HeatingCameraSystem.Master.ViewModels
         }
     }
 }
-

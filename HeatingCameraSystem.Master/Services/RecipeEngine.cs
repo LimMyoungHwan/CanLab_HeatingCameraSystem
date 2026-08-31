@@ -26,6 +26,19 @@ namespace HeatingCameraSystem.Master.Services
         private readonly ICameraDeviceRepository? _deviceRepo;
         private readonly IBlackBodyController _blackBody;
         private readonly AgentDirectory? _agentDirectory;
+        private readonly object _emergencyStopSync = new();
+        private CancellationTokenSource _emergencyStopCts = new();
+
+        public event EventHandler? EmergencyStopChanged;
+
+        public bool IsEmergencyStopRequested
+        {
+            get
+            {
+                lock (_emergencyStopSync)
+                    return _emergencyStopCts.IsCancellationRequested;
+            }
+        }
 
         public RecipeEngine(
             IPlcController plcController,
@@ -50,6 +63,41 @@ namespace HeatingCameraSystem.Master.Services
             _agentDirectory = agentDirectory;
         }
 
+        public void RequestEmergencyStop()
+        {
+            lock (_emergencyStopSync)
+            {
+                if (_emergencyStopCts.IsCancellationRequested)
+                    return;
+
+                _emergencyStopCts.Cancel();
+            }
+
+            EmergencyStopChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void ResetEmergencyStop()
+        {
+            CancellationTokenSource? previous = null;
+            lock (_emergencyStopSync)
+            {
+                if (!_emergencyStopCts.IsCancellationRequested)
+                    return;
+
+                previous = _emergencyStopCts;
+                _emergencyStopCts = new CancellationTokenSource();
+            }
+
+            previous.Dispose();
+            EmergencyStopChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private CancellationToken GetEmergencyStopToken()
+        {
+            lock (_emergencyStopSync)
+                return _emergencyStopCts.Token;
+        }
+
         /// <summary>
         /// 레시피 전체를 실행한다. 시작 시 캡처 결과 구독을 걸어 StepId별 TaskCompletionSource로
         /// 결과를 기다리며, 스텝의 캡처 실패·타임아웃은 <see cref="AlarmSink"/>에 알리고 다음 스텝을
@@ -58,6 +106,16 @@ namespace HeatingCameraSystem.Master.Services
         /// </summary>
         public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null, Func<CancellationToken, Task>? waitForResumeAsync = null)
         {
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, GetEmergencyStopToken());
+            cancellationToken = linkedCancellation.Token;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (recipe.Steps.Any(step => step.Kind != RecipeStepKind.LegacyCapture))
+            {
+                await ExecuteSegmentedRecipeAsync(recipe, cancellationToken, progress);
+                return;
+            }
+
             int totalSteps = recipe.Steps.Count;
             var resultWaiters = new ConcurrentDictionary<string, TaskCompletionSource<CaptureResultMessage>>();
 
@@ -177,7 +235,8 @@ namespace HeatingCameraSystem.Master.Services
                             RecipeStepId = captureResult.RecipeStepId,
                             Timestamp    = captureResult.Timestamp,
                             Temperature  = temp,
-                            Humidity     = humidity
+                            Humidity     = humidity,
+                            CameraTemperature = captureResult.CameraTemperature
                         });
                     }
                     else
@@ -198,6 +257,238 @@ namespace HeatingCameraSystem.Master.Services
             await _plcController.StopChamberAsync();
             progress?.Report(new RecipeProgress { CurrentStep = totalSteps, TotalSteps = totalSteps, CurrentPhase = "완료" });
             Console.WriteLine($"[RecipeEngine] Recipe '{recipe.Name}' completed.");
+        }
+
+        private async Task ExecuteSegmentedRecipeAsync(Recipe recipe, CancellationToken cancellationToken, IProgress<RecipeProgress>? progress)
+        {
+            int totalSteps = recipe.Steps.Count;
+            var captureWaiters = new ConcurrentDictionary<string, TaskCompletionSource<CaptureResultMessage>>();
+            var controlWaiters = new ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>>();
+            var subscribedControlAgents = new HashSet<string>(StringComparer.Ordinal);
+            bool chamberStarted = false;
+
+            await _natsService.SubscribeCaptureResultAsync(result =>
+            {
+                if (captureWaiters.TryGetValue(result.RecipeStepId, out var waiter))
+                    waiter.TrySetResult(result);
+            });
+
+            for (int i = 0; i < totalSteps; i++)
+            {
+                RecipeStep step = recipe.Steps[i];
+                cancellationToken.ThrowIfCancellationRequested();
+
+                switch (step.Kind)
+                {
+                    case RecipeStepKind.MotorMove:
+                        progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"서보 이동 ({i + 1}/{totalSteps})" });
+                        if (step.MotorMoveType == MotorMoveType.Automatic)
+                            await _plcController.MoveServoToPositionAsync(step.TargetPositionIndex);
+                        else
+                            await _plcController.MoveToCoordinateAsync(step.PositionX, step.PositionY);
+                        while (!cancellationToken.IsCancellationRequested)
+                        {
+                            PlcStatusSnapshot status = await _plcController.ReadStatusAsync();
+                            if (!status.ServoXBusy && !status.ServoYBusy) break;
+                            await Task.Delay(500, cancellationToken);
+                        }
+                        break;
+
+                    case RecipeStepKind.ChamberControl:
+                        progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"온습도 설정 ({i + 1}/{totalSteps})" });
+                        if (!chamberStarted)
+                        {
+                            await _plcController.StartChamberAsync();
+                            chamberStarted = true;
+                        }
+                        await _plcController.SetTargetTemperatureAsync((float)step.TargetChamberTemperature);
+                        await _plcController.SetTargetHumidityAsync((float)step.TargetChamberHumidity);
+                        await WaitForTemperatureAsync((float)step.TargetChamberTemperature, cancellationToken);
+                        break;
+
+                    case RecipeStepKind.BlackBodyControl:
+                        await ExecuteBlackBodyStepAsync(step, i, totalSteps, cancellationToken, progress);
+                        break;
+
+                    case RecipeStepKind.CameraCommand:
+                        await ExecuteCameraStepAsync(step, i, totalSteps, captureWaiters, controlWaiters, subscribedControlAgents, cancellationToken, progress);
+                        break;
+
+                    default:
+                        AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"지원하지 않는 스텝 종류: {step.Kind}");
+                        break;
+                }
+            }
+
+            if (chamberStarted)
+                await _plcController.StopChamberAsync();
+            progress?.Report(new RecipeProgress { CurrentStep = totalSteps, TotalSteps = totalSteps, CurrentPhase = "완료" });
+        }
+
+        private async Task ExecuteBlackBodyStepAsync(
+            RecipeStep step,
+            int index,
+            int totalSteps,
+            CancellationToken cancellationToken,
+            IProgress<RecipeProgress>? progress)
+        {
+            progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = $"BB 0, 1 온도 설정 ({index + 1}/{totalSteps})" });
+            try
+            {
+                float target1 = step.TargetBlackBodyTemperature1 == 0
+                    ? step.TargetBlackBodyTemperature
+                    : step.TargetBlackBodyTemperature1;
+                await Task.WhenAll(
+                    _blackBody.SetTemperatureAsync(0, step.TargetBlackBodyTemperature),
+                    _blackBody.SetTemperatureAsync(1, target1));
+            }
+            catch (Exception ex)
+            {
+                AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 블랙바디 {step.BlackBodyIndex} 온도 설정 실패: {ex.Message}");
+                return;
+            }
+
+            if (!step.WaitForStabilization)
+                return;
+
+            progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = $"BB 0, 1 안정화 대기 ({index + 1}/{totalSteps})" });
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    var current = await Task.WhenAll(
+                        _blackBody.GetCurrentTemperatureAsync(0),
+                        _blackBody.GetCurrentTemperatureAsync(1));
+                    float target1 = step.TargetBlackBodyTemperature1 == 0
+                        ? step.TargetBlackBodyTemperature
+                        : step.TargetBlackBodyTemperature1;
+                    if (Math.Abs(current[0] - step.TargetBlackBodyTemperature) <= _tempTolerance &&
+                        Math.Abs(current[1] - target1) <= _tempTolerance)
+                        break;
+                }
+                catch (Exception ex)
+                {
+                    AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 블랙바디 {step.BlackBodyIndex} 온도 읽기 실패: {ex.Message}");
+                    break;
+                }
+                await Task.Delay(1000, cancellationToken);
+            }
+        }
+
+        private async Task WaitForTemperatureAsync(float target, CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                if (Math.Abs(await _plcController.GetCurrentTemperatureAsync() - target) <= _tempTolerance)
+                    return;
+                await Task.Delay(1000, cancellationToken);
+            }
+        }
+
+        private async Task ExecuteCameraStepAsync(
+            RecipeStep step,
+            int index,
+            int totalSteps,
+            ConcurrentDictionary<string, TaskCompletionSource<CaptureResultMessage>> captureWaiters,
+            ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>> controlWaiters,
+            HashSet<string> subscribedControlAgents,
+            CancellationToken cancellationToken,
+            IProgress<RecipeProgress>? progress)
+        {
+            progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = $"카메라 {step.CameraOperation} ({index + 1}/{totalSteps})" });
+            var targets = step.CameraTargets.Count > 0
+                ? step.CameraTargets
+                : new List<RecipeCameraTarget> { new() { CameraIndex = step.CameraIndex } };
+
+            foreach (var target in targets)
+            {
+                string agentId = string.IsNullOrWhiteSpace(target.AgentId)
+                    ? target.CameraIndex == step.CameraIndex ? await ResolveAgentIdAsync(step) : $"Agent_{target.CameraIndex}"
+                    : target.AgentId;
+                string requestId = $"{step.StepId}:{agentId}:{target.CameraIndex}";
+
+                if (step.CameraOperation == CameraControlOps.Capture)
+                {
+                    var captureWaiter = new TaskCompletionSource<CaptureResultMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    captureWaiters[requestId] = captureWaiter;
+                    await _natsService.PublishCaptureCommandAsync(new CaptureCommandMessage
+                    {
+                        TargetAgentId = agentId,
+                        RecipeStepId = requestId,
+                        Source = CaptureSource.Recipe,
+                        Timestamp = DateTime.UtcNow
+                    });
+
+                    Task completed = await Task.WhenAny(captureWaiter.Task, Task.Delay(_captureTimeout, cancellationToken));
+                    if (completed == captureWaiter.Task && captureWaiter.Task.Result.IsSuccess)
+                        await StoreCaptureResultAsync(step, target.CameraIndex, captureWaiter.Task.Result);
+                    else
+                        AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 카메라 {target.CameraIndex} 캡처 실패 또는 타임아웃");
+                    captureWaiters.TryRemove(requestId, out _);
+                    continue;
+                }
+
+                if (subscribedControlAgents.Add(agentId))
+                {
+                    await _natsService.SubscribeCameraControlAckAsync(agentId, ack =>
+                    {
+                        if (controlWaiters.TryGetValue(ack.RequestId, out var waiter))
+                            waiter.TrySetResult(ack);
+                    });
+                }
+
+                var controlWaiter = new TaskCompletionSource<CameraControlAckMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+                controlWaiters[requestId] = controlWaiter;
+                await _natsService.PublishCameraControlAsync(new CameraControlMessage
+                {
+                    AgentId = agentId,
+                    CameraIndex = target.CameraIndex,
+                    Op = step.CameraOperation,
+                    RequestId = requestId,
+                    Timestamp = DateTime.UtcNow
+                });
+
+                Task controlCompleted = await Task.WhenAny(controlWaiter.Task, Task.Delay(_captureTimeout, cancellationToken));
+                if (controlCompleted != controlWaiter.Task || !controlWaiter.Task.Result.IsSuccess)
+                    AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 카메라 {target.CameraIndex} 명령 실패 또는 타임아웃");
+                controlWaiters.TryRemove(requestId, out _);
+            }
+        }
+
+        private async Task StoreCaptureResultAsync(RecipeStep step, int cameraIndex, CaptureResultMessage captureResult)
+        {
+            float temperature = 0f;
+            float humidity = 0f;
+            try
+            {
+                temperature = await _plcController.GetCurrentTemperatureAsync();
+                humidity = await _plcController.GetCurrentHumidityAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RecipeEngine] PLC read failed: {ex.Message}");
+            }
+
+            string storedImagePath = CaptureResultImageCache.Store(captureResult, _imageCacheDir) ?? captureResult.ImagePath;
+            string cameraId = !string.IsNullOrWhiteSpace(captureResult.Alias) ? captureResult.Alias
+                : !string.IsNullOrWhiteSpace(step.CameraAlias) ? step.CameraAlias
+                : captureResult.AgentId;
+
+            await _historyRepo.InsertAsync(new CaptureHistoryRecord
+            {
+                Id = string.IsNullOrEmpty(captureResult.CaptureId) ? Guid.NewGuid().ToString() : captureResult.CaptureId,
+                CameraId = cameraId,
+                AgentId = captureResult.AgentId,
+                CameraAlias = captureResult.Alias,
+                CameraIndex = cameraIndex,
+                Source = CaptureSource.Recipe,
+                ImagePath = storedImagePath,
+                RecipeStepId = captureResult.RecipeStepId,
+                Timestamp = captureResult.Timestamp,
+                Temperature = temperature,
+                Humidity = humidity,
+                CameraTemperature = captureResult.CameraTemperature
+            });
         }
 
         /// <summary>
@@ -233,7 +524,7 @@ namespace HeatingCameraSystem.Master.Services
             float temp = await _plcController.GetCurrentTemperatureAsync();
             float humidity = await _plcController.GetCurrentHumidityAsync();
             bool inBand = Math.Abs(temp - recipe.GlobalTargetTemperature) <= recipe.SafetyTempTolerance
-                       && Math.Abs(humidity - recipe.GlobalTargetHumidity) <= recipe.SafetyHumidityTolerance;
+                       && humidity <= recipe.GlobalTargetHumidity;
             return (inBand, temp, humidity);
         }
 

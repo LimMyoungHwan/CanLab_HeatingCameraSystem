@@ -212,6 +212,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                 AppServices.DashboardLayoutRepo,
                 AppServices.DialogService)
         {
+            if (AppServices.RecipeEngine != null)
+                AppServices.RecipeEngine.EmergencyStopChanged += OnRecipeEngineEmergencyStopChanged;
         }
 
         /// <summary>
@@ -662,9 +664,10 @@ namespace HeatingCameraSystem.Master.ViewModels
                     : Localize("Plc_ErrorStopNoDetails");
                 AlarmSink.Raise(AlarmSeverity.Error, "PLC", message);
                 _dialogService?.ShowError(Localize("Plc_ErrorTitle"), message);
+                AppServices.RecipeEngine?.RequestEmergencyStop();
                 _recipeCts?.Cancel();
 
-                // ponytail: TriggerEmergencyStopAsync는 BitEmergencyStop(=M2000)을 쓰는데 이는 HardwareSettings의
+                // ponytail: TriggerEmergencyStopAsync는 BitEmergencyStop(=M901)을 쓰며 이는 HardwareSettings의
                 // 문서화된 PLACEHOLDER 주소다 — 소프트웨어 stop-all + 알람은 올바르나 실제 PLC estop 비트는 하드웨어
                 // 확인이 필요하다(주소는 변경하지 말 것).
                 if (_plcController != null)
@@ -677,7 +680,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
-        private bool CanStartRecipe => !RecoveryLockActive;
+        private bool CanStartRecipe => !RecoveryLockActive && !(AppServices.RecipeEngine?.IsEmergencyStopRequested ?? false);
 
         // 복구 인터록 해제: 에러 비트 전부 클리어 + 서보 X/Y 모두 원점 ±0.5mm 이내일 때만. 에러 해제만으로는 열리지 않는다.
         /// <summary>
@@ -692,7 +695,26 @@ namespace HeatingCameraSystem.Master.ViewModels
             bool atOrigin = Math.Abs(s.ServoXPosition) <= OriginToleranceMm
                          && Math.Abs(s.ServoYPosition) <= OriginToleranceMm;
             if (errorsClear && atOrigin)
+            {
                 RecoveryLockActive = false;
+                AppServices.RecipeEngine?.ResetEmergencyStop();
+            }
+        }
+
+        private void OnRecipeEngineEmergencyStopChanged(object? sender, EventArgs e)
+        {
+            RunOnUi(() =>
+            {
+                bool emergencyStopRequested = AppServices.RecipeEngine?.IsEmergencyStopRequested ?? false;
+                IsEmergencyStop = emergencyStopRequested;
+                if (emergencyStopRequested)
+                {
+                    RecoveryLockActive = true;
+                    _recipeCts?.Cancel();
+                }
+
+                StartRecipeCommand.NotifyCanExecuteChanged();
+            });
         }
 
         // 두 정지를 독립적으로 시작해 비상정지 쓰기 지연이 챔버 정지를 막지 않게 한다.
@@ -875,6 +897,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             if (AppServices.RecipeEngine == null) { RecipeStatus = LocalizationManager.Instance["Dash_ServiceNotInit"]; return; }
             if (SelectedRecipe == null) { RecipeStatus = LocalizationManager.Instance["Dash_SelectRecipeNeeded"]; return; }
+            if (AppServices.RecipeEngine.IsEmergencyStopRequested) { RecipeStatus = "비상정지 상태에서는 레시피를 시작할 수 없습니다."; return; }
 
             _recipeCts?.Cancel();
             _recipeCts = new CancellationTokenSource();

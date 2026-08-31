@@ -33,6 +33,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly Action<AgentConfigSnapshot>? _applyConfigSnapshot;
         private readonly Func<CameraDescriptor, string, Task<(bool Success, string Message)>>? _cameraControlHandler;
         private readonly Func<CameraDescriptor, bool>? _serialHealth;
+        private readonly Func<CameraDescriptor, Task<double?>>? _readCameraTemperature;
 
         private readonly CancellationTokenSource _cts = new();
         private readonly SemaphoreSlim _subscriptionGate = new(1, 1);
@@ -51,7 +52,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
             Func<AgentConfigSnapshot>? getConfigSnapshot = null,
             Action<AgentConfigSnapshot>? applyConfigSnapshot = null,
             Func<CameraDescriptor, string, Task<(bool Success, string Message)>>? cameraControlHandler = null,
-            Func<CameraDescriptor, bool>? serialHealth = null)
+            Func<CameraDescriptor, bool>? serialHealth = null,
+            Func<CameraDescriptor, Task<double?>>? readCameraTemperature = null)
         {
             _nats = nats ?? throw new ArgumentNullException(nameof(nats));
             _manager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -64,6 +66,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _applyConfigSnapshot = applyConfigSnapshot;
             _cameraControlHandler = cameraControlHandler;
             _serialHealth = serialHealth;
+            _readCameraTemperature = readCameraTemperature;
         }
 
         public bool IsConnected => _connected;
@@ -203,11 +206,17 @@ namespace HeatingCameraSystem.Protocols.Cameras
             bool success = false;
             string imagePath = string.Empty;
             byte[]? bytes = null;
+            double? cameraTemperature = null;
 
             try
             {
                 if (_manager.TryGet(descriptor.AgentId, out ICameraRuntime runtime))
                 {
+                    if (_readCameraTemperature is not null)
+                    {
+                        try { cameraTemperature = await _readCameraTemperature(descriptor).ConfigureAwait(false); }
+                        catch (Exception ex) { Debug.WriteLine($"[CameraNats] camera info read failed for {descriptor.AgentId}: {ex.Message}"); }
+                    }
                     for (int i = 0; i < _captureBurstCount; i++)
                     {
                         bool forceFreshFrame = i > 0;
@@ -251,7 +260,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     IsSuccess = success,
                     ImagePath = imagePath,
                     ImageBytes = bytes,
-                    Timestamp = DateTime.UtcNow
+                    Timestamp = DateTime.UtcNow,
+                    CameraTemperature = cameraTemperature
                 }).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -286,6 +296,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     AgentId = cam.AgentId,
                     CameraIndex = msg.CameraIndex,
                     Op = msg.Op,
+                    RequestId = msg.RequestId,
                     IsSuccess = success,
                     Message = message,
                     Timestamp = DateTime.UtcNow
