@@ -157,7 +157,6 @@ namespace HeatingCameraSystem.Master.ViewModels
         public ObservableCollection<RecipeModel> Recipes { get; } = new ObservableCollection<RecipeModel>();
         public RecipeStepKindOption[] StepKindOptions { get; } =
         {
-            new() { Value = RecipeStepKind.LegacyCapture, Label = "기존 일괄 촬영" },
             new() { Value = RecipeStepKind.MotorMove, Label = "PLC 모터 이동" },
             new() { Value = RecipeStepKind.ChamberControl, Label = "PLC 온습도 설정" },
             new() { Value = RecipeStepKind.CameraCommand, Label = "카메라 명령" },
@@ -265,7 +264,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 StepNumber = n,
                 Kind = kind,
-                NodeAssignment = kind == RecipeStepKind.LegacyCapture ? $"Position {n:D2} -> CAM-{n:D2}" : string.Empty,
+                NodeAssignment = string.Empty,
                 CameraIndex = n,
                 TargetPositionIndex = n,
                 BlackbodyRef = 25.0f,

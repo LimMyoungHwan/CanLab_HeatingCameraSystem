@@ -49,6 +49,9 @@ namespace HeatingCameraSystem.Master.Services
         /// <summary>흑체 판독이 끝날 때마다 발생. PLC 연결 여부와 무관하게 발생한다.</summary>
         public event EventHandler? BlackBodyUpdated;
 
+        /// <summary>PLC 에러 비트가 새로 올라간 순간 1회 발생. 실행 중인 레시피를 중단시키는 데 쓴다.</summary>
+        public event EventHandler? ErrorRaised;
+
         /// <summary>
         /// 타이머 두 개는 <see cref="DispatcherTimer"/>라서 폴링 콜백이 WPF UI 스레드에서 실행된다 —
         /// ObservableProperty를 마샬링 없이 바로 갱신해도 안전한 이유다.
@@ -202,13 +205,18 @@ namespace HeatingCameraSystem.Master.Services
         private void RaiseErrorEdges(bool[] bits)
         {
             var names = PlcDeviceCatalog.ErrorNames;
+            bool anyNewError = false;
             for (int i = 0; i < bits.Length && i < names.Length; i++)
             {
                 bool was = _prevErrorBits != null && i < _prevErrorBits.Length && _prevErrorBits[i];
                 if (bits[i] && !was && !string.IsNullOrEmpty(names[i]))
+                {
                     AlarmSink.Raise(AlarmSeverity.Error, "PLC", LocalizationManager.Instance.GetOrDefault("PlcErr_" + i, names[i]));
+                    anyNewError = true;
+                }
             }
             _prevErrorBits = (bool[])bits.Clone();
+            if (anyNewError) ErrorRaised?.Invoke(this, EventArgs.Empty);
         }
     }
 }

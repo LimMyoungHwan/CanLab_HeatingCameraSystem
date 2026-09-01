@@ -168,6 +168,44 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
+        public async Task ExecuteRecipeAsync_WhenEmergencyStopRaisedMidRun_StopsChamberAndAborts()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(40.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+
+            var engine = new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object);
+
+            // 챔버가 켜진 직후 PLC 알람이 뜬 상황을 재현한다. 서보 이동 트리거를 훅으로 삼아
+            // 그 시점에 비상정지를 걸면, 이후 스텝은 실행되지 않고 챔버는 반드시 정지해야 한다.
+            mockPlc.Setup(p => p.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>()))
+                   .Callback(() => engine.RequestEmergencyStop())
+                   .Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.ChamberControl, TargetChamberTemperature = 40, TargetChamberHumidity = 50, WaitForChamberStabilization = false },
+                    new() { Kind = RecipeStepKind.MotorMove, MotorMoveType = MotorMoveType.Manual, PositionX = 10, PositionY = 20 },
+                    new() { Kind = RecipeStepKind.CameraCommand, CameraIndex = 1, CameraOperation = CameraControlOps.Capture }
+                }
+            };
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => engine.ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(5)));
+
+            mockPlc.Verify(p => p.StartChamberAsync(), Times.Once);
+            mockPlc.Verify(p => p.StopChamberAsync(), Times.Once);
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Never);
+        }
+
+        [Fact]
         public async Task ExecuteRecipeAsync_SegmentedSteps_RunOnlyTheirAssignedOperation()
         {
             var mockPlc = new Mock<IPlcController>();

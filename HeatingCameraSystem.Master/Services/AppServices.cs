@@ -135,6 +135,7 @@ namespace HeatingCameraSystem.Master.Services
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
 
             PlcStatus = new PlcStatusService(PlcController, Settings.BlackBody.Enabled ? BlackBodyController : null);
+            PlcStatus.ErrorRaised += (_, _) => RecipeEngine?.RequestEmergencyStop();
             PlcStatus.Start();
 
             _chamberRecorder = new ChamberHistoryRecorder(ChamberHistoryRepo, PlcStatus);

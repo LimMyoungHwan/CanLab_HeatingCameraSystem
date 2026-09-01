@@ -101,8 +101,8 @@ namespace HeatingCameraSystem.Master.Services
         /// <summary>
         /// 레시피 전체를 실행한다. 시작 시 캡처 결과 구독을 걸어 StepId별 TaskCompletionSource로
         /// 결과를 기다리며, 스텝의 캡처 실패·타임아웃은 <see cref="AlarmSink"/>에 알리고 다음 스텝을
-        /// 계속한다. 정상 완료 시에만 StopChamberAsync를 호출한다 — 취소로 중단되면 챔버 정지는
-        /// AppServices 종료 시퀀스가 유일한 안전망이다.
+        /// 계속한다. 챔버를 켠 뒤에는 정상 완료·취소·PLC 알람 어느 경로로 끝나든 StopChamberAsync를
+        /// 호출한다.
         /// </summary>
         public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null, Func<CancellationToken, Task>? waitForResumeAsync = null)
         {
@@ -130,59 +130,70 @@ namespace HeatingCameraSystem.Master.Services
                     waiter.TrySetResult(result);
             });
 
-            for (int i = 0; i < totalSteps; i++)
+            try
             {
-                RecipeStep step = recipe.Steps[i];
-                cancellationToken.ThrowIfCancellationRequested();
-
-                switch (step.Kind)
+                for (int i = 0; i < totalSteps; i++)
                 {
-                    case RecipeStepKind.MotorMove:
-                        progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"서보 이동 ({i + 1}/{totalSteps})" });
-                        if (step.MotorMoveType == MotorMoveType.Automatic)
-                            await _plcController.MoveServoToPositionAsync(step.TargetPositionIndex);
-                        else
-                            await _plcController.MoveToCoordinateAsync(step.PositionX, step.PositionY);
-                        while (!cancellationToken.IsCancellationRequested)
-                        {
-                            PlcStatusSnapshot status = await _plcController.ReadStatusAsync();
-                            if (!status.ServoXBusy && !status.ServoYBusy) break;
-                            await Task.Delay(500, cancellationToken);
-                        }
-                        break;
+                    RecipeStep step = recipe.Steps[i];
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                    case RecipeStepKind.ChamberControl:
-                        progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"온습도 설정 ({i + 1}/{totalSteps})" });
-                        if (!chamberStarted)
-                        {
-                            await StartChamberForRecipeAsync();
-                            chamberStarted = true;
-                        }
-                        await _plcController.SetTargetHumidityAsync((float)step.TargetChamberHumidity);
-                        await ApplyChamberTemperatureAsync((float)step.TargetChamberTemperature, recipe.TemperatureRampMinutes, i, totalSteps, progress, cancellationToken);
-                        if (step.WaitForChamberStabilization)
-                            await WaitForTemperatureAsync((float)step.TargetChamberTemperature, cancellationToken);
-                        safetyReference = step;
-                        break;
+                    switch (step.Kind)
+                    {
+                        case RecipeStepKind.MotorMove:
+                            progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"서보 이동 ({i + 1}/{totalSteps})" });
+                            if (step.MotorMoveType == MotorMoveType.Automatic)
+                                await _plcController.MoveServoToPositionAsync(step.TargetPositionIndex);
+                            else
+                                await _plcController.MoveToCoordinateAsync(step.PositionX, step.PositionY);
+                            while (!cancellationToken.IsCancellationRequested)
+                            {
+                                PlcStatusSnapshot status = await _plcController.ReadStatusAsync();
+                                if (!status.ServoXBusy && !status.ServoYBusy) break;
+                                await Task.Delay(500, cancellationToken);
+                            }
+                            break;
 
-                    case RecipeStepKind.BlackBodyControl:
-                        await ExecuteBlackBodyStepAsync(step, i, totalSteps, cancellationToken, progress);
-                        break;
+                        case RecipeStepKind.ChamberControl:
+                            progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"온습도 설정 ({i + 1}/{totalSteps})" });
+                            if (!chamberStarted)
+                            {
+                                await StartChamberForRecipeAsync();
+                                chamberStarted = true;
+                            }
+                            await _plcController.SetTargetHumidityAsync((float)step.TargetChamberHumidity);
+                            await ApplyChamberTemperatureAsync((float)step.TargetChamberTemperature, recipe.TemperatureRampMinutes, i, totalSteps, progress, cancellationToken);
+                            if (step.WaitForChamberStabilization)
+                                await WaitForTemperatureAsync((float)step.TargetChamberTemperature, cancellationToken);
+                            safetyReference = step;
+                            break;
 
-                    case RecipeStepKind.CameraCommand:
-                        await ExecuteCameraStepAsync(step, i, totalSteps, captureWaiters, controlWaiters, subscribedControlAgents, cancellationToken, progress);
-                        break;
+                        case RecipeStepKind.BlackBodyControl:
+                            await ExecuteBlackBodyStepAsync(step, i, totalSteps, cancellationToken, progress);
+                            break;
 
-                    default:
-                        AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"지원하지 않는 스텝 종류: {step.Kind}");
-                        break;
+                        case RecipeStepKind.CameraCommand:
+                            await ExecuteCameraStepAsync(step, i, totalSteps, captureWaiters, controlWaiters, subscribedControlAgents, cancellationToken, progress);
+                            break;
+
+                        default:
+                            AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"지원하지 않는 스텝 종류: {step.Kind}");
+                            break;
+                    }
+
+                    await EnforceSafetyBandAsync(safetyReference, i, totalSteps, progress, waitForResumeAsync, cancellationToken);
                 }
-
-                await EnforceSafetyBandAsync(safetyReference, i, totalSteps, progress, waitForResumeAsync, cancellationToken);
+            }
+            finally
+            {
+                // 정상 완료든 취소·비상정지든 챔버는 반드시 세운다. PLC 알람으로 중단될 때
+                // 챔버만 계속 도는 상황을 막는 유일한 지점이다.
+                if (chamberStarted)
+                {
+                    try { await _plcController.StopChamberAsync(); }
+                    catch (Exception ex) { AlarmSink.Raise(AlarmSeverity.Error, "레시피", $"챔버 정지 실패: {ex.Message}"); }
+                }
             }
 
-            if (chamberStarted)
-                await _plcController.StopChamberAsync();
             progress?.Report(new RecipeProgress { CurrentStep = totalSteps, TotalSteps = totalSteps, CurrentPhase = "완료" });
         }
 
