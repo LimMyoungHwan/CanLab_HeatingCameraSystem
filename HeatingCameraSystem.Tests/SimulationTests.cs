@@ -206,13 +206,13 @@ namespace HeatingCameraSystem.Tests
             var engine = new RecipeEngine(plc, mockNats.Object, mockHistory.Object);
             var recipe = new Recipe
             {
-                Name                    = "SimRecipe",
-                GlobalTargetTemperature = 30.0f,
-                GlobalTargetHumidity    = 55.0f,
+                Name = "SimRecipe",
                 Steps = new List<RecipeStep>
                 {
-                    new RecipeStep { CameraIndex = 0, TargetPositionIndex = 1, TargetBlackBodyTemperature = 35.0f },
-                    new RecipeStep { CameraIndex = 1, TargetPositionIndex = 2, TargetBlackBodyTemperature = 40.0f }
+                    new RecipeStep { Kind = RecipeStepKind.ChamberControl, TargetChamberTemperature = 30.0, TargetChamberHumidity = 55.0 },
+                    new RecipeStep { Kind = RecipeStepKind.BlackBodyControl, TargetBlackBodyTemperature = 40.0f, WaitForStabilization = false },
+                    new RecipeStep { Kind = RecipeStepKind.CameraCommand, CameraOperation = CameraControlOps.Capture, CameraIndex = 0 },
+                    new RecipeStep { Kind = RecipeStepKind.CameraCommand, CameraOperation = CameraControlOps.Capture, CameraIndex = 1 }
                 }
             };
 
@@ -265,9 +265,7 @@ namespace HeatingCameraSystem.Tests
                 var recipe = new Recipe
                 {
                     Name = "CacheTest",
-                    GlobalTargetTemperature = 25.0f,
-                    GlobalTargetHumidity    = 50.0f,
-                    Steps = { new RecipeStep { CameraIndex = 0, TargetPositionIndex = 1, TargetBlackBodyTemperature = 30.0f } }
+                    Steps = { new RecipeStep { Kind = RecipeStepKind.CameraCommand, CameraOperation = CameraControlOps.Capture, CameraIndex = 0 } }
                 };
 
                 await engine.ExecuteRecipeAsync(recipe, CancellationToken.None);
@@ -317,7 +315,7 @@ namespace HeatingCameraSystem.Tests
             var recipe = new Recipe
             {
                 Name = "FallbackTest",
-                Steps = { new RecipeStep { CameraIndex = 0, TargetPositionIndex = 1, TargetBlackBodyTemperature = 30.0f } }
+                Steps = { new RecipeStep { Kind = RecipeStepKind.CameraCommand, CameraOperation = CameraControlOps.Capture, CameraIndex = 0 } }
             };
 
             await engine.ExecuteRecipeAsync(recipe, CancellationToken.None);

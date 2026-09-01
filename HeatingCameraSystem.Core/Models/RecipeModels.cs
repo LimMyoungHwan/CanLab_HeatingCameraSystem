@@ -13,20 +13,8 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>레시피 표시 이름.</summary>
         public string Name { get; set; } = "New Recipe";
 
-        /// <summary>챔버 공통 목표 온도(℃).</summary>
-        public float GlobalTargetTemperature { get; set; } = 25.0f;
-
-        /// <summary>챔버 공통 목표 습도(%RH).</summary>
-        public float GlobalTargetHumidity { get; set; } = 50.0f;
-
         /// <summary>타겟 온도 도달 시간(분). 0이면 즉시 지정, 0보다 크면 현재 온도→타겟 선형 램프(히터 급출력 방지).</summary>
         public int TemperatureRampMinutes { get; set; } = 0;
-
-        /// <summary>안전 밴드: 챔버 현재 온도가 전역 목표에서 이만큼(℃) 벗어나면 촬영을 멈추고 알람 후 사용자 확인 대기.</summary>
-        public float SafetyTempTolerance { get; set; } = 1.0f;
-
-        /// <summary>안전 밴드: 챔버 현재 습도가 전역 목표에서 이만큼(%RH) 벗어나면 촬영을 멈추고 알람 후 사용자 확인 대기.</summary>
-        public float SafetyHumidityTolerance { get; set; } = 5.0f;
 
         /// <summary>순차적으로 실행될 스텝 목록.</summary>
         public List<RecipeStep> Steps { get; set; } = new();
@@ -100,5 +88,20 @@ namespace HeatingCameraSystem.Core.Models
 
         /// <summary>스텝별 챔버 목표 습도(%RH).</summary>
         public double TargetChamberHumidity { get; set; }
+
+        /// <summary>true면 챔버가 목표 온도에 도달할 때까지 대기하고, false면 설정만 하고 다음 스텝으로 넘어간다.</summary>
+        public bool WaitForChamberStabilization { get; set; } = true;
+
+        /// <summary>
+        /// 안전 밴드 온도 허용오차(℃). 이 스텝 이후 챔버 현재 온도가 <see cref="TargetChamberTemperature"/>에서
+        /// 이만큼 벗어나면 알람 후 운전자 확인 대기. 0이면 온도 안전 검사를 하지 않는다.
+        /// </summary>
+        public float SafetyTempTolerance { get; set; }
+
+        /// <summary>
+        /// 안전 밴드 습도 허용오차(%RH). 판정 기준은 <see cref="SafetyTempTolerance"/>와 같으며
+        /// 0이면 습도 안전 검사를 하지 않는다.
+        /// </summary>
+        public float SafetyHumidityTolerance { get; set; }
     }
 }

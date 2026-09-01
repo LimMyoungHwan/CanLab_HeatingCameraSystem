@@ -78,11 +78,12 @@ namespace HeatingCameraSystem.Tests
 
         private static Recipe CreateRecipe(int cameraIndex, string? cameraAlias = null) => new()
         {
-            GlobalTargetTemperature = 25.0f,
             Steps = new List<RecipeStep>
             {
                 new RecipeStep
                 {
+                    Kind = RecipeStepKind.CameraCommand,
+                    CameraOperation = CameraControlOps.Capture,
                     CameraIndex = cameraIndex,
                     CameraAlias = cameraAlias,
                     TargetPositionIndex = 1,

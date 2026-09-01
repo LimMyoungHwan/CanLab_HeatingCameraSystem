@@ -500,7 +500,7 @@ namespace HeatingCameraSystem.Tests
             var recipe = new Recipe
             {
                 Name = "AliasTest",
-                Steps = { new RecipeStep { CameraAlias = "Bay1-Top", CameraIndex = 99 } }
+                Steps = { new RecipeStep { Kind = RecipeStepKind.CameraCommand, CameraAlias = "Bay1-Top", CameraIndex = 99 } }
             };
 
             await engine.ExecuteRecipeAsync(recipe);
@@ -545,7 +545,7 @@ namespace HeatingCameraSystem.Tests
             var recipe = new Recipe
             {
                 Name = "FallbackTest",
-                Steps = { new RecipeStep { CameraIndex = 3 } }
+                Steps = { new RecipeStep { Kind = RecipeStepKind.CameraCommand, CameraIndex = 3 } }
             };
 
             await engine.ExecuteRecipeAsync(recipe);
@@ -595,7 +595,7 @@ namespace HeatingCameraSystem.Tests
             var recipe = new Recipe
             {
                 Name = "MissingAliasTest",
-                Steps = { new RecipeStep { CameraAlias = "NonExistent", CameraIndex = 7 } }
+                Steps = { new RecipeStep { Kind = RecipeStepKind.CameraCommand, CameraAlias = "NonExistent", CameraIndex = 7 } }
             };
 
             await engine.ExecuteRecipeAsync(recipe);

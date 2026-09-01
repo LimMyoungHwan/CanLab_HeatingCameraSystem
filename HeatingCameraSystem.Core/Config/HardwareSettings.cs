@@ -101,6 +101,11 @@ namespace HeatingCameraSystem.Core.Config
         // 장비 실측에 따라 조정 가능한 캘리브레이션 값(기본 100ms).
         public int PulseHoldMs { get; set; } = 100;
 
+        // PLC 래더가 PC가 쓴 값을 100ms 주기로 읽어가므로, 연속 쓰기가 이보다 촘촘하면
+        // 앞선 값이 읽히기 전에 덮여 명령이 유실된다. 쓰기 하나가 끝난 뒤 이 시간만큼
+        // 다음 쓰기를 막는다(읽기에는 적용하지 않는다 — 상태 일괄 판독이 수십 배 느려진다).
+        public int WriteGapMs { get; set; } = 100;
+
         // 포인트 이동 원터치 비트: P601~P620 (번호 = base + (idx-1))
         public string ServoPointMoveBase { get; set; } = "P601";
         // 포인트 목표좌표: X=base+(idx-1)*stride, Y=X+2  (1P: D3010/D3012, 2P: D3020/D3022 ...)

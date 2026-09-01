@@ -97,11 +97,12 @@ internal static class Program
             Console.WriteLine($"[E2E]   <- capture result: agent={r.AgentId}, success={r.IsSuccess}, path={r.ImagePath}");
         });
 
+        const float chamberTargetTemperature = 30.0f;
+        const float chamberTargetHumidity = 55.0f;
+
         var recipe = new Recipe
         {
-            Name                    = "E2E_SimRecipe",
-            GlobalTargetTemperature = 30.0f,
-            GlobalTargetHumidity    = 55.0f,
+            Name = "E2E_SimRecipe",
             Steps = new List<RecipeStep>
             {
                 new() { CameraIndex = 0, TargetPositionIndex = 1, TargetBlackBodyTemperature = 35.0f },
@@ -112,16 +113,16 @@ internal static class Program
         };
 
         Console.WriteLine($"[E2E] Recipe '{recipe.Name}' - {recipe.Steps.Count} steps");
-        Console.WriteLine($"[E2E] Phase: chamber stabilization (target T={recipe.GlobalTargetTemperature}, H={recipe.GlobalTargetHumidity})");
+        Console.WriteLine($"[E2E] Phase: chamber stabilization (target T={chamberTargetTemperature}, H={chamberTargetHumidity})");
 
         try
         {
             await plc.StartChamberAsync();
-            await plc.SetTargetTemperatureAsync(recipe.GlobalTargetTemperature);
-            await plc.SetTargetHumidityAsync(recipe.GlobalTargetHumidity);
+            await plc.SetTargetTemperatureAsync(chamberTargetTemperature);
+            await plc.SetTargetHumidityAsync(chamberTargetHumidity);
             await WaitUntilAsync(async () =>
-                Math.Abs(await plc.GetCurrentTemperatureAsync() - recipe.GlobalTargetTemperature) <= 0.5f &&
-                Math.Abs(await plc.GetCurrentHumidityAsync() - recipe.GlobalTargetHumidity) <= 0.5f,
+                Math.Abs(await plc.GetCurrentTemperatureAsync() - chamberTargetTemperature) <= 0.5f &&
+                Math.Abs(await plc.GetCurrentHumidityAsync() - chamberTargetHumidity) <= 0.5f,
                 TimeSpan.FromSeconds(timeoutSec));
         }
         catch (Exception ex)

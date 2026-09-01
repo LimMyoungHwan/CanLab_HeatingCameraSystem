@@ -12,11 +12,7 @@ public class RecipeCopyTests
         var source = new Recipe
         {
             Name = "원본",
-            GlobalTargetTemperature = 42.5f,
-            GlobalTargetHumidity = 67.5f,
             TemperatureRampMinutes = 15,
-            SafetyTempTolerance = 2.5f,
-            SafetyHumidityTolerance = 7.5f,
             Steps = Enumerable.Range(1, 3).Select(i => new RecipeStep
             {
                 StepId = $"step-{i}",
@@ -26,6 +22,9 @@ public class RecipeCopyTests
                 TargetBlackBodyTemperature = 20 + i,
                 BlackBodyIndex = i % 2,
                 WaitForStabilization = i % 2 == 0,
+                WaitForChamberStabilization = i % 2 == 0,
+                SafetyTempTolerance = i * 0.5f,
+                SafetyHumidityTolerance = i * 1.5f,
                 PositionX = i * 100,
                 PositionY = i * 200,
                 TargetChamberTemperature = 30 + i,
@@ -48,14 +47,14 @@ public class RecipeCopyTests
             Assert.Equal(pair.First.TargetBlackBodyTemperature, pair.Second.TargetBlackBodyTemperature);
             Assert.Equal(pair.First.BlackBodyIndex, pair.Second.BlackBodyIndex);
             Assert.Equal(pair.First.WaitForStabilization, pair.Second.WaitForStabilization);
+            Assert.Equal(pair.First.WaitForChamberStabilization, pair.Second.WaitForChamberStabilization);
+            Assert.Equal(pair.First.SafetyTempTolerance, pair.Second.SafetyTempTolerance);
+            Assert.Equal(pair.First.SafetyHumidityTolerance, pair.Second.SafetyHumidityTolerance);
             Assert.Equal(pair.First.PositionX, pair.Second.PositionX);
             Assert.Equal(pair.First.PositionY, pair.Second.PositionY);
             Assert.Equal(pair.First.TargetChamberTemperature, pair.Second.TargetChamberTemperature);
             Assert.Equal(pair.First.TargetChamberHumidity, pair.Second.TargetChamberHumidity);
         });
-
-        Assert.Equal(2.5f, clone.SafetyTempTolerance);
-        Assert.Equal(7.5f, clone.SafetyHumidityTolerance);
 
         clone.Steps[0].CameraIndex = 64;
 
@@ -82,16 +81,21 @@ public class RecipeCopyTests
 
         var recipe = new Recipe
         {
-            GlobalTargetTemperature = 20.0f,
-            GlobalTargetHumidity = 40.0f,
-            SafetyTempTolerance = 2.5f,
-            SafetyHumidityTolerance = 7.5f
+            Steps =
+            {
+                new RecipeStep
+                {
+                    CameraIndex = 1,
+                    SafetyTempTolerance = 2.5f,
+                    SafetyHumidityTolerance = 7.5f
+                }
+            }
         };
 
         var vm = fromDomain.Invoke(null, new object[] { recipe })!;
         var back = (Recipe)toDomain.Invoke(null, new object[] { vm })!;
 
-        Assert.Equal(2.5f, back.SafetyTempTolerance);
-        Assert.Equal(7.5f, back.SafetyHumidityTolerance);
+        Assert.Equal(2.5f, back.Steps[0].SafetyTempTolerance);
+        Assert.Equal(7.5f, back.Steps[0].SafetyHumidityTolerance);
     }
 }

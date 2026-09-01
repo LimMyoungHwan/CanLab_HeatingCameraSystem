@@ -429,6 +429,7 @@ namespace HeatingCameraSystem.Protocols
             {
                 var client = _client ?? throw new InvalidOperationException("Not connected to PLC.");
                 await Task.Run(() => action(client));
+                if (_s.WriteGapMs > 0) await Task.Delay(_s.WriteGapMs);
             }
             catch
             {

@@ -27,6 +27,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private int _blackBodyIndex;
         [ObservableProperty] private float _blackbodyRef1;
         [ObservableProperty] private bool _waitForStabilization = true;
+        [ObservableProperty] private bool _waitForChamberStabilization = true;
+        [ObservableProperty] private float _safetyTempTolerance;
+        [ObservableProperty] private float _safetyHumidityTolerance;
         [ObservableProperty] private float _positionX;
         [ObservableProperty] private float _positionY;
         [ObservableProperty] private double _targetChamberTemperature;
@@ -138,11 +141,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private string _name = string.Empty;
         [ObservableProperty] private bool _isSelected;
         [ObservableProperty] private string _lastModified = string.Empty;
-        [ObservableProperty] private float _targetChamberTemp;
         [ObservableProperty] private int _rampMinutes;
-        [ObservableProperty] private float _targetChamberHumidity;
-        [ObservableProperty] private float _safetyTempTolerance = 1.0f;
-        [ObservableProperty] private float _safetyHumidityTolerance = 5.0f;
         [ObservableProperty] private bool _isSequentialMode = true;
 
         public ObservableCollection<RecipeStepModel> Steps { get; } = new();
@@ -216,7 +215,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand]
         private void AddRecipe()
         {
-            var vm = new RecipeModel { Name = "새 레시피", LastModified = DateTime.Now.ToString("g"), TargetChamberTemp = 25.0f, RampMinutes = 0, TargetChamberHumidity = 50.0f, SafetyTempTolerance = 1.0f, SafetyHumidityTolerance = 5.0f };
+            var vm = new RecipeModel { Name = "새 레시피", LastModified = DateTime.Now.ToString("g"), RampMinutes = 0 };
             Recipes.Add(vm);
             AppServices.RecipeRepo.SaveAsync(ToDomain(vm)).GetAwaiter().GetResult();
             SelectRecipe(vm);
@@ -373,11 +372,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 Id = Guid.NewGuid().ToString(),
                 Name = source.Name + " (복사)",
-                GlobalTargetTemperature = source.GlobalTargetTemperature,
-                GlobalTargetHumidity = source.GlobalTargetHumidity,
                 TemperatureRampMinutes = source.TemperatureRampMinutes,
-                SafetyTempTolerance = source.SafetyTempTolerance,
-                SafetyHumidityTolerance = source.SafetyHumidityTolerance,
                 Steps = source.Steps.Select(s => new RecipeStep
                 {
                     StepId = s.StepId,
@@ -396,6 +391,9 @@ namespace HeatingCameraSystem.Master.ViewModels
                     TargetBlackBodyTemperature1 = s.TargetBlackBodyTemperature1,
                     MotorMoveType = s.MotorMoveType,
                     WaitForStabilization = s.WaitForStabilization,
+                    WaitForChamberStabilization = s.WaitForChamberStabilization,
+                    SafetyTempTolerance = s.SafetyTempTolerance,
+                    SafetyHumidityTolerance = s.SafetyHumidityTolerance,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
@@ -414,11 +412,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 Id = vm.Id,
                 Name = vm.Name,
-                GlobalTargetTemperature = vm.TargetChamberTemp,
-                TemperatureRampMinutes = vm.RampMinutes,
-                GlobalTargetHumidity = vm.TargetChamberHumidity,
-                SafetyTempTolerance = vm.SafetyTempTolerance,
-                SafetyHumidityTolerance = vm.SafetyHumidityTolerance
+                TemperatureRampMinutes = vm.RampMinutes
             };
             foreach (var s in vm.Steps)
             {
@@ -438,6 +432,9 @@ namespace HeatingCameraSystem.Master.ViewModels
                     TargetBlackBodyTemperature1 = s.BlackbodyRef1,
                     MotorMoveType = s.MotorMoveType,
                     WaitForStabilization = s.WaitForStabilization,
+                    WaitForChamberStabilization = s.WaitForChamberStabilization,
+                    SafetyTempTolerance = s.SafetyTempTolerance,
+                    SafetyHumidityTolerance = s.SafetyHumidityTolerance,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
@@ -450,7 +447,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// <summary>도메인 <see cref="Recipe"/>를 편집 모델로 변환하고 스텝 번호·표시 문자열을 만든다.</summary>
         private static RecipeModel FromDomain(Recipe r)
         {
-            var vm = new RecipeModel { Id = r.Id, Name = r.Name, TargetChamberTemp = r.GlobalTargetTemperature, RampMinutes = r.TemperatureRampMinutes, TargetChamberHumidity = r.GlobalTargetHumidity, SafetyTempTolerance = r.SafetyTempTolerance, SafetyHumidityTolerance = r.SafetyHumidityTolerance, LastModified = DateTime.Now.ToString("g") };
+            var vm = new RecipeModel { Id = r.Id, Name = r.Name, RampMinutes = r.TemperatureRampMinutes, LastModified = DateTime.Now.ToString("g") };
             int n = 1;
             foreach (var s in r.Steps)
             {
@@ -467,6 +464,9 @@ namespace HeatingCameraSystem.Master.ViewModels
                     BlackbodyRef1 = s.TargetBlackBodyTemperature1,
                     MotorMoveType = s.MotorMoveType,
                     WaitForStabilization = s.WaitForStabilization,
+                    WaitForChamberStabilization = s.WaitForChamberStabilization,
+                    SafetyTempTolerance = s.SafetyTempTolerance,
+                    SafetyHumidityTolerance = s.SafetyHumidityTolerance,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,

@@ -7,6 +7,7 @@
              xmlns:local="clr-namespace:HeatingCameraSystem.Master.Views"
              xmlns:vm="clr-namespace:HeatingCameraSystem.Master.ViewModels"
              xmlns:model="clr-namespace:HeatingCameraSystem.Core.Models;assembly=HeatingCameraSystem.Core"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
              mc:Ignorable="d" 
              d:DesignHeight="768" d:DesignWidth="1024" Background="#0e1321" Foreground="#dee2f7">
     
@@ -78,7 +79,14 @@
                     <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
                     <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
                         <StackPanel Margin="0,0,16,0"><TextBlock Text="CHAMBER °C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding TargetChamberTemperature}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
-                        <StackPanel><TextBlock Text="CHAMBER %RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding TargetChamberHumidity}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0"><TextBlock Text="CHAMBER %RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding TargetChamberHumidity}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Width="170">
+                            <TextBlock Text="진행 방식" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <ComboBox SelectedValuePath="Tag" SelectedValue="{Binding WaitForChamberStabilization}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">
+                                <ComboBoxItem Content="온·습도 도달까지 대기"><ComboBoxItem.Tag><sys:Boolean>True</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
+                                <ComboBoxItem Content="설정만 하고 진행"><ComboBoxItem.Tag><sys:Boolean>False</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
+                            </ComboBox>
+                        </StackPanel>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -135,8 +143,12 @@
                             <TextBlock Text="BB 1 설정 °C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <TextBox Text="{Binding BlackbodyRef1}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                         </StackPanel>
-                        <StackPanel VerticalAlignment="Bottom" Margin="0,0,0,4">
-                            <CheckBox Content="안정화 대기" IsChecked="{Binding WaitForStabilization}" Foreground="{StaticResource TextOnSurface}"/>
+                        <StackPanel Width="170">
+                            <TextBlock Text="진행 방식" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <ComboBox SelectedValuePath="Tag" SelectedValue="{Binding WaitForStabilization}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">
+                                <ComboBoxItem Content="온도 도달까지 대기"><ComboBoxItem.Tag><sys:Boolean>True</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
+                                <ComboBoxItem Content="설정만 하고 진행"><ComboBoxItem.Tag><sys:Boolean>False</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
+                            </ComboBox>
                         </StackPanel>
                     </StackPanel>
                 </Grid>
