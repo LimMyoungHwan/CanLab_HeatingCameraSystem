@@ -86,7 +86,9 @@
                         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="8">
                             <Button Content="히스토그램 보기" Command="{Binding LoadHistogramCommand}" Padding="12,6" Margin="0,0,8,0"
                                     Background="{StaticResource BgSurfaceContainer}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
-                            <Button Content="원본 내보내기" Command="{Binding ExportRawCommand}" Padding="12,6"
+                            <Button Content="원본 내보내기" Command="{Binding ExportRawCommand}" Padding="12,6" Margin="0,0,8,0"
+                                    Background="{StaticResource BgSurfaceContainer}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                            <Button Content="데이터 수집" Command="{Binding CollectRawCommand}" Padding="12,6"
                                     Background="{StaticResource BgSurfaceContainer}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                             <TextBlock Text="원본은 선택 시점에 해당 Agent에서 받아옵니다 (Agent 실행 중이어야 함)."
                                        VerticalAlignment="Center" Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}"/>

@@ -104,26 +104,104 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
+        /// <summary>
+        /// 선택 회차의 모든 캡처 원본을 Agent에서 순차로 받아 로컬에 저장한다.
+        /// 이미 받아 둔 파일은 건너뛰므로 중단 후 다시 눌러도 남은 것만 받는다.
+        /// </summary>
+        [RelayCommand]
+        private async Task CollectRawAsync()
+        {
+            if (Captures.Count == 0) { StatusMessage = "수집할 캡처가 없습니다."; return; }
+            if (_rawClient == null) { StatusMessage = "NATS가 초기화되지 않아 원본을 가져올 수 없습니다."; return; }
+
+            IsBusy = true;
+            int done = 0, skipped = 0, failed = 0;
+            try
+            {
+                var targets = Captures.ToList();
+                for (int i = 0; i < targets.Count; i++)
+                {
+                    StatusMessage = $"데이터 수집 중... {i + 1}/{targets.Count} (완료 {done} / 보유 {skipped} / 실패 {failed})";
+
+                    string path = RawCachePath(targets[i]);
+                    if (path.Length > 0 && System.IO.File.Exists(path)) { skipped++; continue; }
+
+                    var (pixels, ok) = await RequestRawAsync(targets[i]);
+                    if (ok && pixels != null) done++; else failed++;
+                }
+            }
+            finally
+            {
+                IsBusy = false;
+                StatusMessage = $"데이터 수집 완료: 신규 {done}건 / 기보유 {skipped}건 / 실패 {failed}건";
+            }
+        }
+
+        /// <summary>선택 캡처의 원본. 로컬에 받아 둔 파일이 있으면 Agent에 묻지 않는다.</summary>
         private async Task<(byte[]? Pixels, bool Ok)> FetchRawAsync()
         {
             if (SelectedCapture == null) { StatusMessage = "캡처를 먼저 선택하세요."; return (null, false); }
+
+            string path = RawCachePath(SelectedCapture);
+            if (path.Length > 0 && System.IO.File.Exists(path))
+            {
+                try { return (await System.IO.File.ReadAllBytesAsync(path), true); }
+                catch (Exception ex) { StatusMessage = $"로컬 원본 읽기 실패: {ex.Message}"; return (null, false); }
+            }
+
+            return await RequestRawAsync(SelectedCapture);
+        }
+
+        /// <summary>Agent에 원본을 요청하고 성공하면 로컬 캐시에 저장한다.</summary>
+        private async Task<(byte[]? Pixels, bool Ok)> RequestRawAsync(CaptureHistoryRecord capture)
+        {
             if (_rawClient == null) { StatusMessage = "NATS가 초기화되지 않아 원본을 가져올 수 없습니다."; return (null, false); }
 
+            bool wasBusy = IsBusy;
             IsBusy = true;
-            StatusMessage = "Agent에서 원본을 가져오는 중...";
+            if (!wasBusy) StatusMessage = "Agent에서 원본을 가져오는 중...";
             try
             {
-                var response = await _rawClient.RequestAsync(SelectedCapture.AgentId, SelectedCapture.AgentRawPath);
+                var response = await _rawClient.RequestAsync(capture.AgentId, capture.AgentRawPath);
                 if (!response.IsSuccess || response.Pixels == null)
                 {
                     StatusMessage = string.IsNullOrWhiteSpace(response.Message) ? "원본을 가져오지 못했습니다." : response.Message;
                     return (null, false);
                 }
+
+                SaveRawCache(capture, response.Pixels);
                 return (response.Pixels, true);
             }
             finally
             {
-                IsBusy = false;
+                IsBusy = wasBusy;
+            }
+        }
+
+        /// <summary>
+        /// 원본 로컬 보관 경로: <c>{ImageCacheDir}\raw\{RunId}\{CaptureId}.y16</c>.
+        /// 회차 없는 캡처(수동/AgentUI)는 묶을 폴더가 없으므로 빈 문자열 = 보관하지 않는다.
+        /// </summary>
+        private static string RawCachePath(CaptureHistoryRecord capture)
+        {
+            if (string.IsNullOrEmpty(AppServices.ImageCacheDir)) return string.Empty;
+            if (string.IsNullOrEmpty(capture.RunId)) return string.Empty;
+            return System.IO.Path.Combine(AppServices.ImageCacheDir, "raw", capture.RunId, $"{capture.Id}.y16");
+        }
+
+        private void SaveRawCache(CaptureHistoryRecord capture, byte[] pixels)
+        {
+            string path = RawCachePath(capture);
+            if (path.Length == 0) return;
+
+            try
+            {
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+                System.IO.File.WriteAllBytes(path, pixels);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RecipeResult] raw cache write failed: {ex.Message}");
             }
         }
 
