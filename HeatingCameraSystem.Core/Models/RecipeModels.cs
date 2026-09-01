@@ -16,6 +16,19 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>타겟 온도 도달 시간(분). 0이면 즉시 지정, 0보다 크면 현재 온도→타겟 선형 램프(히터 급출력 방지).</summary>
         public int TemperatureRampMinutes { get; set; } = 0;
 
+        /// <summary>
+        /// 기록 조건: 챔버 온도가 직전 기록 시점 대비 이만큼(℃) 변하면 측정을 1건 남긴다. 0이면 미사용.
+        /// 아래 세 조건은 OR이며, 하나라도 충족하면 기록한다. 전부 0이면 기록 기능 자체가 꺼진다.
+        /// 스텝과 무관하게 레시피 시작부터 종료까지 전 구간에서 동작한다.
+        /// </summary>
+        public float RecordOnTemperatureDelta { get; set; }
+
+        /// <summary>기록 조건: 챔버 습도 변화량(%RH). 0이면 미사용.</summary>
+        public float RecordOnHumidityDelta { get; set; }
+
+        /// <summary>기록 조건: 경과 시간(초). 0이면 미사용.</summary>
+        public int RecordIntervalSeconds { get; set; }
+
         /// <summary>순차적으로 실행될 스텝 목록.</summary>
         public List<RecipeStep> Steps { get; set; } = new();
     }

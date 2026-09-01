@@ -69,6 +69,13 @@ namespace HeatingCameraSystem.Core.Models
         /// 그 사실을 알려야 한다) 노드를 새로 만들어서는 안 된다.
         /// </summary>
         public List<string>? HostAgentIds { get; set; }
+
+        /// <summary>
+        /// 카메라 FPA 온도(℃). 레시피 기록 조건이 캡처와 무관하게 주기적으로 이 값을 필요로 해서
+        /// 하트비트에 싣는다.
+        /// <br/>null = 읽지 못했거나 보고하지 않는 발신자 → Master는 직전 값을 유지한다.
+        /// </summary>
+        public double? CameraTemperature { get; set; }
     }
 
     /// <summary>캡처를 유발한 주체. 이력 화면의 "촬영 구분" 필터가 이 값을 쓴다.</summary>

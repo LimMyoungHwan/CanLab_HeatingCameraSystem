@@ -143,6 +143,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private bool _isSelected;
         [ObservableProperty] private string _lastModified = string.Empty;
         [ObservableProperty] private int _rampMinutes;
+        [ObservableProperty] private float _recordOnTemperatureDelta;
+        [ObservableProperty] private float _recordOnHumidityDelta;
+        [ObservableProperty] private int _recordIntervalSeconds;
         [ObservableProperty] private bool _isSequentialMode = true;
 
         public ObservableCollection<RecipeStepModel> Steps { get; } = new();
@@ -373,6 +376,9 @@ namespace HeatingCameraSystem.Master.ViewModels
                 Id = Guid.NewGuid().ToString(),
                 Name = source.Name + " (복사)",
                 TemperatureRampMinutes = source.TemperatureRampMinutes,
+                RecordOnTemperatureDelta = source.RecordOnTemperatureDelta,
+                RecordOnHumidityDelta = source.RecordOnHumidityDelta,
+                RecordIntervalSeconds = source.RecordIntervalSeconds,
                 Steps = source.Steps.Select(s => new RecipeStep
                 {
                     StepId = s.StepId,
@@ -413,7 +419,10 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 Id = vm.Id,
                 Name = vm.Name,
-                TemperatureRampMinutes = vm.RampMinutes
+                TemperatureRampMinutes = vm.RampMinutes,
+                RecordOnTemperatureDelta = vm.RecordOnTemperatureDelta,
+                RecordOnHumidityDelta = vm.RecordOnHumidityDelta,
+                RecordIntervalSeconds = vm.RecordIntervalSeconds
             };
             foreach (var s in vm.Steps)
             {
@@ -449,7 +458,16 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// <summary>도메인 <see cref="Recipe"/>를 편집 모델로 변환하고 스텝 번호·표시 문자열을 만든다.</summary>
         private static RecipeModel FromDomain(Recipe r)
         {
-            var vm = new RecipeModel { Id = r.Id, Name = r.Name, RampMinutes = r.TemperatureRampMinutes, LastModified = DateTime.Now.ToString("g") };
+            var vm = new RecipeModel
+            {
+                Id = r.Id,
+                Name = r.Name,
+                RampMinutes = r.TemperatureRampMinutes,
+                RecordOnTemperatureDelta = r.RecordOnTemperatureDelta,
+                RecordOnHumidityDelta = r.RecordOnHumidityDelta,
+                RecordIntervalSeconds = r.RecordIntervalSeconds,
+                LastModified = DateTime.Now.ToString("g")
+            };
             int n = 1;
             foreach (var s in r.Steps)
             {

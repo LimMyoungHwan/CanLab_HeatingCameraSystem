@@ -26,6 +26,7 @@ namespace HeatingCameraSystem.Master.Services
         private readonly ICameraDeviceRepository? _deviceRepo;
         private readonly IBlackBodyController _blackBody;
         private readonly AgentDirectory? _agentDirectory;
+        private readonly IRecipeMeasurementRepository? _measurementRepo;
         private readonly object _emergencyStopSync = new();
         private CancellationTokenSource _emergencyStopCts = new();
 
@@ -78,7 +79,8 @@ namespace HeatingCameraSystem.Master.Services
             string? imageCacheDir = null,
             ICameraDeviceRepository? deviceRepo = null,
             IBlackBodyController? blackBody = null,
-            AgentDirectory? agentDirectory = null)
+            AgentDirectory? agentDirectory = null,
+            IRecipeMeasurementRepository? measurementRepo = null)
         {
             _plcController = plcController;
             _natsService = natsService;
@@ -91,6 +93,7 @@ namespace HeatingCameraSystem.Master.Services
             _deviceRepo     = deviceRepo;
             _blackBody      = blackBody ?? new HeatingCameraSystem.Protocols.PlcBlackBodyAdapter(plcController);
             _agentDirectory = agentDirectory;
+            _measurementRepo = measurementRepo;
         }
 
         public void RequestEmergencyStop()
@@ -141,8 +144,86 @@ namespace HeatingCameraSystem.Master.Services
             cancellationToken.ThrowIfCancellationRequested();
 
             Console.WriteLine($"[RecipeEngine] Starting recipe: {recipe.Name}");
-            await ExecuteSegmentedRecipeAsync(recipe, cancellationToken, progress, waitForResumeAsync);
+
+            // 기록 루프는 레시피 전 구간에서 스텝과 무관하게 돌아야 하므로 별도 태스크로 띄우고,
+            // 어떤 경로로 끝나든 finally에서 세운 뒤 마지막 기록까지 비워낸다.
+            using var recordingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            string runId = Guid.NewGuid().ToString();
+            Task recording = RecordMeasurementsAsync(recipe, runId, recordingCts.Token);
+
+            try
+            {
+                await ExecuteSegmentedRecipeAsync(recipe, cancellationToken, progress, waitForResumeAsync);
+            }
+            finally
+            {
+                recordingCts.Cancel();
+                try { await recording; } catch (OperationCanceledException) { }
+            }
+
             Console.WriteLine($"[RecipeEngine] Recipe '{recipe.Name}' completed.");
+        }
+
+        /// <summary>
+        /// 기록 조건(온도 변화량 OR 습도 변화량 OR 경과 시간)을 1초 주기로 평가해 충족될 때마다
+        /// 챔버 온습도와 카메라 온도를 남긴다. 세 조건이 모두 0이면 아무것도 하지 않는다.
+        /// 첫 샘플은 이후 변화량의 기준점이 필요하므로 무조건 1건 기록한다.
+        /// </summary>
+        private async Task RecordMeasurementsAsync(Recipe recipe, string runId, CancellationToken cancellationToken)
+        {
+            if (_measurementRepo == null) return;
+
+            bool byTemperature = recipe.RecordOnTemperatureDelta > 0;
+            bool byHumidity = recipe.RecordOnHumidityDelta > 0;
+            bool byInterval = recipe.RecordIntervalSeconds > 0;
+            if (!byTemperature && !byHumidity && !byInterval) return;
+
+            float? lastTemp = null;
+            float? lastHumidity = null;
+            DateTime? lastAt = null;
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    float temp = await _plcController.GetCurrentTemperatureAsync();
+                    float humidity = await _plcController.GetCurrentHumidityAsync();
+                    DateTime now = DateTime.UtcNow;
+
+                    bool first = lastAt is null;
+                    bool hit = first
+                        || (byTemperature && lastTemp.HasValue && Math.Abs(temp - lastTemp.Value) >= recipe.RecordOnTemperatureDelta)
+                        || (byHumidity && lastHumidity.HasValue && Math.Abs(humidity - lastHumidity.Value) >= recipe.RecordOnHumidityDelta)
+                        || (byInterval && lastAt.HasValue && (now - lastAt.Value).TotalSeconds >= recipe.RecordIntervalSeconds);
+
+                    if (hit)
+                    {
+                        lastTemp = temp;
+                        lastHumidity = humidity;
+                        lastAt = now;
+
+                        await _measurementRepo.InsertAsync(new RecipeMeasurementRecord
+                        {
+                            RunId = runId,
+                            RecipeId = recipe.Id,
+                            RecipeName = recipe.Name,
+                            Timestamp = now,
+                            ChamberTemperature = temp,
+                            ChamberHumidity = humidity,
+                            CameraTemperatures = _agentDirectory == null
+                                ? new Dictionary<string, double>()
+                                : new Dictionary<string, double>(_agentDirectory.CameraTemperatures)
+                        });
+                    }
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[RecipeEngine] measurement record failed: {ex.Message}");
+                }
+
+                await Task.Delay(1000, cancellationToken);
+            }
         }
 
         private async Task ExecuteSegmentedRecipeAsync(Recipe recipe, CancellationToken cancellationToken, IProgress<RecipeProgress>? progress, Func<CancellationToken, Task>? waitForResumeAsync)

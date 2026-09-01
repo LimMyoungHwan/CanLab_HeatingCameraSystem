@@ -14,6 +14,7 @@ namespace HeatingCameraSystem.Master.Services
     {
         private readonly ICaptureHistoryRepository _historyRepo;
         private readonly IChamberHistoryRepository _chamberHistoryRepo;
+        private readonly IRecipeMeasurementRepository? _measurementRepo;
         private readonly string _imageStorageRoot;
         private readonly int _retentionDays;
         private Timer? _timer;
@@ -22,12 +23,14 @@ namespace HeatingCameraSystem.Master.Services
             ICaptureHistoryRepository historyRepo,
             IChamberHistoryRepository chamberHistoryRepo,
             string imageStorageRoot,
-            int retentionDays = 30)
+            int retentionDays = 30,
+            IRecipeMeasurementRepository? measurementRepo = null)
         {
             _historyRepo = historyRepo;
             _chamberHistoryRepo = chamberHistoryRepo;
             _imageStorageRoot = imageStorageRoot;
             _retentionDays = retentionDays;
+            _measurementRepo = measurementRepo;
         }
 
         /// <summary>정리 타이머를 건다. 콜백은 UI와 무관하게 스레드풀에서 실행된다.</summary>
@@ -55,6 +58,7 @@ namespace HeatingCameraSystem.Master.Services
             // 1. DB 레코드 삭제
             await _historyRepo.DeleteOlderThanAsync(cutoff);
             await _chamberHistoryRepo.DeleteOlderThanAsync(cutoff);
+            if (_measurementRepo != null) await _measurementRepo.DeleteOlderThanAsync(cutoff);
 
             // 2. 이미지 파일 삭제
             if (Directory.Exists(_imageStorageRoot))

@@ -425,12 +425,25 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     CameraStatus = status,
                     Timestamp = DateTime.UtcNow,
                     HostAgentIds = inventory,
-                    IsSerialConnected = ReadSerialHealth(cam)
+                    IsSerialConnected = ReadSerialHealth(cam),
+                    CameraTemperature = await ReadCameraTemperatureSafeAsync(cam).ConfigureAwait(false)
                 }).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[CameraNats] heartbeat failed for {cam.AgentId}: {ex.Message}");
+            }
+        }
+
+        /// <summary>하트비트가 카메라 시리얼 고장으로 끊기면 안 되므로 실패는 null로 흡수한다.</summary>
+        private async Task<double?> ReadCameraTemperatureSafeAsync(CameraDescriptor cam)
+        {
+            if (_readCameraTemperature is null) return null;
+            try { return await _readCameraTemperature(cam).ConfigureAwait(false); }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[CameraNats] heartbeat temperature read failed for {cam.AgentId}: {ex.Message}");
+                return null;
             }
         }
 

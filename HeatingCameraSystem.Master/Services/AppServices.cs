@@ -35,6 +35,7 @@ namespace HeatingCameraSystem.Master.Services
         public static IDashboardLayoutRepository DashboardLayoutRepo { get; private set; } = null!;
         public static ICaptureHistoryRepository HistoryRepo { get; private set; } = null!;
         public static IChamberHistoryRepository ChamberHistoryRepo { get; private set; } = null!;
+        public static IRecipeMeasurementRepository RecipeMeasurementRepo { get; private set; } = null!;
         public static IAlarmHistoryRepository? AlarmHistoryRepo { get; private set; }
         public static ICameraSerialSettingsRepository CameraSerialSettingsRepo { get; private set; } = null!;
         public static ICameraDeviceRepository CameraDeviceRepo { get; private set; } = null!;
@@ -98,6 +99,7 @@ namespace HeatingCameraSystem.Master.Services
             DashboardLayoutRepo = new LiteDbDashboardLayoutRepository(Db);
             HistoryRepo = new LiteDbCaptureHistoryRepository(Db);
             ChamberHistoryRepo = new LiteDbChamberHistoryRepository(Db);
+            RecipeMeasurementRepo = new LiteDbRecipeMeasurementRepository(Db);
             AlarmHistoryRepo = new LiteDbAlarmHistoryRepository(Db);
             CameraSerialSettingsRepo = new LiteDbCameraSerialSettingsRepository(Db);
             CameraDeviceRepo = new LiteDbCameraDeviceRepository(Db);
@@ -130,7 +132,7 @@ namespace HeatingCameraSystem.Master.Services
             BlackBodyController = CreateBlackBodyController(Settings, PlcController);
 
             AgentDirectory = new AgentDirectory();
-            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController, AgentDirectory);
+            RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController, AgentDirectory, RecipeMeasurementRepo);
             ConnectionMonitor = new ConnectionMonitorService(PlcController, Settings);
             if (!Settings.SimulationMode) ConnectionMonitor.Start();
 

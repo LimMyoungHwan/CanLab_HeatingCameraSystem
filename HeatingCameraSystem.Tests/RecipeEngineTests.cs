@@ -357,6 +357,76 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
+        public async Task ExecuteRecipeAsync_WhenNoRecordingCondition_WritesNoMeasurement()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+            var mockMeasurements = new Mock<IRecipeMeasurementRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.ChamberControl, TargetChamberTemperature = 25, TargetChamberHumidity = 50, WaitForChamberStabilization = false }
+                }
+            };
+
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object, measurementRepo: mockMeasurements.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            mockMeasurements.Verify(m => m.InsertAsync(It.IsAny<RecipeMeasurementRecord>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_WithRecordingInterval_WritesMeasurementWithChamberAndCameraTemperature()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+            var mockMeasurements = new Mock<IRecipeMeasurementRepository>();
+            var written = new List<RecipeMeasurementRecord>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(42.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(33.0f);
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+            mockMeasurements.Setup(m => m.InsertAsync(It.IsAny<RecipeMeasurementRecord>()))
+                            .Callback<RecipeMeasurementRecord>(r => written.Add(r))
+                            .Returns(Task.CompletedTask);
+
+            var directory = new AgentDirectory();
+            directory.Note(new AgentStatusMessage { AgentId = "Agent_1", Alias = "cam1", CameraTemperature = 36.5 });
+
+            var recipe = new Recipe
+            {
+                RecordIntervalSeconds = 1,
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.ChamberControl, TargetChamberTemperature = 42, TargetChamberHumidity = 33, WaitForChamberStabilization = false }
+                }
+            };
+
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object,
+                                   agentDirectory: directory, measurementRepo: mockMeasurements.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            // 첫 샘플은 이후 변화량의 기준점이라 조건과 무관하게 항상 1건 남는다.
+            Assert.NotEmpty(written);
+            Assert.Equal(42.0f, written[0].ChamberTemperature);
+            Assert.Equal(33.0f, written[0].ChamberHumidity);
+            Assert.Equal(36.5, written[0].CameraTemperatures["Agent_1"]);
+            Assert.All(written, r => Assert.Equal(written[0].RunId, r.RunId));
+        }
+
+        [Fact]
         public async Task ExecuteRecipeAsync_CameraCapture_WithShotCount_PublishesCountAndStoresEveryShot()
         {
             var mockPlc = new Mock<IPlcController>();

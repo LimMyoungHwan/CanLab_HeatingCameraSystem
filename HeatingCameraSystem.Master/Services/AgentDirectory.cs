@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Master.Services
@@ -15,19 +16,24 @@ namespace HeatingCameraSystem.Master.Services
     public sealed class AgentDirectory
     {
         private readonly ConcurrentDictionary<string, string> _byAlias = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, double> _cameraTemperatures = new(StringComparer.OrdinalIgnoreCase);
 
-        /// <summary>하트비트 한 건에서 alias → AgentId 매핑을 갱신한다. alias나 AgentId가 비면 무시한다.</summary>
+        /// <summary>하트비트 한 건에서 alias → AgentId 매핑과 카메라 온도를 갱신한다.</summary>
         public void Note(AgentStatusMessage message)
         {
-            if (message is null ||
-                string.IsNullOrWhiteSpace(message.Alias) ||
-                string.IsNullOrWhiteSpace(message.AgentId))
-            {
-                return;
-            }
+            if (message is null || string.IsNullOrWhiteSpace(message.AgentId)) return;
 
+            // 온도는 alias가 없어도 AgentId만 있으면 기록한다. null이면 직전 값을 지우지 않는다.
+            if (message.CameraTemperature.HasValue)
+                _cameraTemperatures[message.AgentId] = message.CameraTemperature.Value;
+
+            if (string.IsNullOrWhiteSpace(message.Alias)) return;
             _byAlias[message.Alias] = message.AgentId;
         }
+
+        /// <summary>하트비트로 들어온 AgentId별 최신 카메라 온도 스냅샷.</summary>
+        public IReadOnlyDictionary<string, double> CameraTemperatures =>
+            new Dictionary<string, double>(_cameraTemperatures, StringComparer.OrdinalIgnoreCase);
 
         /// <summary>alias로 현재 AgentId를 찾는다. 모르는 alias면 null을 돌려준다.</summary>
         public string? ResolveByAlias(string? alias) =>
