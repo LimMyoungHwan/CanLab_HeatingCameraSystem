@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Interfaces;
@@ -171,6 +173,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 await _nats.SubscribeCameraControlAsync(
                     descriptor.AgentId,
                     msg => _ = HandleCameraControlAsync(descriptor, msg)).ConfigureAwait(false);
+                await _nats.SubscribeRawImageRequestAsync(
+                    descriptor.AgentId,
+                    req => _ = HandleRawImageRequestAsync(req)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -433,6 +438,61 @@ namespace HeatingCameraSystem.Protocols.Cameras
             {
                 Debug.WriteLine($"[CameraNats] heartbeat failed for {cam.AgentId}: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Master의 온디맨드 원본 요청에 응답한다. 요청 경로의 .y16을 그대로 실어 보내고,
+        /// 가로/세로는 옆에 있는 .json 사이드카에서 최선으로 읽는다(없어도 히스토그램은 그린다).
+        /// Master가 타임아웃까지 붙잡히지 않도록 실패도 반드시 응답한다.
+        /// </summary>
+        private async Task HandleRawImageRequestAsync(RawImageRequestMessage request)
+        {
+            var response = new RawImageResponseMessage
+            {
+                AgentId = request.AgentId,
+                RequestId = request.RequestId
+            };
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.RawPath) || !File.Exists(request.RawPath))
+                {
+                    response.Message = $"원본 파일을 찾을 수 없습니다: {request.RawPath}";
+                }
+                else
+                {
+                    response.Pixels = await File.ReadAllBytesAsync(request.RawPath).ConfigureAwait(false);
+                    response.IsSuccess = true;
+
+                    string sidecar = Path.ChangeExtension(request.RawPath, ".json");
+                    if (File.Exists(sidecar))
+                    {
+                        try
+                        {
+                            var meta = JsonSerializer.Deserialize<CaptureMetadata>(
+                                await File.ReadAllTextAsync(sidecar).ConfigureAwait(false));
+                            if (meta is not null)
+                            {
+                                response.Width = meta.Width;
+                                response.Height = meta.Height;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[CameraNats] raw sidecar parse failed for {sidecar}: {ex.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                response.IsSuccess = false;
+                response.Message = ex.Message;
+                Debug.WriteLine($"[CameraNats] raw read failed for {request.RawPath}: {ex.Message}");
+            }
+
+            try { await _nats.PublishRawImageResponseAsync(response).ConfigureAwait(false); }
+            catch (Exception ex) { Debug.WriteLine($"[CameraNats] raw response publish failed: {ex.Message}"); }
         }
 
         /// <summary>하트비트가 카메라 시리얼 고장으로 끊기면 안 되므로 실패는 null로 흡수한다.</summary>

@@ -40,6 +40,13 @@ namespace HeatingCameraSystem.Core.Models
         public string RecipeStepId { get; set; } = string.Empty;
 
         /// <summary>
+        /// Agent PC에 남아 있는 원본(.y16) 경로. <see cref="ImagePath"/>는 Master가 캐시한 JPEG를
+        /// 가리키므로 히스토그램·내보내기에 쓸 원본 위치는 별도로 들고 있어야 한다.
+        /// 이 경로는 Master 파일시스템에서 열 수 없으며, 해당 Agent에 요청해서 받아온다.
+        /// </summary>
+        public string AgentRawPath { get; set; } = string.Empty;
+
+        /// <summary>
         /// 이 캡처를 남긴 레시피 실행 회차. 같은 회차의 측정 기록
         /// (<see cref="RecipeMeasurementRecord.RunId"/>)과 같은 값이며, 결과 화면이 이 키로 묶는다.
         /// 레시피가 아닌 수동/AgentUI 캡처는 비어 있다.

@@ -131,6 +131,43 @@ namespace HeatingCameraSystem.Core.Models
         public double? CameraTemperature { get; set; }
     }
 
+    /// <summary>
+    /// Master → Agent 원본 프레임 요청(<c>master.req.raw.{AgentId}</c>).
+    /// 결과 화면에서 히스토그램·내보내기를 열 때만 나가는 온디맨드 요청이다.
+    /// </summary>
+    public class RawImageRequestMessage
+    {
+        public string AgentId { get; set; } = string.Empty;
+
+        /// <summary>응답을 요청과 짝지어 주는 키.</summary>
+        public string RequestId { get; set; } = string.Empty;
+
+        /// <summary>Agent 파일시스템 기준 .y16 경로(<see cref="CaptureHistoryRecord.AgentRawPath"/>).</summary>
+        public string RawPath { get; set; } = string.Empty;
+
+        public DateTime Timestamp { get; set; }
+    }
+
+    /// <summary>
+    /// Agent → Master 원본 프레임 응답(<c>agent.res.raw.{AgentId}</c>).
+    /// 실패해도 <c>IsSuccess=false</c>로 반드시 응답해야 Master가 타임아웃까지 기다리지 않는다.
+    /// <br/>주의: 640x512 14bit 한 장이 약 640KB다. NATS 기본 최대 페이로드(1MB)를 넘지 않도록
+    /// 한 번에 한 장만 실어 보낸다.
+    /// </summary>
+    public class RawImageResponseMessage
+    {
+        public string AgentId { get; set; } = string.Empty;
+        public string RequestId { get; set; } = string.Empty;
+        public bool IsSuccess { get; set; }
+        public string Message { get; set; } = string.Empty;
+
+        public int Width { get; set; }
+        public int Height { get; set; }
+
+        /// <summary>16비트 픽셀의 리틀엔디안 바이트열(.y16 원본 그대로).</summary>
+        public byte[]? Pixels { get; set; }
+    }
+
     /// <summary>Agent → Master 라이브 미리보기 프레임(<c>agent.live.{AgentId}</c>).</summary>
     public class LiveFrameMessage
     {

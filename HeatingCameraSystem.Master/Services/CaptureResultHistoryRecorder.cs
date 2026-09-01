@@ -55,7 +55,8 @@ namespace HeatingCameraSystem.Master.Services
                     Temperature = s?.CurrentTemperature ?? 0f,
                     Humidity = s?.CurrentHumidity ?? 0f,
                     CameraTemperature = result.CameraTemperature,
-                    ImagePath = imagePath
+                    ImagePath = imagePath,
+                    AgentRawPath = result.ImagePath
                 }).ConfigureAwait(false);
             }
             catch (Exception ex)

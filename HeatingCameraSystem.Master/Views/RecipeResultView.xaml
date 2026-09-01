@@ -82,14 +82,23 @@
                 </TabItem>
 
                 <TabItem Header="캡처">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgSurface}">
-                        <ItemsControl ItemsSource="{Binding Captures}" Margin="8">
-                            <ItemsControl.ItemsPanel>
+                    <DockPanel Background="{StaticResource BgSurface}">
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="8">
+                            <Button Content="히스토그램 보기" Command="{Binding LoadHistogramCommand}" Padding="12,6" Margin="0,0,8,0"
+                                    Background="{StaticResource BgSurfaceContainer}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                            <Button Content="원본 내보내기" Command="{Binding ExportRawCommand}" Padding="12,6"
+                                    Background="{StaticResource BgSurfaceContainer}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                            <TextBlock Text="원본은 선택 시점에 해당 Agent에서 받아옵니다 (Agent 실행 중이어야 함)."
+                                       VerticalAlignment="Center" Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                        </StackPanel>
+                        <ListBox ItemsSource="{Binding Captures}" SelectedItem="{Binding SelectedCapture}" Margin="8"
+                                 Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="4" Padding="6" Width="200">
+                                    <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="2" Padding="6" Width="200">
                                         <StackPanel>
                                             <Image Source="{Binding ImagePath}" Height="140" Stretch="Uniform"/>
                                             <TextBlock Text="{Binding CameraId}" Foreground="{StaticResource Primary}" FontWeight="SemiBold" Margin="0,6,0,0"/>
@@ -101,9 +110,18 @@
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </TabItem>
+
+                <TabItem Header="히스토그램">
+                    <Grid>
+                        <sp:WpfPlot x:Name="Histogram"/>
+                        <TextBlock Text="캡처 탭에서 이미지를 고르고 '히스토그램 보기'를 누르세요."
+                                   HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0"
+                                   Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                    </Grid>
                 </TabItem>
             </TabControl>
         </DockPanel>

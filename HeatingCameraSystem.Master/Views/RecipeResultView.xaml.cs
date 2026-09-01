@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Controls;
 using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Master.Services;
 using HeatingCameraSystem.Master.ViewModels;
 
 namespace HeatingCameraSystem.Master.Views
@@ -28,13 +29,34 @@ namespace HeatingCameraSystem.Master.Views
             if (DataContext is not RecipeResultViewModel vm) return;
             _boundViewModel = vm;
             vm.MeasurementsLoaded += OnMeasurementsLoaded;
+            vm.HistogramLoaded += OnHistogramLoaded;
         }
 
         private void Detach()
         {
             if (_boundViewModel == null) return;
             _boundViewModel.MeasurementsLoaded -= OnMeasurementsLoaded;
+            _boundViewModel.HistogramLoaded -= OnHistogramLoaded;
             _boundViewModel = null;
+        }
+
+        private void OnHistogramLoaded(object? sender, int[] bins)
+        {
+            Histogram.Plot.Clear();
+
+            if (bins.Length > 0)
+            {
+                double binWidth = (RawHistogram.MaxPixelValue + 1) / (double)bins.Length;
+                double[] xs = Enumerable.Range(0, bins.Length).Select(i => (i + 0.5) * binWidth).ToArray();
+
+                var bars = Histogram.Plot.Add.Bars(xs, bins.Select(b => (double)b).ToArray());
+                bars.LegendText = "화소 수";
+                Histogram.Plot.Axes.Bottom.Label.Text = "화소값 (14bit)";
+                Histogram.Plot.Axes.Left.Label.Text = "빈도";
+                Histogram.Plot.Axes.AutoScale();
+            }
+
+            Histogram.Refresh();
         }
 
         private void OnMeasurementsLoaded(object? sender, IReadOnlyList<RecipeMeasurementRecord> samples)

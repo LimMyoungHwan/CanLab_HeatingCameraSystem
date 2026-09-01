@@ -41,13 +41,20 @@ namespace HeatingCameraSystem.Master.ViewModels
         public ObservableCollection<CaptureHistoryRecord> Captures { get; } = new();
 
         [ObservableProperty] private RecipeRunModel? _selectedRun;
+        [ObservableProperty] private CaptureHistoryRecord? _selectedCapture;
         [ObservableProperty] private string _statusMessage = string.Empty;
         [ObservableProperty] private bool _hasMeasurements;
+        [ObservableProperty] private bool _isBusy;
 
         /// <summary>차트가 구독한다. 선택 회차의 측정이 다시 로드될 때마다 발생.</summary>
         public event EventHandler<IReadOnlyList<RecipeMeasurementRecord>>? MeasurementsLoaded;
 
+        /// <summary>히스토그램 차트가 구독한다. 도수 배열이 비면 "데이터 없음"을 뜻한다.</summary>
+        public event EventHandler<int[]>? HistogramLoaded;
+
         private List<RecipeMeasurementRecord> _rawMeasurements = new();
+        private readonly RawImageClient? _rawClient =
+            AppServices.NatsService == null ? null : new RawImageClient(AppServices.NatsService);
 
         public RecipeResultViewModel()
         {
@@ -58,6 +65,67 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         [RelayCommand]
         private async Task RefreshAsync() => await LoadRunsAsync();
+
+        partial void OnSelectedCaptureChanged(CaptureHistoryRecord? value) => HistogramLoaded?.Invoke(this, Array.Empty<int>());
+
+        /// <summary>선택 캡처의 원본을 Agent에서 받아 히스토그램을 그린다.</summary>
+        [RelayCommand]
+        private async Task LoadHistogramAsync()
+        {
+            var (pixels, ok) = await FetchRawAsync();
+            if (!ok || pixels == null) { HistogramLoaded?.Invoke(this, Array.Empty<int>()); return; }
+
+            HistogramLoaded?.Invoke(this, RawHistogram.Compute(pixels));
+            StatusMessage = $"히스토그램 생성 완료 ({pixels.Length / 2:N0} 픽셀)";
+        }
+
+        /// <summary>선택 캡처의 원본을 Agent에서 받아 .y16 파일로 저장한다.</summary>
+        [RelayCommand]
+        private async Task ExportRawAsync()
+        {
+            var (pixels, ok) = await FetchRawAsync();
+            if (!ok || pixels == null) return;
+
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "Raw 16bit (*.y16)|*.y16",
+                FileName = $"{SelectedCapture!.CameraId}_{SelectedCapture.Timestamp.ToLocalTime():yyyyMMdd_HHmmss}.y16"
+            };
+            if (dialog.ShowDialog() != true) return;
+
+            try
+            {
+                await System.IO.File.WriteAllBytesAsync(dialog.FileName, pixels);
+                StatusMessage = $"내보내기 완료: {dialog.FileName}";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"내보내기 실패: {ex.Message}";
+            }
+        }
+
+        private async Task<(byte[]? Pixels, bool Ok)> FetchRawAsync()
+        {
+            if (SelectedCapture == null) { StatusMessage = "캡처를 먼저 선택하세요."; return (null, false); }
+            if (_rawClient == null) { StatusMessage = "NATS가 초기화되지 않아 원본을 가져올 수 없습니다."; return (null, false); }
+
+            IsBusy = true;
+            StatusMessage = "Agent에서 원본을 가져오는 중...";
+            try
+            {
+                var response = await _rawClient.RequestAsync(SelectedCapture.AgentId, SelectedCapture.AgentRawPath);
+                if (!response.IsSuccess || response.Pixels == null)
+                {
+                    StatusMessage = string.IsNullOrWhiteSpace(response.Message) ? "원본을 가져오지 못했습니다." : response.Message;
+                    return (null, false);
+                }
+                return (response.Pixels, true);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
 
         private async Task LoadRunsAsync()
         {

@@ -110,5 +110,12 @@ namespace HeatingCameraSystem.Core.Interfaces
 
         Task PublishCameraControlAckAsync(CameraControlAckMessage message);
         Task SubscribeCameraControlAckAsync(string agentId, Action<CameraControlAckMessage> onMessageReceived);
+
+        // ── 원본 프레임 온디맨드 조회: Master → Agent (master.req.raw.{AgentId}) / Agent → Master (agent.res.raw.{AgentId}) ──
+
+        Task PublishRawImageRequestAsync(RawImageRequestMessage message);
+        Task SubscribeRawImageRequestAsync(string agentId, Action<RawImageRequestMessage> onMessageReceived);
+        Task PublishRawImageResponseAsync(RawImageResponseMessage message);
+        Task SubscribeRawImageResponseAsync(string agentId, Action<RawImageResponseMessage> onMessageReceived);
     }
 }

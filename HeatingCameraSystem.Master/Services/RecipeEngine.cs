@@ -510,6 +510,7 @@ namespace HeatingCameraSystem.Master.Services
                 ImagePath = storedImagePath,
                 RecipeStepId = captureResult.RecipeStepId,
                 RunId = runId,
+                AgentRawPath = captureResult.ImagePath,
                 Timestamp = captureResult.Timestamp,
                 Temperature = temperature,
                 Humidity = humidity,

@@ -285,6 +285,32 @@ namespace HeatingCameraSystem.Protocols
             }
         }
 
+        public async Task PublishRawImageRequestAsync(RawImageRequestMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"master.req.raw.{message.AgentId}", message);
+        }
+
+        public Task SubscribeRawImageRequestAsync(string agentId, Action<RawImageRequestMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop($"master.req.raw.{agentId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
+        public async Task PublishRawImageResponseAsync(RawImageResponseMessage message)
+        {
+            CheckConnection();
+            await _connection!.PublishAsync($"agent.res.raw.{message.AgentId}", message);
+        }
+
+        public Task SubscribeRawImageResponseAsync(string agentId, Action<RawImageResponseMessage> onMessageReceived)
+        {
+            CheckConnection();
+            RunSubscriptionLoop($"agent.res.raw.{agentId}", onMessageReceived);
+            return Task.CompletedTask;
+        }
+
         public async Task PublishCameraInventoryAsync(CameraInventoryMessage message)
         {
             CheckConnection();

@@ -177,5 +177,9 @@ public class ExternalCameraAgentIntegrationTests
         public Task SubscribeCameraControlAsync(string agentId, Action<CameraControlMessage> onMessageReceived) => Task.CompletedTask;
         public Task PublishCameraControlAckAsync(CameraControlAckMessage message) => Task.CompletedTask;
         public Task SubscribeCameraControlAckAsync(string agentId, Action<CameraControlAckMessage> onMessageReceived) => Task.CompletedTask;
+        public Task PublishRawImageRequestAsync(RawImageRequestMessage message) => Task.CompletedTask;
+        public Task SubscribeRawImageRequestAsync(string agentId, Action<RawImageRequestMessage> onMessageReceived) => Task.CompletedTask;
+        public Task PublishRawImageResponseAsync(RawImageResponseMessage message) => Task.CompletedTask;
+        public Task SubscribeRawImageResponseAsync(string agentId, Action<RawImageResponseMessage> onMessageReceived) => Task.CompletedTask;
     }
 }
