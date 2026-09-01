@@ -240,27 +240,31 @@ namespace HeatingCameraSystem.Agent
             if (prev != CameraStatus.Offline) status.Current = CameraStatus.Streaming;
             try
             {
-                bool success = camera.CaptureFrame(out string savedPath);
-                byte[]? bytes = null;
-                if (success && !string.IsNullOrEmpty(savedPath) && File.Exists(savedPath))
+                int shots = cmd.ShotCount > 0 ? cmd.ShotCount : 1;
+                for (int i = 0; i < shots; i++)
                 {
-                    try { bytes = File.ReadAllBytes(savedPath); }
-                    catch (IOException ex)
+                    bool success = camera.CaptureFrame(out string savedPath);
+                    byte[]? bytes = null;
+                    if (success && !string.IsNullOrEmpty(savedPath) && File.Exists(savedPath))
                     {
-                        Console.WriteLine($"[{agentId}] failed reading captured file for NATS payload: {ex.Message}");
+                        try { bytes = File.ReadAllBytes(savedPath); }
+                        catch (IOException ex)
+                        {
+                            Console.WriteLine($"[{agentId}] failed reading captured file for NATS payload: {ex.Message}");
+                        }
                     }
-                }
 
-                await nats.PublishCaptureResultAsync(new CaptureResultMessage
-                {
-                    AgentId      = agentId,
-                    RecipeStepId = cmd.RecipeStepId,
-                    IsSuccess    = success,
-                    ImagePath    = savedPath,
-                    ImageBytes   = bytes,
-                    Timestamp    = DateTime.UtcNow
-                });
-                Console.WriteLine($"[{agentId}] Step {cmd.RecipeStepId}: {(success ? "OK" : "FAIL")} -> {savedPath} ({(bytes?.Length ?? 0)} bytes)");
+                    await nats.PublishCaptureResultAsync(new CaptureResultMessage
+                    {
+                        AgentId      = agentId,
+                        RecipeStepId = cmd.RecipeStepId,
+                        IsSuccess    = success,
+                        ImagePath    = savedPath,
+                        ImageBytes   = bytes,
+                        Timestamp    = DateTime.UtcNow
+                    });
+                    Console.WriteLine($"[{agentId}] Step {cmd.RecipeStepId} ({i + 1}/{shots}): {(success ? "OK" : "FAIL")} -> {savedPath} ({(bytes?.Length ?? 0)} bytes)");
+                }
             }
             finally
             {

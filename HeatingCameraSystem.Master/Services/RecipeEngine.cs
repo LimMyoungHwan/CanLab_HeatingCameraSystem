@@ -40,6 +40,36 @@ namespace HeatingCameraSystem.Master.Services
             }
         }
 
+        /// <summary>
+        /// 한 캡처 요청에 대해 Agent가 보내오는 장수만큼의 결과를 모은다. 기대 장수가 다 차면
+        /// <see cref="Completed"/>가 끝나고, 타임아웃으로 중단돼도 <see cref="Snapshot"/>으로
+        /// 그때까지 받은 것만 꺼내 쓸 수 있다.
+        /// </summary>
+        private sealed class CaptureBatch
+        {
+            private readonly int _expected;
+            private readonly List<CaptureResultMessage> _received = new();
+            private readonly TaskCompletionSource _done = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public CaptureBatch(int expected) => _expected = expected;
+
+            public Task Completed => _done.Task;
+
+            public void Add(CaptureResultMessage result)
+            {
+                lock (_received)
+                {
+                    _received.Add(result);
+                    if (_received.Count >= _expected) _done.TrySetResult();
+                }
+            }
+
+            public List<CaptureResultMessage> Snapshot()
+            {
+                lock (_received) return new List<CaptureResultMessage>(_received);
+            }
+        }
+
         public RecipeEngine(
             IPlcController plcController,
             INatsCommunicationService natsService,
@@ -119,15 +149,15 @@ namespace HeatingCameraSystem.Master.Services
         {
             int totalSteps = recipe.Steps.Count;
             RecipeStep? safetyReference = null;
-            var captureWaiters = new ConcurrentDictionary<string, TaskCompletionSource<CaptureResultMessage>>();
+            var captureWaiters = new ConcurrentDictionary<string, CaptureBatch>();
             var controlWaiters = new ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>>();
             var subscribedControlAgents = new HashSet<string>(StringComparer.Ordinal);
             bool chamberStarted = false;
 
             await _natsService.SubscribeCaptureResultAsync(result =>
             {
-                if (captureWaiters.TryGetValue(result.RecipeStepId, out var waiter))
-                    waiter.TrySetResult(result);
+                if (captureWaiters.TryGetValue(result.RecipeStepId, out var batch))
+                    batch.Add(result);
             });
 
             try
@@ -291,7 +321,7 @@ namespace HeatingCameraSystem.Master.Services
             RecipeStep step,
             int index,
             int totalSteps,
-            ConcurrentDictionary<string, TaskCompletionSource<CaptureResultMessage>> captureWaiters,
+            ConcurrentDictionary<string, CaptureBatch> captureWaiters,
             ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>> controlWaiters,
             HashSet<string> subscribedControlAgents,
             CancellationToken cancellationToken,
@@ -311,21 +341,32 @@ namespace HeatingCameraSystem.Master.Services
 
                 if (step.CameraOperation == CameraControlOps.Capture)
                 {
-                    var captureWaiter = new TaskCompletionSource<CaptureResultMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    captureWaiters[requestId] = captureWaiter;
+                    int shots = step.ShotCount > 0 ? step.ShotCount : 1;
+                    var batch = new CaptureBatch(shots);
+                    captureWaiters[requestId] = batch;
                     await _natsService.PublishCaptureCommandAsync(new CaptureCommandMessage
                     {
                         TargetAgentId = agentId,
                         RecipeStepId = requestId,
                         Source = CaptureSource.Recipe,
+                        ShotCount = shots,
                         Timestamp = DateTime.UtcNow
                     });
 
-                    Task completed = await Task.WhenAny(captureWaiter.Task, Task.Delay(_captureTimeout, cancellationToken));
-                    if (completed == captureWaiter.Task && captureWaiter.Task.Result.IsSuccess)
-                        await StoreCaptureResultAsync(step, target.CameraIndex, captureWaiter.Task.Result);
-                    else
-                        AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 카메라 {target.CameraIndex} 캡처 실패 또는 타임아웃");
+                    // 장수만큼 결과가 오므로 대기 한도도 장수에 비례해 늘린다.
+                    TimeSpan batchTimeout = TimeSpan.FromTicks(_captureTimeout.Ticks * shots);
+                    await Task.WhenAny(batch.Completed, Task.Delay(batchTimeout, cancellationToken));
+
+                    var results = batch.Snapshot();
+                    foreach (var result in results)
+                    {
+                        if (result.IsSuccess)
+                            await StoreCaptureResultAsync(step, target.CameraIndex, result);
+                    }
+
+                    int stored = results.Count(r => r.IsSuccess);
+                    if (stored < shots)
+                        AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 카메라 {target.CameraIndex} 캡처 {stored}/{shots}장만 성공(실패 또는 타임아웃)");
                     captureWaiters.TryRemove(requestId, out _);
                     continue;
                 }

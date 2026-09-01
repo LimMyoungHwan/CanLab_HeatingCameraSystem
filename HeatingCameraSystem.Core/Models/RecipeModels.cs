@@ -77,6 +77,9 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>true면 목표 온도에 도달할 때까지 대기한다.</summary>
         public bool WaitForStabilization { get; set; } = true;
 
+        /// <summary>캡처 스텝에서 찍을 장수. Agent가 이 장수만큼 찍고 각각 결과를 보낼 때까지 스텝이 끝나지 않는다.</summary>
+        public int ShotCount { get; set; } = 1;
+
         /// <summary>서보 유닛 직접 이동 X 좌표(direct-XY-move).</summary>
         public float PositionX { get; set; }
 

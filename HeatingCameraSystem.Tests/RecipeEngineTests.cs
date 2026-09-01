@@ -357,6 +357,43 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
+        public async Task ExecuteRecipeAsync_CameraCapture_WithShotCount_PublishesCountAndStoresEveryShot()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
+            WireCaptureRoundTrip(mockNats);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new()
+                    {
+                        Kind = RecipeStepKind.CameraCommand,
+                        CameraOperation = CameraControlOps.Capture,
+                        CameraIndex = 1,
+                        ShotCount = 3
+                    }
+                }
+            };
+
+            AlarmSink.Entries.Clear();
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(It.Is<CaptureCommandMessage>(m => m.ShotCount == 3)), Times.Once);
+            mockHistory.Verify(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>()), Times.Exactly(3));
+            Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Warning);
+        }
+
+        [Fact]
         public async Task ExecuteRecipeAsync_ChamberControl_WhenTemperatureOutsideSafetyBand_RaisesErrorAndInvokesResume()
         {
             var mockPlc = new Mock<IPlcController>();
@@ -476,14 +513,22 @@ namespace HeatingCameraSystem.Tests
                 .Returns(Task.CompletedTask);
             mockNats
                 .Setup(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()))
-                .Callback<CaptureCommandMessage>(cmd => resultCb?.Invoke(new CaptureResultMessage
+                .Callback<CaptureCommandMessage>(cmd =>
                 {
-                    AgentId      = "Agent_1",
-                    RecipeStepId = cmd.RecipeStepId,
-                    IsSuccess    = true,
-                    ImagePath    = "/test/image.jpg",
-                    Timestamp    = DateTime.UtcNow
-                }))
+                    // 실 Agent와 동일하게 요청된 장수만큼 결과를 되돌려 준다.
+                    int shots = cmd.ShotCount > 0 ? cmd.ShotCount : 1;
+                    for (int i = 0; i < shots; i++)
+                    {
+                        resultCb?.Invoke(new CaptureResultMessage
+                        {
+                            AgentId      = "Agent_1",
+                            RecipeStepId = cmd.RecipeStepId,
+                            IsSuccess    = true,
+                            ImagePath    = $"/test/image_{i}.jpg",
+                            Timestamp    = DateTime.UtcNow
+                        });
+                    }
+                })
                 .Returns(Task.CompletedTask);
         }
     }

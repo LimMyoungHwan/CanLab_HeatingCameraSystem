@@ -199,28 +199,33 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
         /// <summary>
         /// 캡처 명령 처리: 라이브 루프를 스냅샷해 NUC 보정 후 저장하고 결과를 발행한다.
-        /// 캡처가 실패해도 <c>IsSuccess=false</c>로 결과는 반드시 발행한다.
+        /// 장수는 명령의 <see cref="CaptureCommandMessage.ShotCount"/>가 우선이고 없으면 로컬 설정을 쓴다.
+        /// Master가 장수를 세어 스텝 완료를 판정하므로 실패한 장도 <c>IsSuccess=false</c>로 반드시 1건 발행한다.
         /// </summary>
         public async Task HandleCaptureAsync(CameraDescriptor descriptor, CaptureCommandMessage cmd)
         {
-            bool success = false;
-            string imagePath = string.Empty;
-            byte[]? bytes = null;
-            double? cameraTemperature = null;
+            int shots = cmd.ShotCount > 0 ? cmd.ShotCount : _captureBurstCount;
+            if (shots < 1) shots = 1;
 
-            try
+            double? cameraTemperature = null;
+            if (_manager.TryGet(descriptor.AgentId, out ICameraRuntime runtime) && _readCameraTemperature is not null)
             {
-                if (_manager.TryGet(descriptor.AgentId, out ICameraRuntime runtime))
+                try { cameraTemperature = await _readCameraTemperature(descriptor).ConfigureAwait(false); }
+                catch (Exception ex) { Debug.WriteLine($"[CameraNats] camera info read failed for {descriptor.AgentId}: {ex.Message}"); }
+            }
+
+            for (int i = 0; i < shots; i++)
+            {
+                bool success = false;
+                string imagePath = string.Empty;
+                byte[]? bytes = null;
+
+                try
                 {
-                    if (_readCameraTemperature is not null)
-                    {
-                        try { cameraTemperature = await _readCameraTemperature(descriptor).ConfigureAwait(false); }
-                        catch (Exception ex) { Debug.WriteLine($"[CameraNats] camera info read failed for {descriptor.AgentId}: {ex.Message}"); }
-                    }
-                    for (int i = 0; i < _captureBurstCount; i++)
+                    if (_manager.TryGet(descriptor.AgentId, out ICameraRuntime shotRuntime))
                     {
                         bool forceFreshFrame = i > 0;
-                        ThermalFrame? snap = await runtime.CaptureSnapshotAsync(
+                        ThermalFrame? snap = await shotRuntime.CaptureSnapshotAsync(
                             maxAge: forceFreshFrame ? TimeSpan.Zero : TimeSpan.FromSeconds(1),
                             nextFrameTimeout: TimeSpan.FromSeconds(2)).ConfigureAwait(false);
 
@@ -238,35 +243,35 @@ namespace HeatingCameraSystem.Protocols.Cameras
                         }
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[CameraNats] capture failed for {descriptor.AgentId}: {ex.Message}");
-                success = false;
-            }
-
-            try
-            {
-                await _nats.PublishCaptureResultAsync(new CaptureResultMessage
+                catch (Exception ex)
                 {
-                    AgentId = descriptor.AgentId,
-                    Alias = descriptor.Alias,
-                    CameraIndex = descriptor.OpenCvIndex,
-                    RecipeStepId = cmd.RecipeStepId,
-                    Source = cmd.Source != CaptureSource.Unknown
-                        ? cmd.Source
-                        : (string.IsNullOrEmpty(cmd.RecipeStepId) ? CaptureSource.Manual : CaptureSource.Recipe),
-                    CaptureId = Guid.NewGuid().ToString(),
-                    IsSuccess = success,
-                    ImagePath = imagePath,
-                    ImageBytes = bytes,
-                    Timestamp = DateTime.UtcNow,
-                    CameraTemperature = cameraTemperature
-                }).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[CameraNats] publish result failed for {descriptor.AgentId}: {ex.Message}");
+                    Debug.WriteLine($"[CameraNats] capture failed for {descriptor.AgentId}: {ex.Message}");
+                    success = false;
+                }
+
+                try
+                {
+                    await _nats.PublishCaptureResultAsync(new CaptureResultMessage
+                    {
+                        AgentId = descriptor.AgentId,
+                        Alias = descriptor.Alias,
+                        CameraIndex = descriptor.OpenCvIndex,
+                        RecipeStepId = cmd.RecipeStepId,
+                        Source = cmd.Source != CaptureSource.Unknown
+                            ? cmd.Source
+                            : (string.IsNullOrEmpty(cmd.RecipeStepId) ? CaptureSource.Manual : CaptureSource.Recipe),
+                        CaptureId = Guid.NewGuid().ToString(),
+                        IsSuccess = success,
+                        ImagePath = imagePath,
+                        ImageBytes = bytes,
+                        Timestamp = DateTime.UtcNow,
+                        CameraTemperature = cameraTemperature
+                    }).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[CameraNats] publish result failed for {descriptor.AgentId}: {ex.Message}");
+                }
             }
         }
 

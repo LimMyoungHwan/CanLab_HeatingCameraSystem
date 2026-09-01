@@ -30,6 +30,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private bool _waitForChamberStabilization = true;
         [ObservableProperty] private float _safetyTempTolerance;
         [ObservableProperty] private float _safetyHumidityTolerance;
+        [ObservableProperty] private int _shotCount = 1;
         [ObservableProperty] private float _positionX;
         [ObservableProperty] private float _positionY;
         [ObservableProperty] private double _targetChamberTemperature;
@@ -393,6 +394,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     WaitForChamberStabilization = s.WaitForChamberStabilization,
                     SafetyTempTolerance = s.SafetyTempTolerance,
                     SafetyHumidityTolerance = s.SafetyHumidityTolerance,
+                    ShotCount = s.ShotCount,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
@@ -434,6 +436,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     WaitForChamberStabilization = s.WaitForChamberStabilization,
                     SafetyTempTolerance = s.SafetyTempTolerance,
                     SafetyHumidityTolerance = s.SafetyHumidityTolerance,
+                    ShotCount = s.ShotCount > 0 ? s.ShotCount : 1,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
@@ -466,6 +469,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     WaitForChamberStabilization = s.WaitForChamberStabilization,
                     SafetyTempTolerance = s.SafetyTempTolerance,
                     SafetyHumidityTolerance = s.SafetyHumidityTolerance,
+                    ShotCount = s.ShotCount > 0 ? s.ShotCount : 1,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,

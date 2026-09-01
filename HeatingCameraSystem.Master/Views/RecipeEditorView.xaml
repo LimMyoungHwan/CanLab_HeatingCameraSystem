@@ -111,6 +111,10 @@
                             <TextBlock Text="CAMERA COMMAND" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <ComboBox ItemsSource="{Binding DataContext.CameraOperationOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Value" SelectedValue="{Binding CameraOperation}" DisplayMemberPath="Label" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
                         </StackPanel>
+                        <StackPanel Margin="0,0,16,0" Width="90">
+                            <TextBlock Text="촬영 장수" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <TextBox Text="{Binding ShotCount}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                        </StackPanel>
                         <StackPanel Width="260">
                             <TextBlock Text="대상 카메라 (복수 선택)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <ComboBox ItemsSource="{Binding CameraTargets}" IsEditable="True" IsReadOnly="True" Text="{Binding SelectedCameraSummary, Mode=OneWay}" StaysOpenOnEdit="True" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">

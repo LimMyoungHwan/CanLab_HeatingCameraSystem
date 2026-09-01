@@ -89,6 +89,12 @@ namespace HeatingCameraSystem.Core.Models
         public string RecipeStepId { get; set; } = string.Empty;
         public CaptureSource Source { get; set; } = CaptureSource.Unknown;
         public DateTime Timestamp { get; set; }
+
+        /// <summary>
+        /// 이 명령으로 찍을 장수. Agent는 장마다 <see cref="CaptureResultMessage"/>를 1건씩 발행한다.
+        /// 0 이하이면 Agent 로컬 설정(CaptureBurstCount)을 따른다.
+        /// </summary>
+        public int ShotCount { get; set; }
     }
 
     /// <summary>
