@@ -356,6 +356,50 @@ namespace HeatingCameraSystem.Tests
             plc.Verify(p => p.SetControlTemperatureAsync(25.0f), Times.AtLeastOnce);
         }
 
+        [Theory]
+        // 목표 20℃, 안전범위 10~60. 현재 80℃는 상한 초과이므로 이탈.
+        [InlineData(80.0f, 50.0f, true)]
+        // 승온·냉각 과도구간(목표와 60℃ 차이나도 범위 안이면 정상) — 상대 오차 방식이었다면 오탐하던 값.
+        [InlineData(55.0f, 50.0f, false)]
+        [InlineData(9.9f, 50.0f, true)]
+        [InlineData(10.0f, 50.0f, false)]
+        [InlineData(20.0f, 95.0f, true)]
+        public void DescribeSafetyViolation_UsesAbsoluteLimitsNotTargetOffset(float temperature, float humidity, bool expectViolation)
+        {
+            var step = new RecipeStep
+            {
+                Kind = RecipeStepKind.ChamberControl,
+                TargetChamberTemperature = 20,
+                TargetChamberHumidity = 50,
+                UseSafetyTemperature = true,
+                SafetyTempMin = 10,
+                SafetyTempMax = 60,
+                UseSafetyHumidity = true,
+                SafetyHumidityMin = 20,
+                SafetyHumidityMax = 90
+            };
+
+            string? violation = RecipeEngine.DescribeSafetyViolation(step, temperature, humidity);
+
+            Assert.Equal(expectViolation, violation != null);
+        }
+
+        [Fact]
+        public void DescribeSafetyViolation_WhenUnchecked_IgnoresLimits()
+        {
+            var step = new RecipeStep
+            {
+                UseSafetyTemperature = false,
+                SafetyTempMin = 10,
+                SafetyTempMax = 60,
+                UseSafetyHumidity = false,
+                SafetyHumidityMin = 20,
+                SafetyHumidityMax = 90
+            };
+
+            Assert.Null(RecipeEngine.DescribeSafetyViolation(step, 500f, 500f));
+        }
+
         [Fact]
         public async Task ExecuteRecipeAsync_WhenNoRecordingCondition_WritesNoMeasurement()
         {
@@ -488,7 +532,9 @@ namespace HeatingCameraSystem.Tests
                         Kind = RecipeStepKind.ChamberControl,
                         TargetChamberTemperature = 25,
                         TargetChamberHumidity = 50,
-                        SafetyTempTolerance = 2.0f,
+                        UseSafetyTemperature = true,
+                        SafetyTempMin = 23.0f,
+                        SafetyTempMax = 27.0f,
                         WaitForChamberStabilization = false
                     }
                 }
@@ -568,7 +614,9 @@ namespace HeatingCameraSystem.Tests
                     Kind = RecipeStepKind.ChamberControl,
                     TargetChamberTemperature = 25.0,
                     TargetChamberHumidity = 50.0,
-                    SafetyHumidityTolerance = 5.0f
+                    UseSafetyHumidity = true,
+                    SafetyHumidityMin = 45.0f,
+                    SafetyHumidityMax = 55.0f
                 },
                 new RecipeStep { Kind = RecipeStepKind.CameraCommand, CameraOperation = CameraControlOps.Capture, CameraIndex = 1 }
             }

@@ -28,8 +28,12 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private float _blackbodyRef1;
         [ObservableProperty] private bool _waitForStabilization = true;
         [ObservableProperty] private bool _waitForChamberStabilization = true;
-        [ObservableProperty] private float _safetyTempTolerance;
-        [ObservableProperty] private float _safetyHumidityTolerance;
+        [ObservableProperty] private bool _useSafetyTemperature;
+        [ObservableProperty] private float _safetyTempMin;
+        [ObservableProperty] private float _safetyTempMax;
+        [ObservableProperty] private bool _useSafetyHumidity;
+        [ObservableProperty] private float _safetyHumidityMin;
+        [ObservableProperty] private float _safetyHumidityMax;
         [ObservableProperty] private int _shotCount = 1;
         [ObservableProperty] private float _positionX;
         [ObservableProperty] private float _positionY;
@@ -398,8 +402,12 @@ namespace HeatingCameraSystem.Master.ViewModels
                     MotorMoveType = s.MotorMoveType,
                     WaitForStabilization = s.WaitForStabilization,
                     WaitForChamberStabilization = s.WaitForChamberStabilization,
-                    SafetyTempTolerance = s.SafetyTempTolerance,
-                    SafetyHumidityTolerance = s.SafetyHumidityTolerance,
+                    UseSafetyTemperature = s.UseSafetyTemperature,
+                    SafetyTempMin = s.SafetyTempMin,
+                    SafetyTempMax = s.SafetyTempMax,
+                    UseSafetyHumidity = s.UseSafetyHumidity,
+                    SafetyHumidityMin = s.SafetyHumidityMin,
+                    SafetyHumidityMax = s.SafetyHumidityMax,
                     ShotCount = s.ShotCount,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
@@ -443,8 +451,12 @@ namespace HeatingCameraSystem.Master.ViewModels
                     MotorMoveType = s.MotorMoveType,
                     WaitForStabilization = s.WaitForStabilization,
                     WaitForChamberStabilization = s.WaitForChamberStabilization,
-                    SafetyTempTolerance = s.SafetyTempTolerance,
-                    SafetyHumidityTolerance = s.SafetyHumidityTolerance,
+                    UseSafetyTemperature = s.UseSafetyTemperature,
+                    SafetyTempMin = s.SafetyTempMin,
+                    SafetyTempMax = s.SafetyTempMax,
+                    UseSafetyHumidity = s.UseSafetyHumidity,
+                    SafetyHumidityMin = s.SafetyHumidityMin,
+                    SafetyHumidityMax = s.SafetyHumidityMax,
                     ShotCount = s.ShotCount > 0 ? s.ShotCount : 1,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
@@ -485,8 +497,12 @@ namespace HeatingCameraSystem.Master.ViewModels
                     MotorMoveType = s.MotorMoveType,
                     WaitForStabilization = s.WaitForStabilization,
                     WaitForChamberStabilization = s.WaitForChamberStabilization,
-                    SafetyTempTolerance = s.SafetyTempTolerance,
-                    SafetyHumidityTolerance = s.SafetyHumidityTolerance,
+                    UseSafetyTemperature = s.UseSafetyTemperature,
+                    SafetyTempMin = s.SafetyTempMin,
+                    SafetyTempMax = s.SafetyTempMax,
+                    UseSafetyHumidity = s.UseSafetyHumidity,
+                    SafetyHumidityMin = s.SafetyHumidityMin,
+                    SafetyHumidityMax = s.SafetyHumidityMax,
                     ShotCount = s.ShotCount > 0 ? s.ShotCount : 1,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,

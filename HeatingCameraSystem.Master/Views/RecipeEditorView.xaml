@@ -87,8 +87,22 @@
                                 <ComboBoxItem Content="설정만 하고 진행"><ComboBoxItem.Tag><sys:Boolean>False</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
                             </ComboBox>
                         </StackPanel>
-                        <StackPanel Margin="0,0,16,0" Width="110"><TextBlock Text="안전 ±°C (0=미사용)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding SafetyTempTolerance}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
-                        <StackPanel Width="110"><TextBlock Text="안전 ±%RH (0=미사용)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding SafetyHumidityTolerance}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0" Width="170">
+                            <CheckBox Content="온도 안전범위" IsChecked="{Binding UseSafetyTemperature}" Foreground="{StaticResource TextOnSurface}" FontSize="11"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0" IsEnabled="{Binding UseSafetyTemperature}">
+                                <TextBox Text="{Binding SafetyTempMin}" Width="70" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                                <TextBlock Text="~" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="6,0"/>
+                                <TextBox Text="{Binding SafetyTempMax}" Width="70" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Width="170">
+                            <CheckBox Content="습도 안전범위" IsChecked="{Binding UseSafetyHumidity}" Foreground="{StaticResource TextOnSurface}" FontSize="11"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0" IsEnabled="{Binding UseSafetyHumidity}">
+                                <TextBox Text="{Binding SafetyHumidityMin}" Width="70" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                                <TextBlock Text="~" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="6,0"/>
+                                <TextBox Text="{Binding SafetyHumidityMax}" Width="70" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                            </StackPanel>
+                        </StackPanel>
                     </StackPanel>
                 </Grid>
             </Border>

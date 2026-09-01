@@ -50,3 +50,6 @@ ImageStorage/
 
 # E2EDriver live-capture run logs
 e2e-live-capture-*.log
+
+# 배포용으로 임시로 압축한 산출물 (저장소에 넣지 않는다)
+*.zip

@@ -529,9 +529,9 @@ namespace HeatingCameraSystem.Master.Services
         }
 
         /// <summary>
-        /// 가장 최근 ChamberControl 스텝의 목표값을 기준으로 안전 밴드를 검사한다. 허용오차가 0인
-        /// 항목은 검사 대상이 아니며, 기준 스텝이 아직 없으면 검사 자체를 건너뛴다. 이탈 시 알람을
-        /// 올리고 운전자가 재개할 때까지 대기한다(재개 콜백이 없으면 1회 알람 후 통과).
+        /// 가장 최근 ChamberControl 스텝이 정한 절대 상·하한으로 챔버 온습도를 검사한다.
+        /// 한계가 null인 항목은 검사하지 않고, 기준 스텝이 아직 없으면 검사 자체를 건너뛴다.
+        /// 이탈 시 알람을 올리고 운전자가 재개할 때까지 대기한다(재개 콜백이 없으면 1회 알람 후 통과).
         /// </summary>
         private async Task EnforceSafetyBandAsync(
             RecipeStep? reference,
@@ -542,29 +542,44 @@ namespace HeatingCameraSystem.Master.Services
             CancellationToken cancellationToken)
         {
             if (reference == null) return;
-            bool checkTemp = reference.SafetyTempTolerance > 0;
-            bool checkHumidity = reference.SafetyHumidityTolerance > 0;
-            if (!checkTemp && !checkHumidity) return;
+            if (!reference.UseSafetyTemperature && !reference.UseSafetyHumidity) return;
 
             while (!cancellationToken.IsCancellationRequested)
             {
                 float temp = await _plcController.GetCurrentTemperatureAsync();
                 float humidity = await _plcController.GetCurrentHumidityAsync();
 
-                bool tempOk = !checkTemp
-                    || Math.Abs(temp - (float)reference.TargetChamberTemperature) <= reference.SafetyTempTolerance;
-                bool humidityOk = !checkHumidity
-                    || Math.Abs(humidity - (float)reference.TargetChamberHumidity) <= reference.SafetyHumidityTolerance;
-                if (tempOk && humidityOk) return;
+                string? violation = DescribeSafetyViolation(reference, temp, humidity);
+                if (violation is null) return;
 
-                AlarmSink.Raise(AlarmSeverity.Error, "레시피",
-                    $"안전 밴드 이탈 (T={temp:F1}℃ 목표 {reference.TargetChamberTemperature:F1}±{reference.SafetyTempTolerance:F1}, " +
-                    $"H={humidity:F1}%RH 목표 {reference.TargetChamberHumidity:F1}±{reference.SafetyHumidityTolerance:F1}). 사용자 확인 대기.");
+                AlarmSink.Raise(AlarmSeverity.Error, "레시피", $"{violation} 사용자 확인 대기.");
                 progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = "안전조건 이탈 — 사용자 확인 대기" });
 
                 if (waitForResumeAsync is null) return;
                 await waitForResumeAsync(cancellationToken);
             }
+        }
+
+        /// <summary>범위를 벗어난 항목의 설명을 돌려준다. 모두 정상이면 null.</summary>
+        internal static string? DescribeSafetyViolation(RecipeStep reference, float temperature, float humidity)
+        {
+            if (reference.UseSafetyTemperature)
+            {
+                if (temperature < reference.SafetyTempMin)
+                    return $"안전 하한 미만: 온도 {temperature:F1}℃ < {reference.SafetyTempMin:F1}℃.";
+                if (temperature > reference.SafetyTempMax)
+                    return $"안전 상한 초과: 온도 {temperature:F1}℃ > {reference.SafetyTempMax:F1}℃.";
+            }
+
+            if (reference.UseSafetyHumidity)
+            {
+                if (humidity < reference.SafetyHumidityMin)
+                    return $"안전 하한 미만: 습도 {humidity:F1}%RH < {reference.SafetyHumidityMin:F1}%RH.";
+                if (humidity > reference.SafetyHumidityMax)
+                    return $"안전 상한 초과: 습도 {humidity:F1}%RH > {reference.SafetyHumidityMax:F1}%RH.";
+            }
+
+            return null;
         }
 
         /// <summary>

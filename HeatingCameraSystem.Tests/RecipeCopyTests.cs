@@ -23,8 +23,12 @@ public class RecipeCopyTests
                 BlackBodyIndex = i % 2,
                 WaitForStabilization = i % 2 == 0,
                 WaitForChamberStabilization = i % 2 == 0,
-                SafetyTempTolerance = i * 0.5f,
-                SafetyHumidityTolerance = i * 1.5f,
+                UseSafetyTemperature = i % 2 == 0,
+                SafetyTempMin = 10 + i,
+                SafetyTempMax = 60 + i,
+                UseSafetyHumidity = i % 2 == 1,
+                SafetyHumidityMin = 20 + i,
+                SafetyHumidityMax = 80 + i,
                 PositionX = i * 100,
                 PositionY = i * 200,
                 TargetChamberTemperature = 30 + i,
@@ -48,8 +52,12 @@ public class RecipeCopyTests
             Assert.Equal(pair.First.BlackBodyIndex, pair.Second.BlackBodyIndex);
             Assert.Equal(pair.First.WaitForStabilization, pair.Second.WaitForStabilization);
             Assert.Equal(pair.First.WaitForChamberStabilization, pair.Second.WaitForChamberStabilization);
-            Assert.Equal(pair.First.SafetyTempTolerance, pair.Second.SafetyTempTolerance);
-            Assert.Equal(pair.First.SafetyHumidityTolerance, pair.Second.SafetyHumidityTolerance);
+            Assert.Equal(pair.First.UseSafetyTemperature, pair.Second.UseSafetyTemperature);
+            Assert.Equal(pair.First.SafetyTempMin, pair.Second.SafetyTempMin);
+            Assert.Equal(pair.First.SafetyTempMax, pair.Second.SafetyTempMax);
+            Assert.Equal(pair.First.UseSafetyHumidity, pair.Second.UseSafetyHumidity);
+            Assert.Equal(pair.First.SafetyHumidityMin, pair.Second.SafetyHumidityMin);
+            Assert.Equal(pair.First.SafetyHumidityMax, pair.Second.SafetyHumidityMax);
             Assert.Equal(pair.First.PositionX, pair.Second.PositionX);
             Assert.Equal(pair.First.PositionY, pair.Second.PositionY);
             Assert.Equal(pair.First.TargetChamberTemperature, pair.Second.TargetChamberTemperature);
@@ -86,8 +94,12 @@ public class RecipeCopyTests
                 new RecipeStep
                 {
                     CameraIndex = 1,
-                    SafetyTempTolerance = 2.5f,
-                    SafetyHumidityTolerance = 7.5f
+                    UseSafetyTemperature = true,
+                    SafetyTempMin = 15.5f,
+                    SafetyTempMax = 62.5f,
+                    UseSafetyHumidity = true,
+                    SafetyHumidityMin = 25.5f,
+                    SafetyHumidityMax = 77.5f
                 }
             }
         };
@@ -95,7 +107,11 @@ public class RecipeCopyTests
         var vm = fromDomain.Invoke(null, new object[] { recipe })!;
         var back = (Recipe)toDomain.Invoke(null, new object[] { vm })!;
 
-        Assert.Equal(2.5f, back.Steps[0].SafetyTempTolerance);
-        Assert.Equal(7.5f, back.Steps[0].SafetyHumidityTolerance);
+        Assert.True(back.Steps[0].UseSafetyTemperature);
+        Assert.Equal(15.5f, back.Steps[0].SafetyTempMin);
+        Assert.Equal(62.5f, back.Steps[0].SafetyTempMax);
+        Assert.True(back.Steps[0].UseSafetyHumidity);
+        Assert.Equal(25.5f, back.Steps[0].SafetyHumidityMin);
+        Assert.Equal(77.5f, back.Steps[0].SafetyHumidityMax);
     }
 }

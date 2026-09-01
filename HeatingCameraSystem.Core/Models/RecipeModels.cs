@@ -109,15 +109,19 @@ namespace HeatingCameraSystem.Core.Models
         public bool WaitForChamberStabilization { get; set; } = true;
 
         /// <summary>
-        /// 안전 밴드 온도 허용오차(℃). 이 스텝 이후 챔버 현재 온도가 <see cref="TargetChamberTemperature"/>에서
-        /// 이만큼 벗어나면 알람 후 운전자 확인 대기. 0이면 온도 안전 검사를 하지 않는다.
+        /// true면 이 스텝 이후 챔버 온도가 <see cref="SafetyTempMin"/>~<see cref="SafetyTempMax"/> 범위를
+        /// 벗어날 때 알람 후 운전자 확인 대기. 목표값 기준 상대 오차가 아니라 절대 한계이므로
+        /// 승온·냉각 중 과도구간을 오탐하지 않는다.
         /// </summary>
-        public float SafetyTempTolerance { get; set; }
+        public bool UseSafetyTemperature { get; set; }
 
-        /// <summary>
-        /// 안전 밴드 습도 허용오차(%RH). 판정 기준은 <see cref="SafetyTempTolerance"/>와 같으며
-        /// 0이면 습도 안전 검사를 하지 않는다.
-        /// </summary>
-        public float SafetyHumidityTolerance { get; set; }
+        public float SafetyTempMin { get; set; }
+        public float SafetyTempMax { get; set; }
+
+        /// <summary>true면 습도를 <see cref="SafetyHumidityMin"/>~<see cref="SafetyHumidityMax"/>로 검사한다.</summary>
+        public bool UseSafetyHumidity { get; set; }
+
+        public float SafetyHumidityMin { get; set; }
+        public float SafetyHumidityMax { get; set; }
     }
 }
