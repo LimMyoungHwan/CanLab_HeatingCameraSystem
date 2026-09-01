@@ -31,6 +31,9 @@
         <DataTemplate DataType="{x:Type vm:HistoryViewModel}">
             <views:HistoryView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:RecipeResultViewModel}">
+            <views:RecipeResultView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:AgentSettingsViewModel}">
             <views:AgentSettingsView />
         </DataTemplate>
@@ -159,6 +162,20 @@
                                 VerticalAlignment="Center"
                                 FontSize="16"
                                 Text="{loc:Loc Nav_History}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding NavigateToRecipeResultCommand}" Style="{StaticResource NavBtn}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialIcons:MaterialIcon
+                                Width="18"
+                                Height="18"
+                                Margin="0,0,10,0"
+                                VerticalAlignment="Center"
+                                Kind="ChartLine" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="16"
+                                Text="{loc:Loc Nav_RecipeResult}" />
                         </StackPanel>
                     </Button>
                     <Button Command="{Binding NavigateToAgentSettingsCommand}" Style="{StaticResource NavBtn}">

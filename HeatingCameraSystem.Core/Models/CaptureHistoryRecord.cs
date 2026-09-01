@@ -38,5 +38,12 @@ namespace HeatingCameraSystem.Core.Models
 
         /// <summary>연관된 레시피 스텝 식별자. 빈 문자열이면 레시피와 무관한 촬영.</summary>
         public string RecipeStepId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 이 캡처를 남긴 레시피 실행 회차. 같은 회차의 측정 기록
+        /// (<see cref="RecipeMeasurementRecord.RunId"/>)과 같은 값이며, 결과 화면이 이 키로 묶는다.
+        /// 레시피가 아닌 수동/AgentUI 캡처는 비어 있다.
+        /// </summary>
+        public string RunId { get; set; } = string.Empty;
     }
 }

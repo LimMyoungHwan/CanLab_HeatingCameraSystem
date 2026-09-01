@@ -190,6 +190,15 @@ namespace HeatingCameraSystem.Master.ViewModels
             UpdateTitle();
         }
 
+        /// <summary>레시피 결과 화면으로 전환한다. 진입할 때마다 회차 목록을 새로 읽는다.</summary>
+        [RelayCommand]
+        private void NavigateToRecipeResult()
+        {
+            _currentTitleKey = "Title_RecipeResult";
+            CurrentViewModel = new RecipeResultViewModel();
+            UpdateTitle();
+        }
+
         /// <summary>Agent 설정 화면으로 전환한다.</summary>
         [RelayCommand]
         private void NavigateToAgentSettings()

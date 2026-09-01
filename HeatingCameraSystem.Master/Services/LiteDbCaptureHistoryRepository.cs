@@ -20,6 +20,7 @@ namespace HeatingCameraSystem.Master.Services
             _col = db.GetCollection<CaptureHistoryRecord>("capture_history");
             _col.EnsureIndex(x => x.Timestamp);
             _col.EnsureIndex(x => x.CameraId);
+            _col.EnsureIndex(x => x.RunId);
         }
 
         public Task InsertAsync(CaptureHistoryRecord record)
@@ -75,6 +76,16 @@ namespace HeatingCameraSystem.Master.Services
             }
 
             return Task.FromResult(count);
+        }
+
+        public Task<IEnumerable<CaptureHistoryRecord>> QueryByRunAsync(string runId)
+        {
+            var results = _col.Query()
+                .Where(r => r.RunId == runId)
+                .OrderBy(r => r.Timestamp)
+                .ToList();
+
+            return Task.FromResult<IEnumerable<CaptureHistoryRecord>>(results);
         }
 
         public Task DeleteOlderThanAsync(DateTime cutoff)

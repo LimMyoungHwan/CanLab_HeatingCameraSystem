@@ -1,0 +1,111 @@
+<UserControl x:Class="HeatingCameraSystem.Master.Views.RecipeResultView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:sp="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
+             mc:Ignorable="d"
+             d:DesignHeight="768" d:DesignWidth="1024"
+             Background="#0e1321" Foreground="#dee2f7">
+
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="BgSurface" Color="#0e1321"/>
+        <SolidColorBrush x:Key="BgSurfaceContainer" Color="#1a1f2e"/>
+        <SolidColorBrush x:Key="OutlineVariant" Color="#39405a"/>
+        <SolidColorBrush x:Key="TextOnSurface" Color="#dee2f7"/>
+        <SolidColorBrush x:Key="TextOnSurfaceVariant" Color="#9aa3c4"/>
+        <SolidColorBrush x:Key="Primary" Color="#7ee0d0"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
+    <Grid Margin="16">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,16,0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="12">
+                    <TextBlock Text="실행 회차" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextOnSurface}"/>
+                    <Button Content="새로고침" Command="{Binding RefreshCommand}" Margin="0,8,0,0" Padding="0,6"
+                            Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                </StackPanel>
+                <ListBox ItemsSource="{Binding Runs}" SelectedItem="{Binding SelectedRun}" Margin="8"
+                         Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextOnSurface}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="4">
+                                <TextBlock Text="{Binding Display}" Foreground="{StaticResource TextOnSurface}" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding MeasurementCount, StringFormat='측정 {0}건'}" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <DockPanel Grid.Column="1">
+            <TextBlock DockPanel.Dock="Top" Text="{Binding StatusMessage}" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,8"/>
+            <TabControl Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" Foreground="#101010">
+                <TabItem Header="차트">
+                    <Grid>
+                        <sp:WpfPlot x:Name="Chart"/>
+                        <TextBlock Text="이 회차에는 측정 기록이 없습니다 (기록 조건 미사용)."
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextOnSurfaceVariant}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasMeasurements}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </TabItem>
+
+                <TabItem Header="측정 로그">
+                    <DataGrid ItemsSource="{Binding Measurements}" AutoGenerateColumns="False" IsReadOnly="True"
+                              Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"
+                              GridLinesVisibility="Horizontal" HeadersVisibility="Column" RowBackground="{StaticResource BgSurface}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="시각" Binding="{Binding Timestamp, StringFormat='yyyy-MM-dd HH:mm:ss'}" Width="170"/>
+                            <DataGridTextColumn Header="챔버 ℃" Binding="{Binding ChamberTemperature, StringFormat='F1'}" Width="90"/>
+                            <DataGridTextColumn Header="챔버 %RH" Binding="{Binding ChamberHumidity, StringFormat='F1'}" Width="90"/>
+                            <DataGridTextColumn Header="카메라 온도" Binding="{Binding CameraTemperatures}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="캡처">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{StaticResource BgSurface}">
+                        <ItemsControl ItemsSource="{Binding Captures}" Margin="8">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="4" Padding="6" Width="200">
+                                        <StackPanel>
+                                            <Image Source="{Binding ImagePath}" Height="140" Stretch="Uniform"/>
+                                            <TextBlock Text="{Binding CameraId}" Foreground="{StaticResource Primary}" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                                            <TextBlock Text="{Binding Timestamp, StringFormat='yyyy-MM-dd HH:mm:ss'}" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                                            <TextBlock FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}">
+                                                <Run Text="{Binding Temperature, StringFormat='챔버 {0:F1}℃'}"/>
+                                                <Run Text="{Binding Humidity, StringFormat='/ {0:F1}%RH'}"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+        </DockPanel>
+    </Grid>
+</UserControl>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
@@ -153,7 +153,7 @@ namespace HeatingCameraSystem.Master.Services
 
             try
             {
-                await ExecuteSegmentedRecipeAsync(recipe, cancellationToken, progress, waitForResumeAsync);
+                await ExecuteSegmentedRecipeAsync(recipe, runId, cancellationToken, progress, waitForResumeAsync);
             }
             finally
             {
@@ -226,7 +226,7 @@ namespace HeatingCameraSystem.Master.Services
             }
         }
 
-        private async Task ExecuteSegmentedRecipeAsync(Recipe recipe, CancellationToken cancellationToken, IProgress<RecipeProgress>? progress, Func<CancellationToken, Task>? waitForResumeAsync)
+        private async Task ExecuteSegmentedRecipeAsync(Recipe recipe, string runId, CancellationToken cancellationToken, IProgress<RecipeProgress>? progress, Func<CancellationToken, Task>? waitForResumeAsync)
         {
             int totalSteps = recipe.Steps.Count;
             RecipeStep? safetyReference = null;
@@ -283,7 +283,7 @@ namespace HeatingCameraSystem.Master.Services
                             break;
 
                         case RecipeStepKind.CameraCommand:
-                            await ExecuteCameraStepAsync(step, i, totalSteps, captureWaiters, controlWaiters, subscribedControlAgents, cancellationToken, progress);
+                            await ExecuteCameraStepAsync(step, runId, i, totalSteps, captureWaiters, controlWaiters, subscribedControlAgents, cancellationToken, progress);
                             break;
 
                         default:
@@ -400,6 +400,7 @@ namespace HeatingCameraSystem.Master.Services
 
         private async Task ExecuteCameraStepAsync(
             RecipeStep step,
+            string runId,
             int index,
             int totalSteps,
             ConcurrentDictionary<string, CaptureBatch> captureWaiters,
@@ -442,7 +443,7 @@ namespace HeatingCameraSystem.Master.Services
                     foreach (var result in results)
                     {
                         if (result.IsSuccess)
-                            await StoreCaptureResultAsync(step, target.CameraIndex, result);
+                            await StoreCaptureResultAsync(step, runId, target.CameraIndex, result);
                     }
 
                     int stored = results.Count(r => r.IsSuccess);
@@ -479,7 +480,7 @@ namespace HeatingCameraSystem.Master.Services
             }
         }
 
-        private async Task StoreCaptureResultAsync(RecipeStep step, int cameraIndex, CaptureResultMessage captureResult)
+        private async Task StoreCaptureResultAsync(RecipeStep step, string runId, int cameraIndex, CaptureResultMessage captureResult)
         {
             float temperature = 0f;
             float humidity = 0f;
@@ -508,6 +509,7 @@ namespace HeatingCameraSystem.Master.Services
                 Source = CaptureSource.Recipe,
                 ImagePath = storedImagePath,
                 RecipeStepId = captureResult.RecipeStepId,
+                RunId = runId,
                 Timestamp = captureResult.Timestamp,
                 Temperature = temperature,
                 Humidity = humidity,

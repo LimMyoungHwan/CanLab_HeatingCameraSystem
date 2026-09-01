@@ -24,6 +24,9 @@ namespace HeatingCameraSystem.Core.Interfaces
         /// <summary>지정 기간의 촬영 이력 건수를 반환한다.</summary>
         Task<int> CountAsync(DateTime from, DateTime to, string? cameraId = null);
 
+        /// <summary>한 레시피 실행 회차의 캡처를 시간 오름차순으로 모두 반환한다(결과 화면용).</summary>
+        Task<IEnumerable<CaptureHistoryRecord>> QueryByRunAsync(string runId);
+
         /// <summary>지정 시점보다 오래된 이력을 삭제한다.</summary>
         Task DeleteOlderThanAsync(DateTime cutoff);
     }

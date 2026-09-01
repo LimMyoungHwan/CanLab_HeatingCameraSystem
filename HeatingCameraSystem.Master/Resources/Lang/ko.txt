@@ -1,406 +1,408 @@
-# canlab HeatingCameraSystem — 한국어 (ko)
-# 형식: 키=값 · '#'로 시작하는 줄은 주석
-# 새 언어 추가: 이 파일을 <언어코드>.txt 로 복사한 뒤 = 오른쪽 값만 번역하세요.
-Lang_Name=한국어
-Window_Title=열화상 카메라 마스터 시스템
-Nav_Subtitle=마스터 컨트롤 시스템
-Nav_Language=언어
-Nav_EquipmentStatus=장비 상태
-Nav_BuzzerOff=PLC 부저 OFF
-Nav_ErrorReset=PLC 에러 리셋
-Nav_Dashboard=대시보드
-Nav_RecipeEditor=레시피 편집기
-Nav_History=이력 조회
-Nav_AgentSettings=Agent 설정
-Nav_PlcStatus=PLC 상태
-Nav_PlcSettings=PLC 설정
-Nav_ManualControl=수동 조작
-Title_Dashboard=대시보드
-Title_RecipeEditor=레시피 편집기
-Title_History=이력 조회
-Title_AgentSettings=Agent 원격 설정
-Title_PlcStatus=PLC 상태
-Title_PlcSettings=PLC 설정
-Title_ManualControl=수동 조작
-
-# Common
-Equip_EStop=비상정지
-Equip_Heater=히터
-Equip_Cooler1=1차 냉동기
-Equip_Cooler2=2차 냉동기
-Equip_CoolerRoom=상온 냉동기
-Equip_Bypass=바이패스
-Equip_Blower1=블로워1
-Equip_Blower2=블로워2
-Equip_Mcf=MCF
-Equip_Door=도어
-Equip_PairGlass=페어글라스
-Equip_Temperature=온도
-Equip_Humidity=습도
-Equip_Servo=서보
-Equip_Chamber=챔버
-Equip_BlackBody=흑체
-Equip_DoorLamp=도어램프
-Common_Save=저장
-Common_Apply=적용
-Common_Stop=중지
-Common_Load=불러오기
-Common_Send=전송
-Common_RefreshInfo=정보 갱신
-Common_Search=조회
-Common_Delete=삭제
-Common_AddCamera=+ 카메라 추가
-Common_Approve=승인
-Common_Reject=거부
-Common_Minute=분
-
-# Dash
-Dash_EmergencyStopMsg=EMERGENCY STOP ACTIVE  ·  비상정지 동작 중
-Dash_SystemOverview=SYSTEM OVERVIEW
-Dash_RefreshRate=실시간 통합 모니터링 · 2s REFRESH
-Dash_ChamberTitle=CHAMBER · 챔버 온습도
-Dash_TempLabel=온도 TEMP
-Dash_TargetTempPrefix=목표 
-Dash_HumidityLabel=습도 HUMIDITY
-Dash_TrendLoading=트렌드 수집 중…
-Dash_BlackBodyTitle=BLACKBODY · 흑체
-Dash_Bb1Pv=흑체 1 현재 (PV)
-Dash_Bb1Sv=흑체 1 목표 (SV)
-Dash_Bb2Pv=흑체 2 현재 (PV)
-Dash_Bb2Sv=흑체 2 목표 (SV)
-Dash_MotionTitle=MOTION · 서보 직교로봇
-Dash_CurrentPoint=현재 포인트 · P{0}
-Dash_XOrigin= X 원점
-Dash_YOrigin= Y 원점
-Dash_XErrorCode=X 에러코드
-Dash_YErrorCode=Y 에러코드
-Dash_ProgramTitle=PROGRAM · 진행
-Dash_StepLabel=스텝 STEP
-Dash_FanLabel=팬 속도 FAN
-Dash_GasLabel=GAS 유속
-Dash_EquipTitle=EQUIPMENT · 장비 상태
-Dash_Cooler1Short= 1차 냉동
-Dash_Cooler2Short= 2차 냉동
-Dash_CoolerRoomShort= 상온 냉동
-Dash_BypassShort= 바이패스
-Dash_DoorLampShort= 도어램프
-Dash_PairGlassShort= 페어글라스
-Dash_Blower1Short= 블로워1
-Dash_Blower2Short= 블로워2
-Dash_AlarmsTitle=ALARMS · 알람
-Dash_AlarmsCount={}{0}건
-Dash_AllNominal=정상 · ALL SYSTEMS NOMINAL
-Dash_ColorMap=컬러맵
-Dash_Color=컬러
-Dash_Grayscale=그레이스케일
-Dash_AgentsTitle=AGENTS · 카메라
-Dash_RefreshRecipesTooltip=레시피 목록 새로고침
-
-# Status
-Status_PlcMonitorTitle=PLC 상태 모니터
-Status_CurrentTemp=현재온도 (℃)
-Status_TargetTemp=목표온도 (℃)
-Status_CurrentHumidity=현재습도 (%RH)
-Status_TargetHumidity=목표습도 (%RH)
-Status_Bb1Current=흑체1 현재 (℃)
-Status_Bb1Target=흑체1 목표 (℃)
-Status_Bb2Current=흑체2 현재 (℃)
-Status_Bb2Target=흑체2 목표 (℃)
-Status_ServoTitle=서보 (직교로봇)
-Status_XPos=X 위치
-Status_YPos=Y 위치
-Status_CurrentPoint=현재 포인트
-Status_ProgressMisc=진행 / 기타
-Status_CurrentStep=현재 스텝
-Status_TotalSteps=전체 스텝
-Status_FanSpeed=팬 속도 (Hz)
-Status_EquipStatus=장비 상태
-Status_ErrorArea=에러 (M4001~)
-Status_InputArea=입력 (P000~)
-Status_OutputArea=출력 (P020~)
-
-# Plc
-Plc_Connection=PLC 연결
-Plc_IpAddress=IP 주소
-Plc_Port=포트
-Plc_Station=국번(Station)
-Plc_ChamberBbTitle=챔버 온습도 / 흑체
-Plc_HumidityControl=습도 제어
-Plc_TempRamp=온도 램프
-Plc_ReachTime=도달시간(분)
-Plc_RampStart=램프 시작
-Plc_MotorFan=모터 / 팬
-Plc_ServoSpeed=서보 속도 (1~100%)
-Plc_AdminSettings=관리자 설정
-Plc_OverheatLimit=과열 상한 (℃)
-Plc_CoolerRoomBoundary=상온냉동기 경계 (℃)
-Plc_Cooler2ndBoundary=2차냉동기 경계 (℃)
-Plc_CoolerDelay=냉동기 딜레이 (분)
-Plc_BypassBoundary=바이패스 경계 (℃)
-Plc_MfcMin=MFC 최소출력 (%RH)
-Plc_MfcMax=MFC 최대출력 (%RH)
-Plc_PairGlassBoundary=페어글라스 경계 (℃)
-Plc_ServoPointsTitle=서보 포인트 좌표 (20)
-Plc_Point=포인트
-Plc_ErrorTitle=PLC 오류
-Plc_ErrorStop=PLC 오류 감지 — 전체 정지: {0}
-Plc_ErrorStopNoDetails=PLC 오류 감지 — 전체 정지
-Plc_ErrorCleared=PLC 오류 해제
-Plc_EmergencyStopFailed=비상 정지 실패: {0}
-Plc_ChamberStopFailed=챔버 정지 실패: {0}
-Plc_Origin=PLC 원점 복귀
-Plc_NotInitialized=PLC 미초기화
-Plc_ActionCompleted={0} 완료 {1}
-Plc_ActionFailed={0} 실패: {1}
-
-# Manual
-Manual_TempStart=온도제어 시작
-Manual_TempStop=온도제어 정지
-Manual_EquipOneTouch=장비 원터치
-Manual_Chiller=칠러
-Manual_DoorLock=도어락
-Manual_Lighting=조명
-Manual_ServoOp=서보 조작
-Manual_CurrentPoint=현재 포인트:
-Manual_XJogMinus=X 축 JOG -
-Manual_XJogPlus=X 축 JOG +
-Manual_YJogMinus=Y 축 JOG -
-Manual_YJogPlus=Y 축 JOG +
-Manual_HomeX=X 원점
-Manual_HomeY=Y 원점
-Manual_MoveAbsolute=절대 위치 이동
-Manual_MoveX=X 이동
-Manual_MoveY=Y 이동
-Manual_MoveRelative=상대 위치 이동
-Manual_MovePointTitle=포인트 이동
-Manual_Current=현재:
-Manual_CameraControl=카메라 제어
-Manual_CameraSelect=카메라 선택
-Manual_ShutterOpen=셔터 열기
-Manual_ShutterClose=셔터 닫기
-Manual_Capture=캡처
-Manual_SaveConfig=설정 저장
-
-# Agent
-Agent_RemoteSettings=Agent 원격 설정
-Agent_OnlineAgent=온라인 Agent
-Agent_Instruction=상단에서 Agent를 선택하고 '조회'를 눌러 설정을 불러오세요.
-Agent_SimMode=Simulation mode (가짜 카메라)
-Agent_StoragePath=Storage path (빈 값 = config 폴더 기본값)
-Agent_Heartbeat=Heartbeat (초)
-Agent_CaptureFormat=Capture 이미지 포맷
-Agent_CaptureCount=Capture 장수 (Save 1회당)
-Agent_Cameras=카메라
-Agent_SendConfig=설정 전송
-
-# Recipe
-Recipe_NewRecipe=새 레시피
-Recipe_CopyRecipe=레시피 복사
-Recipe_TempRampTime=온도 램프 도달시간 (분)
-Recipe_CameraMapping=카메라 맵핑
-Recipe_AvailableCameras=사용 가능한 카메라
-Recipe_MappingInstruction=카메라를 선택한 뒤 슬롯을 클릭하세요.
-Recipe_UnmapTooltip=맵핑 해제
-Recipe_OnlineAgentCameras=온라인 Agent 카메라
-Recipe_SafetyTempTolerance=안전 온도 허용치 (℃)
-Recipe_SafetyHumidityTolerance=안전 습도 허용치 (%RH)
-
-# Hist
-Hist_From=시작
-Hist_To=종료
-Hist_CameraFilter=카메라 필터
-Hist_ExportCsv=CSV 내보내기
-Hist_ColTimestamp=타임스탬프
-Hist_ColCameraId=카메라 ID
-Hist_ColTemp=온도 (°C)
-Hist_ColHumidity=습도 (%RH)
-Hist_ColThumbnail=썸네일
-Hist_ColAction=작업
-Hist_Open=열기 ↗
-Hist_Of=/
-Hist_EmergencyStop=⚠️ 비상정지
-Hist_ModalCameraSource=카메라 소스
-Hist_ModalTemperature=온도
-Hist_ModalHumidity=습도
-
-# Manual Extras
-Manual_XPosCol=X 위치:
-Manual_YPosCol=Y 위치:
-Manual_Bb1Target=흑체1 목표(℃)
-Manual_Bb2Target=흑체2 목표(℃)
-
-# Plc Extras
-Plc_TargetTemp=목표 온도 (℃)
-Plc_TargetHum=목표 습도 (%RH)
-
-# Status Extras
-Status_Cooler1Short= 1차 냉동기
-Status_Cooler2Short= 2차 냉동기
-Status_CoolerRoomShort= 상온 냉동기
-Status_BypassShort= 바이패스
-Status_DoorLampShort= 도어램프
-Status_PairGlassShort= 페어글라스
-Status_Blower1Short= 블로워1
-Status_Blower2Short= 블로워2
-
-# Agent Headers
-Agent_ColAgentId=Agent Id
-Agent_ColOpenCvIdx=OpenCV 인덱스
-Agent_ColAlias=별칭
-Agent_ColDeviceName=장치명
-Agent_ColSerialCOM=시리얼 COM
-
-Manual_BlackBody=흑체
-Hist_AgentId=에이전트 ID
-
-Nav_PlcOrigin=PLC 원점 복귀
-Nav_AlarmsTitle=ALARMS · 알람
-Nav_AlarmsFilterType=종류
-Nav_AlarmsFilterAll=전체
-Nav_AlarmsFilterInfo=정보
-Nav_AlarmsFilterWarning=경고
-Nav_AlarmsFilterError=오류
-Nav_AlarmsDeleteTooltip=알람 삭제
-Nav_AlarmsEmpty=알람 없음
-
-# Status view (hero + card labels)
-Status_HeroChamberTemp=챔버 온도
-Status_HeroChamberHumidity=챔버 습도
-Status_HeroProgress=진행 상태
-Status_HeroServoPoint=서보 포인트
-Status_ChamberEnvTitle=챔버 환경
-Status_BlackBodyRefTitle=흑체 기준 온도
-Status_FanSpeedLabel=팬 속도
-Status_PlcAlarmTitle=PLC 알람
-Status_ActiveErrorHint=활성 오류는 빨간색으로 표시됩니다
-
-# History view tabs / filters / alarm columns
-Hist_ViewMode=보기
-Hist_CaptureTab=촬영 이력
-Hist_ChamberTab=챔버 이력
-Hist_AlarmTab=알람 이력
-Hist_SourceFilter=촬영 구분
-Hist_SeverityFilter=알람 수준
-Hist_ColTime=시간
-Hist_ColSeverity=등급
-Hist_ColSource=출처
-Hist_ColMessage=메시지
-
-# PLC settings — black body connection
-Plc_BlackBodyConnTitle=흑체 연결 설정
-Plc_BlackBodyDirectControl=직접 제어 사용
-Plc_BlackBody1=흑체 1
-Plc_BlackBody2=흑체 2
-Plc_ComPort=COM 포트
-
-# ViewModel status messages
-Status_PollingWait=폴링 대기
-Agent_SelectAndLoad=에이전트를 선택하고 조회하세요.
-Agent_Loading={0} 설정 조회 중…
-Agent_Loaded={0} 설정 로드됨 (카메라 {1}대). 편집 후 전송하세요.
-Agent_Sending={0} 설정 전송 중…
-
-# Dashboard status messages
-Dash_RecipeIdle=대기 중
-Dash_PlcWaiting=PLC 대기 중
-Dash_UnknownPc=(미확인 PC)
-Dash_AgentOffline={0} 오프라인
-Dash_Refreshed=갱신 {0}
-Dash_ReadFailed=읽기 실패: {0}
-Dash_Mode1Active=Mode 1 — 활성 카메라
-Dash_Mode1Idle=Mode 1 — 대기
-Dash_ServiceNotInit=서비스 미초기화
-Dash_SelectRecipeNeeded=레시피 선택 필요
-Dash_RecipeRunning=실행 중: {0}
-Dash_RecipeDone=완료
-Dash_RecipeStopped=중지됨
-Dash_RecipeError=오류: {0}
-Dash_RecipeStopping=중지 중...
-Dash_Resume=재개
-Dash_Paused=안전조건 이탈 — 사용자 확인 대기
-
-# PLC settings status messages
-Common_Idle=대기
-Plc_ConnSaved=PLC 연결 저장됨 ({0}:{1}) — 재시작 후 적용
-Plc_BbConnSaved=흑체 연결 설정 저장됨 — 재시작 후 적용
-Plc_Bb1Temp=흑체1 온도
-Plc_Bb2Temp=흑체2 온도
-Plc_PointsLoaded=포인트 좌표 불러옴
-Plc_LoadError=불러오기 오류: {0}
-Plc_PointsSaved=포인트 좌표 저장됨
-Plc_SaveError=저장 오류: {0}
-Plc_AdminLoaded=관리자 설정 불러옴
-Plc_AdminLabel=관리자 설정
-Plc_LabelApplied={0} 적용됨
-Plc_LabelError={0} 오류: {1}
-Plc_BbNotInit=흑체 컨트롤러 미초기화
-
-# Manual control status messages
-Manual_HumidityControlLabel=습도제어
-Manual_StartChamber=챔버 시작
-Manual_StopChamber=챔버 정지
-Manual_HomeXLabel=X축 원점
-Manual_HomeYLabel=Y축 원점
-Manual_MovePointLabel={0}포인트 이동
-Manual_MoveYAbs=Y 절대이동
-Manual_MoveXAbs=X 절대이동
-Manual_RelMoveLabel=상대이동 {0}
-Manual_TargetTempLabel=타겟 온도
-Manual_TargetHumLabel=타겟 습도
-Manual_RampDone=온도 램프 완료됨
-Manual_RampStopped=램프 중지됨
-Manual_RampError=온도 램프 오류: {0}
-Manual_ServoSpeedLabel=서보 속도
-Manual_Sending=⏳ 전송됨…
-Manual_SendFailed=✘ 전송 실패: {0}
-Manual_CaptureRequesting=⏳ 캡처 요청…
-Manual_CaptureSent=캡처 명령 전송됨
-Manual_CaptureFailed=✘ 캡처 전송 실패: {0}
-Manual_LabelExecuted={0} 실행됨
-
-# History filter options
-Hist_SourceRecipe=레시피
-Hist_SourceManual=수동
-Hist_SourceAgentUi=AgentUI
-Hist_SevInfoAbove=정보 이상
-Hist_SevWarnAbove=경고 이상
-Hist_SevErrorOnly=오류만
-
-# PLC status messages
-Plc_StatusWaiting=PLC 대기
-Plc_ConnRestored=연결 복구
-Plc_ConnLost=연결 끊김: {0}
-
-# PLC device bit names (localized only for Korean catalog entries; English entries fall back)
-PlcErr_0=비상정지 스위치 동작
-PlcErr_1=서보드라이브1 - X축 에러
-PlcErr_2=서보드라이브2 - Y축 에러
-PlcErr_3=과열방지 온도계 에러
-PlcErr_4=메인콘트롤 온도 초과
-PlcErr_5=인버터1 - FAN1 에러
-PlcErr_6=인버터2 - FAN2 에러
-PlcErr_7=SCR 전력조정기 에러
-PlcErr_8=EOCR1 과부하
-PlcErr_9=EOCR2 과부하
-PlcErr_10=EOCR3 과부하
-PlcErr_11=EOCR4 과부하
-PlcErr_12=EOCR5 과부하
-PlcErr_13=칠러 EOCR 에러
-PlcErr_15=도어 안전센서1 에러
-PlcErr_16=도어 안전센서2 에러
-PlcErr_17=도어 안전센서3 에러
-PlcIn_0=비상정지 신호
-PlcOut_2=타워램프 녹
-PlcOut_3=타워램프 황
-PlcOut_4=타워램프 적
-PlcOut_5=부저
-PlcOut_8=1차 냉동 마그네트
-PlcOut_9=2차 냉동 마그네트
-PlcOut_10=상온냉동 마그네트
-PlcOut_11=히터 제어 마그네트
-PlcOut_12=상온냉동 바이패스
-PlcOut_13=도어 LAMP
-PlcOut_14=페어글라스
-PlcOut_15=도어락 출력
-PlcOut_24=배기밸브
-PlcOut_25=칠러(서보냉각) 마그네트 ON
+﻿# canlab HeatingCameraSystem — 한국어 (ko)
+# 형식: 키=값 · '#'로 시작하는 줄은 주석
+# 새 언어 추가: 이 파일을 <언어코드>.txt 로 복사한 뒤 = 오른쪽 값만 번역하세요.
+Lang_Name=한국어
+Window_Title=열화상 카메라 마스터 시스템
+Nav_Subtitle=마스터 컨트롤 시스템
+Nav_Language=언어
+Nav_EquipmentStatus=장비 상태
+Nav_BuzzerOff=PLC 부저 OFF
+Nav_ErrorReset=PLC 에러 리셋
+Nav_Dashboard=대시보드
+Nav_RecipeEditor=레시피 편집기
+Nav_History=이력 조회
+Nav_RecipeResult=레시피 결과
+Nav_AgentSettings=Agent 설정
+Nav_PlcStatus=PLC 상태
+Nav_PlcSettings=PLC 설정
+Nav_ManualControl=수동 조작
+Title_Dashboard=대시보드
+Title_RecipeEditor=레시피 편집기
+Title_History=이력 조회
+Title_RecipeResult=레시피 결과
+Title_AgentSettings=Agent 원격 설정
+Title_PlcStatus=PLC 상태
+Title_PlcSettings=PLC 설정
+Title_ManualControl=수동 조작
+
+# Common
+Equip_EStop=비상정지
+Equip_Heater=히터
+Equip_Cooler1=1차 냉동기
+Equip_Cooler2=2차 냉동기
+Equip_CoolerRoom=상온 냉동기
+Equip_Bypass=바이패스
+Equip_Blower1=블로워1
+Equip_Blower2=블로워2
+Equip_Mcf=MCF
+Equip_Door=도어
+Equip_PairGlass=페어글라스
+Equip_Temperature=온도
+Equip_Humidity=습도
+Equip_Servo=서보
+Equip_Chamber=챔버
+Equip_BlackBody=흑체
+Equip_DoorLamp=도어램프
+Common_Save=저장
+Common_Apply=적용
+Common_Stop=중지
+Common_Load=불러오기
+Common_Send=전송
+Common_RefreshInfo=정보 갱신
+Common_Search=조회
+Common_Delete=삭제
+Common_AddCamera=+ 카메라 추가
+Common_Approve=승인
+Common_Reject=거부
+Common_Minute=분
+
+# Dash
+Dash_EmergencyStopMsg=EMERGENCY STOP ACTIVE  ·  비상정지 동작 중
+Dash_SystemOverview=SYSTEM OVERVIEW
+Dash_RefreshRate=실시간 통합 모니터링 · 2s REFRESH
+Dash_ChamberTitle=CHAMBER · 챔버 온습도
+Dash_TempLabel=온도 TEMP
+Dash_TargetTempPrefix=목표 
+Dash_HumidityLabel=습도 HUMIDITY
+Dash_TrendLoading=트렌드 수집 중…
+Dash_BlackBodyTitle=BLACKBODY · 흑체
+Dash_Bb1Pv=흑체 1 현재 (PV)
+Dash_Bb1Sv=흑체 1 목표 (SV)
+Dash_Bb2Pv=흑체 2 현재 (PV)
+Dash_Bb2Sv=흑체 2 목표 (SV)
+Dash_MotionTitle=MOTION · 서보 직교로봇
+Dash_CurrentPoint=현재 포인트 · P{0}
+Dash_XOrigin= X 원점
+Dash_YOrigin= Y 원점
+Dash_XErrorCode=X 에러코드
+Dash_YErrorCode=Y 에러코드
+Dash_ProgramTitle=PROGRAM · 진행
+Dash_StepLabel=스텝 STEP
+Dash_FanLabel=팬 속도 FAN
+Dash_GasLabel=GAS 유속
+Dash_EquipTitle=EQUIPMENT · 장비 상태
+Dash_Cooler1Short= 1차 냉동
+Dash_Cooler2Short= 2차 냉동
+Dash_CoolerRoomShort= 상온 냉동
+Dash_BypassShort= 바이패스
+Dash_DoorLampShort= 도어램프
+Dash_PairGlassShort= 페어글라스
+Dash_Blower1Short= 블로워1
+Dash_Blower2Short= 블로워2
+Dash_AlarmsTitle=ALARMS · 알람
+Dash_AlarmsCount={}{0}건
+Dash_AllNominal=정상 · ALL SYSTEMS NOMINAL
+Dash_ColorMap=컬러맵
+Dash_Color=컬러
+Dash_Grayscale=그레이스케일
+Dash_AgentsTitle=AGENTS · 카메라
+Dash_RefreshRecipesTooltip=레시피 목록 새로고침
+
+# Status
+Status_PlcMonitorTitle=PLC 상태 모니터
+Status_CurrentTemp=현재온도 (℃)
+Status_TargetTemp=목표온도 (℃)
+Status_CurrentHumidity=현재습도 (%RH)
+Status_TargetHumidity=목표습도 (%RH)
+Status_Bb1Current=흑체1 현재 (℃)
+Status_Bb1Target=흑체1 목표 (℃)
+Status_Bb2Current=흑체2 현재 (℃)
+Status_Bb2Target=흑체2 목표 (℃)
+Status_ServoTitle=서보 (직교로봇)
+Status_XPos=X 위치
+Status_YPos=Y 위치
+Status_CurrentPoint=현재 포인트
+Status_ProgressMisc=진행 / 기타
+Status_CurrentStep=현재 스텝
+Status_TotalSteps=전체 스텝
+Status_FanSpeed=팬 속도 (Hz)
+Status_EquipStatus=장비 상태
+Status_ErrorArea=에러 (M4001~)
+Status_InputArea=입력 (P000~)
+Status_OutputArea=출력 (P020~)
+
+# Plc
+Plc_Connection=PLC 연결
+Plc_IpAddress=IP 주소
+Plc_Port=포트
+Plc_Station=국번(Station)
+Plc_ChamberBbTitle=챔버 온습도 / 흑체
+Plc_HumidityControl=습도 제어
+Plc_TempRamp=온도 램프
+Plc_ReachTime=도달시간(분)
+Plc_RampStart=램프 시작
+Plc_MotorFan=모터 / 팬
+Plc_ServoSpeed=서보 속도 (1~100%)
+Plc_AdminSettings=관리자 설정
+Plc_OverheatLimit=과열 상한 (℃)
+Plc_CoolerRoomBoundary=상온냉동기 경계 (℃)
+Plc_Cooler2ndBoundary=2차냉동기 경계 (℃)
+Plc_CoolerDelay=냉동기 딜레이 (분)
+Plc_BypassBoundary=바이패스 경계 (℃)
+Plc_MfcMin=MFC 최소출력 (%RH)
+Plc_MfcMax=MFC 최대출력 (%RH)
+Plc_PairGlassBoundary=페어글라스 경계 (℃)
+Plc_ServoPointsTitle=서보 포인트 좌표 (20)
+Plc_Point=포인트
+Plc_ErrorTitle=PLC 오류
+Plc_ErrorStop=PLC 오류 감지 — 전체 정지: {0}
+Plc_ErrorStopNoDetails=PLC 오류 감지 — 전체 정지
+Plc_ErrorCleared=PLC 오류 해제
+Plc_EmergencyStopFailed=비상 정지 실패: {0}
+Plc_ChamberStopFailed=챔버 정지 실패: {0}
+Plc_Origin=PLC 원점 복귀
+Plc_NotInitialized=PLC 미초기화
+Plc_ActionCompleted={0} 완료 {1}
+Plc_ActionFailed={0} 실패: {1}
+
+# Manual
+Manual_TempStart=온도제어 시작
+Manual_TempStop=온도제어 정지
+Manual_EquipOneTouch=장비 원터치
+Manual_Chiller=칠러
+Manual_DoorLock=도어락
+Manual_Lighting=조명
+Manual_ServoOp=서보 조작
+Manual_CurrentPoint=현재 포인트:
+Manual_XJogMinus=X 축 JOG -
+Manual_XJogPlus=X 축 JOG +
+Manual_YJogMinus=Y 축 JOG -
+Manual_YJogPlus=Y 축 JOG +
+Manual_HomeX=X 원점
+Manual_HomeY=Y 원점
+Manual_MoveAbsolute=절대 위치 이동
+Manual_MoveX=X 이동
+Manual_MoveY=Y 이동
+Manual_MoveRelative=상대 위치 이동
+Manual_MovePointTitle=포인트 이동
+Manual_Current=현재:
+Manual_CameraControl=카메라 제어
+Manual_CameraSelect=카메라 선택
+Manual_ShutterOpen=셔터 열기
+Manual_ShutterClose=셔터 닫기
+Manual_Capture=캡처
+Manual_SaveConfig=설정 저장
+
+# Agent
+Agent_RemoteSettings=Agent 원격 설정
+Agent_OnlineAgent=온라인 Agent
+Agent_Instruction=상단에서 Agent를 선택하고 '조회'를 눌러 설정을 불러오세요.
+Agent_SimMode=Simulation mode (가짜 카메라)
+Agent_StoragePath=Storage path (빈 값 = config 폴더 기본값)
+Agent_Heartbeat=Heartbeat (초)
+Agent_CaptureFormat=Capture 이미지 포맷
+Agent_CaptureCount=Capture 장수 (Save 1회당)
+Agent_Cameras=카메라
+Agent_SendConfig=설정 전송
+
+# Recipe
+Recipe_NewRecipe=새 레시피
+Recipe_CopyRecipe=레시피 복사
+Recipe_TempRampTime=온도 램프 도달시간 (분)
+Recipe_CameraMapping=카메라 맵핑
+Recipe_AvailableCameras=사용 가능한 카메라
+Recipe_MappingInstruction=카메라를 선택한 뒤 슬롯을 클릭하세요.
+Recipe_UnmapTooltip=맵핑 해제
+Recipe_OnlineAgentCameras=온라인 Agent 카메라
+Recipe_SafetyTempTolerance=안전 온도 허용치 (℃)
+Recipe_SafetyHumidityTolerance=안전 습도 허용치 (%RH)
+
+# Hist
+Hist_From=시작
+Hist_To=종료
+Hist_CameraFilter=카메라 필터
+Hist_ExportCsv=CSV 내보내기
+Hist_ColTimestamp=타임스탬프
+Hist_ColCameraId=카메라 ID
+Hist_ColTemp=온도 (°C)
+Hist_ColHumidity=습도 (%RH)
+Hist_ColThumbnail=썸네일
+Hist_ColAction=작업
+Hist_Open=열기 ↗
+Hist_Of=/
+Hist_EmergencyStop=⚠️ 비상정지
+Hist_ModalCameraSource=카메라 소스
+Hist_ModalTemperature=온도
+Hist_ModalHumidity=습도
+
+# Manual Extras
+Manual_XPosCol=X 위치:
+Manual_YPosCol=Y 위치:
+Manual_Bb1Target=흑체1 목표(℃)
+Manual_Bb2Target=흑체2 목표(℃)
+
+# Plc Extras
+Plc_TargetTemp=목표 온도 (℃)
+Plc_TargetHum=목표 습도 (%RH)
+
+# Status Extras
+Status_Cooler1Short= 1차 냉동기
+Status_Cooler2Short= 2차 냉동기
+Status_CoolerRoomShort= 상온 냉동기
+Status_BypassShort= 바이패스
+Status_DoorLampShort= 도어램프
+Status_PairGlassShort= 페어글라스
+Status_Blower1Short= 블로워1
+Status_Blower2Short= 블로워2
+
+# Agent Headers
+Agent_ColAgentId=Agent Id
+Agent_ColOpenCvIdx=OpenCV 인덱스
+Agent_ColAlias=별칭
+Agent_ColDeviceName=장치명
+Agent_ColSerialCOM=시리얼 COM
+
+Manual_BlackBody=흑체
+Hist_AgentId=에이전트 ID
+
+Nav_PlcOrigin=PLC 원점 복귀
+Nav_AlarmsTitle=ALARMS · 알람
+Nav_AlarmsFilterType=종류
+Nav_AlarmsFilterAll=전체
+Nav_AlarmsFilterInfo=정보
+Nav_AlarmsFilterWarning=경고
+Nav_AlarmsFilterError=오류
+Nav_AlarmsDeleteTooltip=알람 삭제
+Nav_AlarmsEmpty=알람 없음
+
+# Status view (hero + card labels)
+Status_HeroChamberTemp=챔버 온도
+Status_HeroChamberHumidity=챔버 습도
+Status_HeroProgress=진행 상태
+Status_HeroServoPoint=서보 포인트
+Status_ChamberEnvTitle=챔버 환경
+Status_BlackBodyRefTitle=흑체 기준 온도
+Status_FanSpeedLabel=팬 속도
+Status_PlcAlarmTitle=PLC 알람
+Status_ActiveErrorHint=활성 오류는 빨간색으로 표시됩니다
+
+# History view tabs / filters / alarm columns
+Hist_ViewMode=보기
+Hist_CaptureTab=촬영 이력
+Hist_ChamberTab=챔버 이력
+Hist_AlarmTab=알람 이력
+Hist_SourceFilter=촬영 구분
+Hist_SeverityFilter=알람 수준
+Hist_ColTime=시간
+Hist_ColSeverity=등급
+Hist_ColSource=출처
+Hist_ColMessage=메시지
+
+# PLC settings — black body connection
+Plc_BlackBodyConnTitle=흑체 연결 설정
+Plc_BlackBodyDirectControl=직접 제어 사용
+Plc_BlackBody1=흑체 1
+Plc_BlackBody2=흑체 2
+Plc_ComPort=COM 포트
+
+# ViewModel status messages
+Status_PollingWait=폴링 대기
+Agent_SelectAndLoad=에이전트를 선택하고 조회하세요.
+Agent_Loading={0} 설정 조회 중…
+Agent_Loaded={0} 설정 로드됨 (카메라 {1}대). 편집 후 전송하세요.
+Agent_Sending={0} 설정 전송 중…
+
+# Dashboard status messages
+Dash_RecipeIdle=대기 중
+Dash_PlcWaiting=PLC 대기 중
+Dash_UnknownPc=(미확인 PC)
+Dash_AgentOffline={0} 오프라인
+Dash_Refreshed=갱신 {0}
+Dash_ReadFailed=읽기 실패: {0}
+Dash_Mode1Active=Mode 1 — 활성 카메라
+Dash_Mode1Idle=Mode 1 — 대기
+Dash_ServiceNotInit=서비스 미초기화
+Dash_SelectRecipeNeeded=레시피 선택 필요
+Dash_RecipeRunning=실행 중: {0}
+Dash_RecipeDone=완료
+Dash_RecipeStopped=중지됨
+Dash_RecipeError=오류: {0}
+Dash_RecipeStopping=중지 중...
+Dash_Resume=재개
+Dash_Paused=안전조건 이탈 — 사용자 확인 대기
+
+# PLC settings status messages
+Common_Idle=대기
+Plc_ConnSaved=PLC 연결 저장됨 ({0}:{1}) — 재시작 후 적용
+Plc_BbConnSaved=흑체 연결 설정 저장됨 — 재시작 후 적용
+Plc_Bb1Temp=흑체1 온도
+Plc_Bb2Temp=흑체2 온도
+Plc_PointsLoaded=포인트 좌표 불러옴
+Plc_LoadError=불러오기 오류: {0}
+Plc_PointsSaved=포인트 좌표 저장됨
+Plc_SaveError=저장 오류: {0}
+Plc_AdminLoaded=관리자 설정 불러옴
+Plc_AdminLabel=관리자 설정
+Plc_LabelApplied={0} 적용됨
+Plc_LabelError={0} 오류: {1}
+Plc_BbNotInit=흑체 컨트롤러 미초기화
+
+# Manual control status messages
+Manual_HumidityControlLabel=습도제어
+Manual_StartChamber=챔버 시작
+Manual_StopChamber=챔버 정지
+Manual_HomeXLabel=X축 원점
+Manual_HomeYLabel=Y축 원점
+Manual_MovePointLabel={0}포인트 이동
+Manual_MoveYAbs=Y 절대이동
+Manual_MoveXAbs=X 절대이동
+Manual_RelMoveLabel=상대이동 {0}
+Manual_TargetTempLabel=타겟 온도
+Manual_TargetHumLabel=타겟 습도
+Manual_RampDone=온도 램프 완료됨
+Manual_RampStopped=램프 중지됨
+Manual_RampError=온도 램프 오류: {0}
+Manual_ServoSpeedLabel=서보 속도
+Manual_Sending=⏳ 전송됨…
+Manual_SendFailed=✘ 전송 실패: {0}
+Manual_CaptureRequesting=⏳ 캡처 요청…
+Manual_CaptureSent=캡처 명령 전송됨
+Manual_CaptureFailed=✘ 캡처 전송 실패: {0}
+Manual_LabelExecuted={0} 실행됨
+
+# History filter options
+Hist_SourceRecipe=레시피
+Hist_SourceManual=수동
+Hist_SourceAgentUi=AgentUI
+Hist_SevInfoAbove=정보 이상
+Hist_SevWarnAbove=경고 이상
+Hist_SevErrorOnly=오류만
+
+# PLC status messages
+Plc_StatusWaiting=PLC 대기
+Plc_ConnRestored=연결 복구
+Plc_ConnLost=연결 끊김: {0}
+
+# PLC device bit names (localized only for Korean catalog entries; English entries fall back)
+PlcErr_0=비상정지 스위치 동작
+PlcErr_1=서보드라이브1 - X축 에러
+PlcErr_2=서보드라이브2 - Y축 에러
+PlcErr_3=과열방지 온도계 에러
+PlcErr_4=메인콘트롤 온도 초과
+PlcErr_5=인버터1 - FAN1 에러
+PlcErr_6=인버터2 - FAN2 에러
+PlcErr_7=SCR 전력조정기 에러
+PlcErr_8=EOCR1 과부하
+PlcErr_9=EOCR2 과부하
+PlcErr_10=EOCR3 과부하
+PlcErr_11=EOCR4 과부하
+PlcErr_12=EOCR5 과부하
+PlcErr_13=칠러 EOCR 에러
+PlcErr_15=도어 안전센서1 에러
+PlcErr_16=도어 안전센서2 에러
+PlcErr_17=도어 안전센서3 에러
+PlcIn_0=비상정지 신호
+PlcOut_2=타워램프 녹
+PlcOut_3=타워램프 황
+PlcOut_4=타워램프 적
+PlcOut_5=부저
+PlcOut_8=1차 냉동 마그네트
+PlcOut_9=2차 냉동 마그네트
+PlcOut_10=상온냉동 마그네트
+PlcOut_11=히터 제어 마그네트
+PlcOut_12=상온냉동 바이패스
+PlcOut_13=도어 LAMP
+PlcOut_14=페어글라스
+PlcOut_15=도어락 출력
+PlcOut_24=배기밸브
+PlcOut_25=칠러(서보냉각) 마그네트 ON
