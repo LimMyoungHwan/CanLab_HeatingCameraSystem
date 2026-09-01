@@ -182,8 +182,19 @@ namespace HeatingCameraSystem.Master.Services
             float? lastHumidity = null;
             DateTime? lastAt = null;
 
-            while (!cancellationToken.IsCancellationRequested)
+            // 샘플 시각을 레시피 시작 기준 절대 시각에 맞춘다. PLC 왕복 시간이 매 주기 더해지는
+            // 고정 지연 방식이면 1시간짜리 측정에서 수십 초가 밀린다.
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var tick = TimeSpan.FromSeconds(1);
+
+            for (long round = 0; !cancellationToken.IsCancellationRequested; round++)
             {
+                if (round > 0)
+                {
+                    TimeSpan wait = tick * round - clock.Elapsed;
+                    if (wait > TimeSpan.Zero) await Task.Delay(wait, cancellationToken);
+                }
+
                 try
                 {
                     float temp = await _plcController.GetCurrentTemperatureAsync();
@@ -221,8 +232,6 @@ namespace HeatingCameraSystem.Master.Services
                 {
                     System.Diagnostics.Debug.WriteLine($"[RecipeEngine] measurement record failed: {ex.Message}");
                 }
-
-                await Task.Delay(1000, cancellationToken);
             }
         }
 
@@ -414,44 +423,18 @@ namespace HeatingCameraSystem.Master.Services
                 ? step.CameraTargets
                 : new List<RecipeCameraTarget> { new() { CameraIndex = step.CameraIndex } };
 
+            if (step.CameraOperation == CameraControlOps.Capture)
+            {
+                await RepeatCaptureAsync(step, runId, index, totalSteps, targets, captureWaiters, cancellationToken, progress);
+                return;
+            }
+
             foreach (var target in targets)
             {
                 string agentId = string.IsNullOrWhiteSpace(target.AgentId)
                     ? target.CameraIndex == step.CameraIndex ? await ResolveAgentIdAsync(step) : $"Agent_{target.CameraIndex}"
                     : target.AgentId;
                 string requestId = $"{step.StepId}:{agentId}:{target.CameraIndex}";
-
-                if (step.CameraOperation == CameraControlOps.Capture)
-                {
-                    int shots = step.ShotCount > 0 ? step.ShotCount : 1;
-                    var batch = new CaptureBatch(shots);
-                    captureWaiters[requestId] = batch;
-                    await _natsService.PublishCaptureCommandAsync(new CaptureCommandMessage
-                    {
-                        TargetAgentId = agentId,
-                        RecipeStepId = requestId,
-                        Source = CaptureSource.Recipe,
-                        ShotCount = shots,
-                        Timestamp = DateTime.UtcNow
-                    });
-
-                    // 장수만큼 결과가 오므로 대기 한도도 장수에 비례해 늘린다.
-                    TimeSpan batchTimeout = TimeSpan.FromTicks(_captureTimeout.Ticks * shots);
-                    await Task.WhenAny(batch.Completed, Task.Delay(batchTimeout, cancellationToken));
-
-                    var results = batch.Snapshot();
-                    foreach (var result in results)
-                    {
-                        if (result.IsSuccess)
-                            await StoreCaptureResultAsync(step, runId, target.CameraIndex, result);
-                    }
-
-                    int stored = results.Count(r => r.IsSuccess);
-                    if (stored < shots)
-                        AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 카메라 {target.CameraIndex} 캡처 {stored}/{shots}장만 성공(실패 또는 타임아웃)");
-                    captureWaiters.TryRemove(requestId, out _);
-                    continue;
-                }
 
                 if (subscribedControlAgents.Add(agentId))
                 {
@@ -477,6 +460,109 @@ namespace HeatingCameraSystem.Master.Services
                 if (controlCompleted != controlWaiter.Task || !controlWaiter.Task.Result.IsSuccess)
                     AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 카메라 {target.CameraIndex} 명령 실패 또는 타임아웃");
                 controlWaiters.TryRemove(requestId, out _);
+            }
+        }
+
+        /// <summary>
+        /// 캡처 반복 횟수. 간격이 0이면 1회, 아니면 <c>전체시간 / 간격</c>이다(최소 1회).
+        /// </summary>
+        internal static int CaptureRepeatCount(RecipeStep step)
+        {
+            if (step.CaptureIntervalSeconds <= 0) return 1;
+            int count = step.CaptureDurationSeconds / step.CaptureIntervalSeconds;
+            return count < 1 ? 1 : count;
+        }
+
+        /// <summary>
+        /// 회차를 스텝 시작 시각 기준 절대 시각(0초, interval, 2×interval …)에 맞춰 실행한다.
+        /// 매번 고정 시간을 자는 방식이 아니므로 촬영·PLC 지연이 다음 회차로 누적되지 않는다.
+        /// 한 회차가 간격을 통째로 넘겨 늦으면 따라잡기를 시도하지 않고 경고만 남긴다
+        /// (몰아 찍으면 샘플 간격이 오히려 더 망가진다).
+        /// </summary>
+        private async Task RepeatCaptureAsync(
+            RecipeStep step,
+            string runId,
+            int index,
+            int totalSteps,
+            List<RecipeCameraTarget> targets,
+            ConcurrentDictionary<string, CaptureBatch> captureWaiters,
+            CancellationToken cancellationToken,
+            IProgress<RecipeProgress>? progress)
+        {
+            int repeats = CaptureRepeatCount(step);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+
+            for (int round = 0; round < repeats; round++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (round > 0)
+                {
+                    TimeSpan due = TimeSpan.FromSeconds((double)step.CaptureIntervalSeconds * round);
+                    TimeSpan wait = due - clock.Elapsed;
+                    if (wait > TimeSpan.Zero)
+                        await Task.Delay(wait, cancellationToken);
+                    else if (-wait >= TimeSpan.FromSeconds(step.CaptureIntervalSeconds))
+                        AlarmSink.Raise(AlarmSeverity.Warning, "레시피",
+                            $"스텝 {step.StepId} 캡처 {round + 1}/{repeats} 회차가 {-wait.TotalSeconds:F0}초 지연됨(간격 {step.CaptureIntervalSeconds}초).");
+                }
+
+                if (repeats > 1)
+                    progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = $"캡처 {round + 1}/{repeats} ({index + 1}/{totalSteps})" });
+
+                foreach (var target in targets)
+                    await CaptureOnceAsync(step, runId, round, target, captureWaiters, cancellationToken);
+            }
+        }
+
+        private async Task CaptureOnceAsync(
+            RecipeStep step,
+            string runId,
+            int round,
+            RecipeCameraTarget target,
+            ConcurrentDictionary<string, CaptureBatch> captureWaiters,
+            CancellationToken cancellationToken)
+        {
+            string agentId = string.IsNullOrWhiteSpace(target.AgentId)
+                ? target.CameraIndex == step.CameraIndex ? await ResolveAgentIdAsync(step) : $"Agent_{target.CameraIndex}"
+                : target.AgentId;
+
+            // 회차마다 다른 키를 써야 이전 회차 결과가 다음 회차 배치로 새지 않는다.
+            string requestId = $"{step.StepId}:{agentId}:{target.CameraIndex}:{round}";
+
+            int shots = step.ShotCount > 0 ? step.ShotCount : 1;
+            var batch = new CaptureBatch(shots);
+            captureWaiters[requestId] = batch;
+
+            try
+            {
+                await _natsService.PublishCaptureCommandAsync(new CaptureCommandMessage
+                {
+                    TargetAgentId = agentId,
+                    RecipeStepId = requestId,
+                    Source = CaptureSource.Recipe,
+                    ShotCount = shots,
+                    Timestamp = DateTime.UtcNow
+                });
+
+                // 장수만큼 결과가 오므로 대기 한도도 장수에 비례해 늘린다.
+                TimeSpan batchTimeout = TimeSpan.FromTicks(_captureTimeout.Ticks * shots);
+                await Task.WhenAny(batch.Completed, Task.Delay(batchTimeout, cancellationToken));
+
+                var results = batch.Snapshot();
+                foreach (var result in results)
+                {
+                    if (result.IsSuccess)
+                        await StoreCaptureResultAsync(step, runId, target.CameraIndex, result);
+                }
+
+                int stored = results.Count(r => r.IsSuccess);
+                if (stored < shots)
+                    AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 카메라 {target.CameraIndex} 캡처 {stored}/{shots}장만 성공(실패 또는 타임아웃)");
+            }
+            finally
+            {
+                captureWaiters.TryRemove(requestId, out _);
             }
         }
 

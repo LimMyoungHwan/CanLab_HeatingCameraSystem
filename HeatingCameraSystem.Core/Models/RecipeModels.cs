@@ -90,8 +90,21 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>true면 목표 온도에 도달할 때까지 대기한다.</summary>
         public bool WaitForStabilization { get; set; } = true;
 
-        /// <summary>캡처 스텝에서 찍을 장수. Agent가 이 장수만큼 찍고 각각 결과를 보낼 때까지 스텝이 끝나지 않는다.</summary>
+        /// <summary>캡처 스텝에서 한 번에 찍을 장수(연속, 간격 없음). Agent가 장마다 결과를 보낸다.</summary>
         public int ShotCount { get; set; } = 1;
+
+        /// <summary>
+        /// 캡처 반복 간격(초). 0이면 반복하지 않고 1회만 촬영한다.
+        /// <see cref="ShotCount"/>가 "한 번에 몇 장"이라면 이쪽은 "몇 초마다 다시 찍는가"다.
+        /// </summary>
+        public int CaptureIntervalSeconds { get; set; }
+
+        /// <summary>
+        /// 캡처 반복 전체 시간(초). 촬영 횟수는 <c>전체시간 / 간격</c>으로 정해진다
+        /// (예: 간격 60초, 전체 1800초 → 30회). 간격이 0이면 무시된다.
+        /// 각 회차는 스텝 시작 시각 기준 절대 시각에 맞춰 실행되므로 지연이 누적되지 않는다.
+        /// </summary>
+        public int CaptureDurationSeconds { get; set; }
 
         /// <summary>서보 유닛 직접 이동 X 좌표(direct-XY-move).</summary>
         public float PositionX { get; set; }

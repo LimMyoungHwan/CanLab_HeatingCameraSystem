@@ -35,6 +35,8 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private float _safetyHumidityMin;
         [ObservableProperty] private float _safetyHumidityMax;
         [ObservableProperty] private int _shotCount = 1;
+        [ObservableProperty] private int _captureIntervalSeconds;
+        [ObservableProperty] private int _captureDurationSeconds;
         [ObservableProperty] private float _positionX;
         [ObservableProperty] private float _positionY;
         [ObservableProperty] private double _targetChamberTemperature;
@@ -409,6 +411,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                     SafetyHumidityMin = s.SafetyHumidityMin,
                     SafetyHumidityMax = s.SafetyHumidityMax,
                     ShotCount = s.ShotCount,
+                    CaptureIntervalSeconds = s.CaptureIntervalSeconds,
+                    CaptureDurationSeconds = s.CaptureDurationSeconds,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
@@ -458,6 +462,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                     SafetyHumidityMin = s.SafetyHumidityMin,
                     SafetyHumidityMax = s.SafetyHumidityMax,
                     ShotCount = s.ShotCount > 0 ? s.ShotCount : 1,
+                    CaptureIntervalSeconds = s.CaptureIntervalSeconds,
+                    CaptureDurationSeconds = s.CaptureDurationSeconds,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
@@ -504,6 +510,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                     SafetyHumidityMin = s.SafetyHumidityMin,
                     SafetyHumidityMax = s.SafetyHumidityMax,
                     ShotCount = s.ShotCount > 0 ? s.ShotCount : 1,
+                    CaptureIntervalSeconds = s.CaptureIntervalSeconds,
+                    CaptureDurationSeconds = s.CaptureDurationSeconds,
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,

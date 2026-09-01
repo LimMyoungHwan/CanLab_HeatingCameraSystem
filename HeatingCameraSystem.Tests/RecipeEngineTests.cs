@@ -357,6 +357,67 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Theory]
+        [InlineData(0, 1800, 1)]
+        [InlineData(60, 1800, 30)]
+        [InlineData(60, 600, 10)]
+        // 전체 시간이 간격보다 짧아도 최소 1회는 찍는다.
+        [InlineData(60, 0, 1)]
+        [InlineData(60, 30, 1)]
+        public void CaptureRepeatCount_DerivesRoundsFromDurationOverInterval(int interval, int duration, int expected)
+        {
+            var step = new RecipeStep
+            {
+                Kind = RecipeStepKind.CameraCommand,
+                CaptureIntervalSeconds = interval,
+                CaptureDurationSeconds = duration
+            };
+
+            Assert.Equal(expected, RecipeEngine.CaptureRepeatCount(step));
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_CameraCapture_WithInterval_RepeatsOnSchedule()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
+            WireCaptureRoundTrip(mockNats);
+
+            // 간격 1초 × 전체 3초 = 3회. 실제로 기다리는 테스트라 초 단위로 짧게 잡는다.
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new()
+                    {
+                        Kind = RecipeStepKind.CameraCommand,
+                        CameraOperation = CameraControlOps.Capture,
+                        CameraIndex = 1,
+                        ShotCount = 1,
+                        CaptureIntervalSeconds = 1,
+                        CaptureDurationSeconds = 3
+                    }
+                }
+            };
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(15));
+            clock.Stop();
+
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Exactly(3));
+            mockHistory.Verify(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>()), Times.Exactly(3));
+            // 0초/1초/2초에 실행되므로 2초 이상 걸리고, 누적 지연이 없으니 넉넉잡아 5초를 넘지 않는다.
+            Assert.InRange(clock.Elapsed.TotalSeconds, 1.8, 5.0);
+        }
+
+        [Theory]
         // 목표 20℃, 안전범위 10~60. 현재 80℃는 상한 초과이므로 이탈.
         [InlineData(80.0f, 50.0f, true)]
         // 승온·냉각 과도구간(목표와 60℃ 차이나도 범위 안이면 정상) — 상대 오차 방식이었다면 오탐하던 값.
