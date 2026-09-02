@@ -33,7 +33,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly IReadOnlyDictionary<string, ThermalNucCorrector>? _nucs;
         private readonly Func<AgentConfigSnapshot>? _getConfigSnapshot;
         private readonly Action<AgentConfigSnapshot>? _applyConfigSnapshot;
-        private readonly Func<CameraDescriptor, string, Task<(bool Success, string Message)>>? _cameraControlHandler;
+        private readonly Func<CameraDescriptor, CameraControlMessage, Task<(bool Success, string Message)>>? _cameraControlHandler;
         private readonly Func<CameraDescriptor, bool>? _serialHealth;
         private readonly Func<CameraDescriptor, Task<double?>>? _readCameraTemperature;
 
@@ -53,7 +53,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             int captureBurstCount = 1,
             Func<AgentConfigSnapshot>? getConfigSnapshot = null,
             Action<AgentConfigSnapshot>? applyConfigSnapshot = null,
-            Func<CameraDescriptor, string, Task<(bool Success, string Message)>>? cameraControlHandler = null,
+            Func<CameraDescriptor, CameraControlMessage, Task<(bool Success, string Message)>>? cameraControlHandler = null,
             Func<CameraDescriptor, bool>? serialHealth = null,
             Func<CameraDescriptor, Task<double?>>? readCameraTemperature = null)
         {
@@ -290,7 +290,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             {
                 if (_cameraControlHandler is not null)
                 {
-                    (success, message) = await _cameraControlHandler(cam, msg.Op).ConfigureAwait(false);
+                    (success, message) = await _cameraControlHandler(cam, msg).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)

@@ -126,16 +126,18 @@ namespace HeatingCameraSystem.Tests
                 var descriptor = new CameraDescriptor("cam0", 0, "Camera 0");
                 CameraDescriptor? handledCamera = null;
                 string? handledOp = null;
+                double handledBiasTarget = 0;
 
                 await using (var connector = new CameraNatsConnector(
                     natsMock.Object,
                     manager,
                     store,
                     new[] { descriptor },
-                    cameraControlHandler: (camera, op) =>
+                    cameraControlHandler: (camera, message) =>
                     {
                         handledCamera = camera;
-                        handledOp = op;
+                        handledOp = message.Op;
+                        handledBiasTarget = message.BiasTargetLevel;
                         return Task.FromResult((Success: true, Message: "ok"));
                     }))
                 {
@@ -145,12 +147,14 @@ namespace HeatingCameraSystem.Tests
                         CameraIndex = descriptor.OpenCvIndex,
                         Op = CameraControlOps.Run,
                         RequestId = "request-1",
+                        BiasTargetLevel = 8200,
                         Timestamp = DateTime.UtcNow
                     });
                 }
 
                 Assert.Same(descriptor, handledCamera);
                 Assert.Equal(CameraControlOps.Run, handledOp);
+                Assert.Equal(8200, handledBiasTarget);
                 Assert.NotNull(published);
                 Assert.Equal(descriptor.AgentId, published!.AgentId);
                 Assert.Equal(CameraControlOps.Run, published.Op);

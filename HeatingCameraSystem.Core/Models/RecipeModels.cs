@@ -38,9 +38,14 @@ namespace HeatingCameraSystem.Core.Models
     {
         LegacyCapture,
         MotorMove,
+
+        /// <summary>챔버 온도 전용 스텝. 습도는 <see cref="HumidityControl"/>에서 따로 제어한다.</summary>
         ChamberControl,
         CameraCommand,
-        BlackBodyControl
+        BlackBodyControl,
+
+        /// <summary>챔버 습도 전용 스텝.</summary>
+        HumidityControl
     }
 
     public enum MotorMoveType
@@ -106,6 +111,12 @@ namespace HeatingCameraSystem.Core.Models
         /// </summary>
         public int CaptureDurationSeconds { get; set; }
 
+        /// <summary>
+        /// BIAS 자동 탐색이 맞출 목표 레벨. 0이면 Agent의 모드별 기본 목표를 쓴다.
+        /// Cint 등 레지스터 값은 카메라 특성이라 이 값으로 바뀌지 않는다.
+        /// </summary>
+        public double BiasTargetLevel { get; set; }
+
         /// <summary>서보 유닛 직접 이동 X 좌표(direct-XY-move).</summary>
         public float PositionX { get; set; }
 
@@ -118,8 +129,17 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>스텝별 챔버 목표 습도(%RH).</summary>
         public double TargetChamberHumidity { get; set; }
 
-        /// <summary>true면 챔버가 목표 온도에 도달할 때까지 대기하고, false면 설정만 하고 다음 스텝으로 넘어간다.</summary>
+        /// <summary>true면 챔버가 목표값에 도달할 때까지 대기하고, false면 설정만 하고 다음 스텝으로 넘어간다.</summary>
         public bool WaitForChamberStabilization { get; set; } = true;
+
+        /// <summary>온도 도달 판정 폭(±℃). 0 이하면 전역 설정 TemperatureTolerance를 쓴다.</summary>
+        public double StabilizationToleranceC { get; set; }
+
+        /// <summary>습도 도달 판정 폭(±%RH). 0 이하면 기본값 5%RH를 쓴다.</summary>
+        public double StabilizationToleranceRh { get; set; }
+
+        /// <summary>목표 도달 후 다음 스텝으로 넘어가기 전 유지할 시간(분). 0이면 도달 즉시 진행한다.</summary>
+        public int SoakMinutes { get; set; }
 
         /// <summary>
         /// true면 이 스텝 이후 챔버 온도가 <see cref="SafetyTempMin"/>~<see cref="SafetyTempMax"/> 범위를

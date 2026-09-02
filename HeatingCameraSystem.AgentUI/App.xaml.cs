@@ -152,8 +152,9 @@ namespace HeatingCameraSystem.AgentUI
                     config.Cameras = snap.Cameras ?? new List<CameraDescriptor>();
                     config.Save();
                 },
-                cameraControlHandler: async (descriptor, op) =>
+                cameraControlHandler: async (descriptor, controlMessage) =>
                 {
+                    string op = controlMessage.Op;
                     try
                     {
                         // [S7] Manager발 카메라별 런타임 load/unload: 다른 카메라나 프로세스는
@@ -201,7 +202,12 @@ namespace HeatingCameraSystem.AgentUI
                             return (false, $"unknown camera control op: {op}");
                         }
 
-                        await dispatcher.InvokeAsync(() => command.ExecuteAsync(null)).Task.Unwrap();
+                        // BIAS 명령만 목표 레벨을 인수로 받는다. 0이면 패널의 모드별 기본 목표를 쓴다.
+                        object? parameter = controlMessage.BiasTargetLevel > 0
+                            ? controlMessage.BiasTargetLevel
+                            : null;
+
+                        await dispatcher.InvokeAsync(() => command.ExecuteAsync(parameter)).Task.Unwrap();
                         return (true, "ok");
                     }
                     catch (Exception ex)

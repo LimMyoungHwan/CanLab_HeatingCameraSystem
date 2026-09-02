@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Config;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Master.Localization;
 
 namespace HeatingCameraSystem.Master.Services
 {
@@ -16,6 +17,13 @@ namespace HeatingCameraSystem.Master.Services
     /// </summary>
     public class RecipeEngine
     {
+        private const float DefaultHumidityTolerance = 5f;
+
+        private static string L(string key, params object?[] args)
+            => string.Format(LocalizationManager.Instance[key], args);
+
+        private static string RecipeSource => LocalizationManager.Instance["Alarm_Src_Recipe"];
+
         private readonly IPlcController _plcController;
         private readonly INatsCommunicationService _natsService;
         private readonly ICaptureHistoryRepository _historyRepo;
@@ -250,17 +258,20 @@ namespace HeatingCameraSystem.Master.Services
                     batch.Add(result);
             });
 
+            int currentStep = 0;
+
             try
             {
                 for (int i = 0; i < totalSteps; i++)
                 {
                     RecipeStep step = recipe.Steps[i];
+                    currentStep = i;
                     cancellationToken.ThrowIfCancellationRequested();
 
                     switch (step.Kind)
                     {
                         case RecipeStepKind.MotorMove:
-                            progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"서보 이동 ({i + 1}/{totalSteps})" });
+                            progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = L("Recipe_Phase_ServoMove", i + 1, totalSteps) });
                             if (step.MotorMoveType == MotorMoveType.Automatic)
                                 await _plcController.MoveServoToPositionAsync(step.TargetPositionIndex);
                             else
@@ -274,16 +285,34 @@ namespace HeatingCameraSystem.Master.Services
                             break;
 
                         case RecipeStepKind.ChamberControl:
-                            progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = $"온습도 설정 ({i + 1}/{totalSteps})" });
+                            progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = L("Recipe_Phase_TempSet", i + 1, totalSteps) });
+                            if (!chamberStarted)
+                            {
+                                await StartChamberForRecipeAsync();
+                                chamberStarted = true;
+                            }
+                            await ApplyChamberTemperatureAsync((float)step.TargetChamberTemperature, recipe.TemperatureRampMinutes, i, totalSteps, progress, cancellationToken);
+                            if (step.WaitForChamberStabilization)
+                            {
+                                await WaitForTemperatureAsync((float)step.TargetChamberTemperature, ToleranceC(step), cancellationToken);
+                                await SoakAsync(step, i, totalSteps, progress, cancellationToken);
+                            }
+                            safetyReference = step;
+                            break;
+
+                        case RecipeStepKind.HumidityControl:
+                            progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = L("Recipe_Phase_HumiditySet", i + 1, totalSteps) });
                             if (!chamberStarted)
                             {
                                 await StartChamberForRecipeAsync();
                                 chamberStarted = true;
                             }
                             await _plcController.SetTargetHumidityAsync((float)step.TargetChamberHumidity);
-                            await ApplyChamberTemperatureAsync((float)step.TargetChamberTemperature, recipe.TemperatureRampMinutes, i, totalSteps, progress, cancellationToken);
                             if (step.WaitForChamberStabilization)
-                                await WaitForTemperatureAsync((float)step.TargetChamberTemperature, cancellationToken);
+                            {
+                                await WaitForHumidityAsync((float)step.TargetChamberHumidity, ToleranceRh(step), cancellationToken);
+                                await SoakAsync(step, i, totalSteps, progress, cancellationToken);
+                            }
                             safetyReference = step;
                             break;
 
@@ -296,25 +325,38 @@ namespace HeatingCameraSystem.Master.Services
                             break;
 
                         default:
-                            AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"지원하지 않는 스텝 종류: {step.Kind}");
+                            AlarmSink.Raise(AlarmCodes.StepKindUnsupported, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_StepKindUnsupported", step.Kind));
                             break;
                     }
 
                     await EnforceSafetyBandAsync(safetyReference, i, totalSteps, progress, waitForResumeAsync, cancellationToken);
                 }
             }
+            catch (OperationCanceledException)
+            {
+                bool emergency = IsEmergencyStopRequested;
+                AlarmSink.Raise(
+                    emergency ? AlarmCodes.EmergencyStopped : AlarmCodes.UserStopped,
+                    emergency ? AlarmSeverity.Error : AlarmSeverity.Info,
+                    RecipeSource,
+                    L("Alarm_Msg_Stopped", recipe.Name, currentStep + 1, totalSteps));
+                throw;
+            }
+            catch (Exception ex)
+            {
+                AlarmSink.Raise(AlarmCodes.PlcCommFailed, AlarmSeverity.Error, RecipeSource,
+                    L("Alarm_Msg_StepFailed", recipe.Name, currentStep + 1, totalSteps, ex.Message));
+                throw;
+            }
             finally
             {
                 // 정상 완료든 취소·비상정지든 챔버는 반드시 세운다. PLC 알람으로 중단될 때
                 // 챔버만 계속 도는 상황을 막는 유일한 지점이다.
                 if (chamberStarted)
-                {
-                    try { await _plcController.StopChamberAsync(); }
-                    catch (Exception ex) { AlarmSink.Raise(AlarmSeverity.Error, "레시피", $"챔버 정지 실패: {ex.Message}"); }
-                }
+                    await StopChamberWithRetryAsync();
             }
 
-            progress?.Report(new RecipeProgress { CurrentStep = totalSteps, TotalSteps = totalSteps, CurrentPhase = "완료" });
+            progress?.Report(new RecipeProgress { CurrentStep = totalSteps, TotalSteps = totalSteps, CurrentPhase = LocalizationManager.Instance["Recipe_Phase_Done"] });
         }
 
         private async Task ExecuteBlackBodyStepAsync(
@@ -324,7 +366,7 @@ namespace HeatingCameraSystem.Master.Services
             CancellationToken cancellationToken,
             IProgress<RecipeProgress>? progress)
         {
-            progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = $"BB 0, 1 온도 설정 ({index + 1}/{totalSteps})" });
+            progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = L("Recipe_Phase_BlackBodySet", index + 1, totalSteps) });
             try
             {
                 float target1 = step.TargetBlackBodyTemperature1 == 0
@@ -336,14 +378,14 @@ namespace HeatingCameraSystem.Master.Services
             }
             catch (Exception ex)
             {
-                AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 블랙바디 {step.BlackBodyIndex} 온도 설정 실패: {ex.Message}");
+                AlarmSink.Raise(AlarmCodes.BlackBodyFailed, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_BlackBodySetFailed", step.StepId, step.BlackBodyIndex, ex.Message));
                 return;
             }
 
             if (!step.WaitForStabilization)
                 return;
 
-            progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = $"BB 0, 1 안정화 대기 ({index + 1}/{totalSteps})" });
+            progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = L("Recipe_Phase_BlackBodyWait", index + 1, totalSteps) });
             while (!cancellationToken.IsCancellationRequested)
             {
                 try
@@ -354,17 +396,19 @@ namespace HeatingCameraSystem.Master.Services
                     float target1 = step.TargetBlackBodyTemperature1 == 0
                         ? step.TargetBlackBodyTemperature
                         : step.TargetBlackBodyTemperature1;
-                    if (Math.Abs(current[0] - step.TargetBlackBodyTemperature) <= _tempTolerance &&
-                        Math.Abs(current[1] - target1) <= _tempTolerance)
+                    if (Math.Abs(current[0] - step.TargetBlackBodyTemperature) <= ToleranceC(step) &&
+                        Math.Abs(current[1] - target1) <= ToleranceC(step))
                         break;
                 }
                 catch (Exception ex)
                 {
-                    AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 블랙바디 {step.BlackBodyIndex} 온도 읽기 실패: {ex.Message}");
+                    AlarmSink.Raise(AlarmCodes.BlackBodyFailed, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_BlackBodyReadFailed", step.StepId, step.BlackBodyIndex, ex.Message));
                     break;
                 }
                 await Task.Delay(1000, cancellationToken);
             }
+
+            await SoakAsync(step, index, totalSteps, progress, cancellationToken);
         }
 
         /// <summary>
@@ -397,13 +441,72 @@ namespace HeatingCameraSystem.Master.Services
             await ramp.RampAsync(start, target, rampMinutes, rampProgress, cancellationToken);
         }
 
-        private async Task WaitForTemperatureAsync(float target, CancellationToken cancellationToken)
+        private async Task WaitForTemperatureAsync(float target, float tolerance, CancellationToken cancellationToken)
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                if (Math.Abs(await _plcController.GetCurrentTemperatureAsync() - target) <= _tempTolerance)
+                if (Math.Abs(await _plcController.GetCurrentTemperatureAsync() - target) <= tolerance)
                     return;
                 await Task.Delay(1000, cancellationToken);
+            }
+        }
+
+        private async Task WaitForHumidityAsync(float target, float tolerance, CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                if (Math.Abs(await _plcController.GetCurrentHumidityAsync() - target) <= tolerance)
+                    return;
+                await Task.Delay(1000, cancellationToken);
+            }
+        }
+
+        /// <summary>
+        /// 목표 도달 후 유지 시간. 도달 판정은 오차 범위에 처음 들어온 순간이라 시료 내부는 아직
+        /// 따라오지 못했을 수 있어, 이 시간만큼 더 버틴 뒤 다음 스텝으로 넘어간다.
+        /// 유지 중 범위를 다시 벗어나도 타이머를 되돌리지 않는다(이탈은 안전밴드가 잡는다).
+        /// </summary>
+        internal static TimeSpan SoakDuration(RecipeStep step)
+            => step.SoakMinutes > 0 ? TimeSpan.FromMinutes(step.SoakMinutes) : TimeSpan.Zero;
+
+        private float ToleranceC(RecipeStep step)
+            => step.StabilizationToleranceC > 0 ? (float)step.StabilizationToleranceC : _tempTolerance;
+
+        private static float ToleranceRh(RecipeStep step)
+            => step.StabilizationToleranceRh > 0 ? (float)step.StabilizationToleranceRh : DefaultHumidityTolerance;
+
+        private async Task SoakAsync(RecipeStep step, int index, int totalSteps, IProgress<RecipeProgress>? progress, CancellationToken cancellationToken)
+        {
+            TimeSpan soak = SoakDuration(step);
+            if (soak <= TimeSpan.Zero) return;
+
+            progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = L("Recipe_Phase_Soak", step.SoakMinutes, index + 1, totalSteps) });
+            await Task.Delay(soak, cancellationToken);
+        }
+
+        /// <summary>
+        /// 챔버 정지를 최대 두 번 시도한다. 첫 실패가 PLC 순간 단절이면 짧은 재시도로 살아나는 경우가 있고,
+        /// 여기서 끝내 실패하면 히터가 켜진 채 남으므로 <see cref="AlarmCodes.ChamberStopFailed"/>로
+        /// 운영자에게 수동 정지를 요구한다.
+        /// </summary>
+        private async Task StopChamberWithRetryAsync()
+        {
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                try
+                {
+                    await _plcController.StopChamberAsync();
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    if (attempt == 1)
+                    {
+                        AlarmSink.Raise(AlarmCodes.ChamberStopFailed, AlarmSeverity.Error, RecipeSource, L("Alarm_Msg_ChamberStopFailed", ex.Message));
+                        return;
+                    }
+                    await Task.Delay(2000);
+                }
             }
         }
 
@@ -418,7 +521,7 @@ namespace HeatingCameraSystem.Master.Services
             CancellationToken cancellationToken,
             IProgress<RecipeProgress>? progress)
         {
-            progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = $"카메라 {step.CameraOperation} ({index + 1}/{totalSteps})" });
+            progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = L("Recipe_Phase_CameraOp", step.CameraOperation, index + 1, totalSteps) });
             var targets = step.CameraTargets.Count > 0
                 ? step.CameraTargets
                 : new List<RecipeCameraTarget> { new() { CameraIndex = step.CameraIndex } };
@@ -447,18 +550,29 @@ namespace HeatingCameraSystem.Master.Services
 
                 var controlWaiter = new TaskCompletionSource<CameraControlAckMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
                 controlWaiters[requestId] = controlWaiter;
-                await _natsService.PublishCameraControlAsync(new CameraControlMessage
+                try
                 {
-                    AgentId = agentId,
-                    CameraIndex = target.CameraIndex,
-                    Op = step.CameraOperation,
-                    RequestId = requestId,
-                    Timestamp = DateTime.UtcNow
-                });
+                    await _natsService.PublishCameraControlAsync(new CameraControlMessage
+                    {
+                        AgentId = agentId,
+                        CameraIndex = target.CameraIndex,
+                        Op = step.CameraOperation,
+                        RequestId = requestId,
+                        BiasTargetLevel = step.BiasTargetLevel,
+                        Timestamp = DateTime.UtcNow
+                    });
+                }
+                catch (Exception ex)
+                {
+                    // 카메라 통신 실패로 챔버 시퀀스까지 죽이지 않는다. 이 카메라만 건너뛴다.
+                    AlarmSink.Raise(AlarmCodes.NatsPublishFailed, AlarmSeverity.Error, RecipeSource, L("Alarm_Msg_ControlPublishFailed", step.StepId, target.CameraIndex, ex.Message));
+                    controlWaiters.TryRemove(requestId, out _);
+                    continue;
+                }
 
                 Task controlCompleted = await Task.WhenAny(controlWaiter.Task, Task.Delay(_captureTimeout, cancellationToken));
                 if (controlCompleted != controlWaiter.Task || !controlWaiter.Task.Result.IsSuccess)
-                    AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 카메라 {target.CameraIndex} 명령 실패 또는 타임아웃");
+                    AlarmSink.Raise(AlarmCodes.AgentTimeout, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_ControlTimeout", step.StepId, target.CameraIndex));
                 controlWaiters.TryRemove(requestId, out _);
             }
         }
@@ -503,12 +617,12 @@ namespace HeatingCameraSystem.Master.Services
                     if (wait > TimeSpan.Zero)
                         await Task.Delay(wait, cancellationToken);
                     else if (-wait >= TimeSpan.FromSeconds(step.CaptureIntervalSeconds))
-                        AlarmSink.Raise(AlarmSeverity.Warning, "레시피",
-                            $"스텝 {step.StepId} 캡처 {round + 1}/{repeats} 회차가 {-wait.TotalSeconds:F0}초 지연됨(간격 {step.CaptureIntervalSeconds}초).");
+                        AlarmSink.Raise(AlarmCodes.CaptureScheduleSlip, AlarmSeverity.Warning, RecipeSource,
+                            L("Alarm_Msg_CaptureSlip", step.StepId, round + 1, repeats, -wait.TotalSeconds, step.CaptureIntervalSeconds));
                 }
 
                 if (repeats > 1)
-                    progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = $"캡처 {round + 1}/{repeats} ({index + 1}/{totalSteps})" });
+                    progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = L("Recipe_Phase_CaptureRound", round + 1, repeats, index + 1, totalSteps) });
 
                 foreach (var target in targets)
                     await CaptureOnceAsync(step, runId, round, target, captureWaiters, cancellationToken);
@@ -536,14 +650,23 @@ namespace HeatingCameraSystem.Master.Services
 
             try
             {
-                await _natsService.PublishCaptureCommandAsync(new CaptureCommandMessage
+                try
                 {
-                    TargetAgentId = agentId,
-                    RecipeStepId = requestId,
-                    Source = CaptureSource.Recipe,
-                    ShotCount = shots,
-                    Timestamp = DateTime.UtcNow
-                });
+                    await _natsService.PublishCaptureCommandAsync(new CaptureCommandMessage
+                    {
+                        TargetAgentId = agentId,
+                        RecipeStepId = requestId,
+                        Source = CaptureSource.Recipe,
+                        ShotCount = shots,
+                        Timestamp = DateTime.UtcNow
+                    });
+                }
+                catch (Exception ex)
+                {
+                    // 카메라 통신 실패로 챔버 시퀀스까지 죽이지 않는다. 이 회차만 건너뛴다.
+                    AlarmSink.Raise(AlarmCodes.NatsPublishFailed, AlarmSeverity.Error, RecipeSource, L("Alarm_Msg_CapturePublishFailed", step.StepId, target.CameraIndex, ex.Message));
+                    return;
+                }
 
                 // 장수만큼 결과가 오므로 대기 한도도 장수에 비례해 늘린다.
                 TimeSpan batchTimeout = TimeSpan.FromTicks(_captureTimeout.Ticks * shots);
@@ -558,7 +681,7 @@ namespace HeatingCameraSystem.Master.Services
 
                 int stored = results.Count(r => r.IsSuccess);
                 if (stored < shots)
-                    AlarmSink.Raise(AlarmSeverity.Warning, "레시피", $"스텝 {step.StepId} 카메라 {target.CameraIndex} 캡처 {stored}/{shots}장만 성공(실패 또는 타임아웃)");
+                    AlarmSink.Raise(AlarmCodes.PartialCapture, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_PartialCapture", step.StepId, target.CameraIndex, stored, shots));
             }
             finally
             {
@@ -632,14 +755,26 @@ namespace HeatingCameraSystem.Master.Services
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                float temp = await _plcController.GetCurrentTemperatureAsync();
-                float humidity = await _plcController.GetCurrentHumidityAsync();
+                float temp;
+                float humidity;
+                try
+                {
+                    temp = await _plcController.GetCurrentTemperatureAsync();
+                    humidity = await _plcController.GetCurrentHumidityAsync();
+                }
+                catch (Exception ex)
+                {
+                    // 안전 검사 자체가 불가능해진 상태다. 건너뛰고 진행하면 이탈을 못 잡으므로
+                    // 알람만 남기고 예외를 그대로 올려 레시피를 세운다(finally가 챔버를 정지시킨다).
+                    AlarmSink.Raise(AlarmCodes.SafetyCheckFailed, AlarmSeverity.Error, RecipeSource, L("Alarm_Msg_SafetyCheckFailed", ex.Message));
+                    throw;
+                }
 
                 string? violation = DescribeSafetyViolation(reference, temp, humidity);
                 if (violation is null) return;
 
-                AlarmSink.Raise(AlarmSeverity.Error, "레시피", $"{violation} 사용자 확인 대기.");
-                progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = "안전조건 이탈 — 사용자 확인 대기" });
+                AlarmSink.Raise(AlarmCodes.SafetyBandViolation, AlarmSeverity.Error, RecipeSource, L("Alarm_Msg_SafetyHold", violation));
+                progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = LocalizationManager.Instance["Recipe_Phase_SafetyHold"] });
 
                 if (waitForResumeAsync is null) return;
                 await waitForResumeAsync(cancellationToken);
@@ -652,17 +787,17 @@ namespace HeatingCameraSystem.Master.Services
             if (reference.UseSafetyTemperature)
             {
                 if (temperature < reference.SafetyTempMin)
-                    return $"안전 하한 미만: 온도 {temperature:F1}℃ < {reference.SafetyTempMin:F1}℃.";
+                    return L("Safety_BelowMinTemp", temperature, reference.SafetyTempMin);
                 if (temperature > reference.SafetyTempMax)
-                    return $"안전 상한 초과: 온도 {temperature:F1}℃ > {reference.SafetyTempMax:F1}℃.";
+                    return L("Safety_AboveMaxTemp", temperature, reference.SafetyTempMax);
             }
 
             if (reference.UseSafetyHumidity)
             {
                 if (humidity < reference.SafetyHumidityMin)
-                    return $"안전 하한 미만: 습도 {humidity:F1}%RH < {reference.SafetyHumidityMin:F1}%RH.";
+                    return L("Safety_BelowMinHumidity", humidity, reference.SafetyHumidityMin);
                 if (humidity > reference.SafetyHumidityMax)
-                    return $"안전 상한 초과: 습도 {humidity:F1}%RH > {reference.SafetyHumidityMax:F1}%RH.";
+                    return L("Safety_AboveMaxHumidity", humidity, reference.SafetyHumidityMax);
             }
 
             return null;

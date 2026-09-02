@@ -263,7 +263,153 @@ Nav_AlarmsFilterInfo=정보
 Nav_AlarmsFilterWarning=경고
 Nav_AlarmsFilterError=오류
 Nav_AlarmsDeleteTooltip=알람 삭제
-Nav_AlarmsEmpty=알람 없음
+Nav_AlarmsEmpty=알람 없음
+
+Nav_AlarmWindow=알람
+
+# Alarm window
+
+Alarm_WindowTitle=알람
+
+Alarm_ColTime=시각
+
+Alarm_ColCode=코드
+
+Alarm_ColSource=출처
+
+Alarm_ColMessage=메시지
+
+Alarm_DetailTitle=상세
+
+Alarm_Cause=원인
+
+Alarm_Action=해결책
+
+Alarm_NoSelection=목록에서 알람을 선택하세요.
+
+Alarm_NoDetail=이 알람에는 등록된 원인·해결책 문구가 없습니다.
+
+Alarm_BtnBuzzerOff=부저 정지
+
+Alarm_BtnResetError=PLC 알람 해제
+
+Alarm_BtnClear=목록 비우기
+
+Alarm_BtnDelete=선택 삭제
+
+Alarm_ClearHint=목록만 비웁니다. 이력은 이력 화면에 그대로 남습니다.
+
+# Alarm cause / action per code
+
+Alarm_PLC_001_Cause=레시피 실행 중 PLC와 통신이 끊겼습니다. 해당 스텝은 중단되었고 챔버 정지를 시도했습니다.
+
+Alarm_PLC_001_Action=PLC 전원과 랜선을 확인하세요. 30초 주기로 자동 재연결을 시도합니다. 재연결 후 레시피를 다시 시작해야 합니다.
+
+Alarm_PLC_002_Cause=안전 범위를 확인할 온도·습도를 PLC에서 읽지 못했습니다. 검사를 계속할 수 없어 레시피를 중단했습니다.
+
+Alarm_PLC_002_Action=챔버 상태를 직접 확인하세요. 온도가 아직 높을 수 있습니다. PLC 통신 복구 후 재시작하세요.
+
+Alarm_PLC_003_Cause=챔버 정지 명령이 두 번 모두 실패했습니다. 히터가 계속 동작하고 있을 수 있습니다.
+
+Alarm_PLC_003_Action=즉시 PLC 조작반에서 챔버를 수동으로 정지시키세요. 통신 복구를 기다리지 마세요.
+
+Alarm_NATS_001_Cause=카메라 Agent로 명령을 보내지 못했습니다(NATS 연결 끊김). 해당 카메라만 건너뛰고 챔버 시퀀스는 계속 진행했습니다.
+
+Alarm_NATS_001_Action=NATS 브로커 서버와 카메라 PC 네트워크를 확인하세요. 이 구간의 촬영 데이터는 누락되었습니다.
+
+Alarm_CAM_001_Cause=카메라 Agent가 제한 시간 안에 응답하지 않았습니다.
+
+Alarm_CAM_001_Action=해당 카메라 PC의 전원과 Agent 실행 여부를 확인하세요.
+
+Alarm_CAM_002_Cause=요청한 장수 중 일부만 저장되었습니다. 나머지는 실패했거나 시간 안에 도착하지 않았습니다.
+
+Alarm_CAM_002_Action=해당 카메라 상태와 저장 경로 여유 공간을 확인하세요. 이 스텝의 데이터는 일부만 남았습니다.
+
+Alarm_CAM_003_Cause=반복 촬영 회차가 지정한 간격을 넘겨 지연되었습니다. 몰아 찍지 않고 해당 회차를 건너뛰었습니다.
+
+Alarm_CAM_003_Action=간격을 늘리거나 촬영 장수를 줄이세요. 카메라 응답이 느려진 원인도 함께 확인하세요.
+
+Alarm_BB_001_Cause=블랙바디 온도 설정 또는 읽기에 실패했습니다. 목표에 도달하지 않은 상태로 다음 스텝이 진행되었습니다.
+
+Alarm_BB_001_Action=블랙바디 전원과 통신선을 확인하세요. 이 구간 촬영은 기준 온도가 맞지 않을 수 있습니다.
+
+Alarm_RCP_001_Cause=운영자가 레시피를 중지했습니다.
+
+Alarm_RCP_001_Action=조치가 필요 없습니다. 중단 지점은 메시지에 기록되어 있습니다.
+
+Alarm_RCP_002_Cause=비상정지가 걸려 레시피가 중단되었습니다.
+
+Alarm_RCP_002_Action=비상정지 원인을 제거한 뒤 해제하고, 챔버 상태를 확인한 다음 레시피를 다시 시작하세요.
+
+Alarm_RCP_003_Cause=챔버 온습도가 스텝에 지정한 안전 범위를 벗어났습니다. 운영자 확인 전까지 레시피가 대기합니다.
+
+Alarm_RCP_003_Action=챔버 상태를 확인하고 계속할지 판단하세요. 안전 범위 설정 자체가 잘못되지 않았는지도 확인하세요.
+
+Alarm_RCP_004_Cause=레시피에 이 버전이 모르는 스텝 종류가 들어 있어 건너뛰었습니다.
+
+Alarm_RCP_004_Action=레시피를 저장한 Master 버전과 실행 중인 버전이 같은지 확인하세요.
+
+# Alarm source / message text
+
+Alarm_Src_Recipe=레시피
+
+Alarm_Msg_StepKindUnsupported=지원하지 않는 스텝 종류: {0}
+
+Alarm_Msg_Stopped='{0}' 스텝 {1}/{2}에서 중단됨
+
+Alarm_Msg_StepFailed='{0}' 스텝 {1}/{2} 실행 실패: {3}
+
+Alarm_Msg_ChamberStopFailed=챔버 정지 실패: {0}
+
+Alarm_Msg_BlackBodySetFailed=스텝 {0} 블랙바디 {1} 온도 설정 실패: {2}
+
+Alarm_Msg_BlackBodyReadFailed=스텝 {0} 블랙바디 {1} 온도 읽기 실패: {2}
+
+Alarm_Msg_ControlPublishFailed=스텝 {0} 카메라 {1} 명령 전송 실패: {2}
+
+Alarm_Msg_ControlTimeout=스텝 {0} 카메라 {1} 명령 실패 또는 타임아웃
+
+Alarm_Msg_CaptureSlip=스텝 {0} 캡처 {1}/{2} 회차가 {3:F0}초 지연됨(간격 {4}초).
+
+Alarm_Msg_CapturePublishFailed=스텝 {0} 카메라 {1} 캡처 명령 전송 실패: {2}
+
+Alarm_Msg_PartialCapture=스텝 {0} 카메라 {1} 캡처 {2}/{3}장만 성공(실패 또는 타임아웃)
+
+Alarm_Msg_SafetyCheckFailed=안전 범위 확인 실패: {0}
+
+Alarm_Msg_SafetyHold={0} 사용자 확인 대기.
+
+Safety_BelowMinTemp=안전 하한 미만: 온도 {0:F1}℃ < {1:F1}℃.
+
+Safety_AboveMaxTemp=안전 상한 초과: 온도 {0:F1}℃ > {1:F1}℃.
+
+Safety_BelowMinHumidity=안전 하한 미만: 습도 {0:F1}%RH < {1:F1}%RH.
+
+Safety_AboveMaxHumidity=안전 상한 초과: 습도 {0:F1}%RH > {1:F1}%RH.
+
+# Recipe progress phases
+
+Recipe_Phase_ServoMove=서보 이동 ({0}/{1})
+
+Recipe_Phase_TempSet=온도 설정 ({0}/{1})
+
+Recipe_Phase_HumiditySet=습도 설정 ({0}/{1})
+
+Recipe_Phase_BlackBodySet=BB 0, 1 온도 설정 ({0}/{1})
+
+Recipe_Phase_BlackBodyWait=BB 0, 1 안정화 대기 ({0}/{1})
+
+Recipe_Phase_Soak=도달 후 유지 {0}분 ({1}/{2})
+
+Recipe_Phase_CameraOp=카메라 {0} ({1}/{2})
+
+Recipe_Phase_CaptureRound=캡처 {0}/{1} ({2}/{3})
+
+Recipe_Phase_SafetyHold=안전조건 이탈 — 사용자 확인 대기
+
+Recipe_Phase_TempRamp=온도 램프 {0:F1}℃ / {1:F1}℃
+
+Recipe_Phase_Done=완료
 
 # Status view (hero + card labels)
 Status_HeroChamberTemp=챔버 온도

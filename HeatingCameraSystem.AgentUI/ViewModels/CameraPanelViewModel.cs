@@ -254,17 +254,27 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             }
         }
 
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task RunBiasLowAsync() => RunAutoBiasAsync("LOW", 8400, 8500, 8600, 0x93);
+        private const double BiasTargetTolerance = 100;
 
         [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task RunBiasMidAsync() => RunAutoBiasAsync("MID", 4900, 5000, 5100, 0xA3);
+        private Task RunBiasLowAsync(double? targetOverride) => RunAutoBiasAsync("LOW", targetOverride ?? 8500, 0x93);
 
         [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task RunBiasHighAsync() => RunAutoBiasAsync("HIGH", 4900, 5000, 5100, 0xD3);
+        private Task RunBiasMidAsync(double? targetOverride) => RunAutoBiasAsync("MID", targetOverride ?? 5000, 0xA3);
 
-        private async Task RunAutoBiasAsync(string mode, double targetMin, double target, double targetMax, byte cint)
+        [RelayCommand(CanExecute = nameof(HasSerialControl))]
+        private Task RunBiasHighAsync(double? targetOverride) => RunAutoBiasAsync("HIGH", targetOverride ?? 5000, 0xD3);
+
+        /// <summary>
+        /// 목표 레벨 ±<see cref="BiasTargetTolerance"/> 안에 드는 바이어스 값을 탐색해 적용한다.
+        /// 레시피 스텝이 목표를 지정하면 그 값이, 없으면 모드별 기본값이 들어온다.
+        /// Cint는 카메라 특성이라 목표와 무관하게 모드별로 고정한다.
+        /// </summary>
+        private async Task RunAutoBiasAsync(string mode, double target, byte cint)
         {
+            double targetMin = target - BiasTargetTolerance;
+            double targetMax = target + BiasTargetTolerance;
+
             if (_serial is null) return;
 
             await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintMsb, 0x02);

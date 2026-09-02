@@ -32,7 +32,11 @@ public class RecipeCopyTests
                 PositionX = i * 100,
                 PositionY = i * 200,
                 TargetChamberTemperature = 30 + i,
-                TargetChamberHumidity = 40 + i
+                TargetChamberHumidity = 40 + i,
+                StabilizationToleranceC = 0.5 * i,
+                StabilizationToleranceRh = 1.5 * i,
+                SoakMinutes = i * 3,
+                BiasTargetLevel = 8000 + i
             }).ToList()
         };
 
@@ -62,6 +66,10 @@ public class RecipeCopyTests
             Assert.Equal(pair.First.PositionY, pair.Second.PositionY);
             Assert.Equal(pair.First.TargetChamberTemperature, pair.Second.TargetChamberTemperature);
             Assert.Equal(pair.First.TargetChamberHumidity, pair.Second.TargetChamberHumidity);
+            Assert.Equal(pair.First.StabilizationToleranceC, pair.Second.StabilizationToleranceC);
+            Assert.Equal(pair.First.StabilizationToleranceRh, pair.Second.StabilizationToleranceRh);
+            Assert.Equal(pair.First.SoakMinutes, pair.Second.SoakMinutes);
+            Assert.Equal(pair.First.BiasTargetLevel, pair.Second.BiasTargetLevel);
         });
 
         clone.Steps[0].CameraIndex = 64;

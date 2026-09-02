@@ -92,7 +92,7 @@ public class MainViewModelTests
     public void AlarmFilter_UpdatesVisibleAlarms()
     {
         AlarmSink.Entries.Clear();
-        var vm = new MainViewModel();
+        using var vm = new AlarmWindowViewModel();
 
         AlarmSink.Raise(AlarmSeverity.Info, "Test", "info");
         AlarmSink.Raise(AlarmSeverity.Error, "Test", "error");
@@ -105,17 +105,43 @@ public class MainViewModelTests
     }
 
     [Fact]
-    public void DeleteAlarmCommand_RemovesEntry()
+    public void DeleteSelectedCommand_RemovesEntry()
     {
         AlarmSink.Entries.Clear();
-        var vm = new MainViewModel();
+        using var vm = new AlarmWindowViewModel();
         AlarmSink.Raise(AlarmSeverity.Warning, "Test", "warning");
-        var alarm = Assert.Single(AlarmSink.Entries);
+        vm.SelectedAlarm = Assert.Single(AlarmSink.Entries);
 
-        vm.DeleteAlarmCommand.Execute(alarm);
+        vm.DeleteSelectedCommand.Execute(null);
 
         Assert.Empty(AlarmSink.Entries);
         Assert.Empty(vm.FilteredAlarms);
+    }
+
+    [Fact]
+    public void ClearAlarmsCommand_EmptiesListOnly()
+    {
+        AlarmSink.Entries.Clear();
+        using var vm = new AlarmWindowViewModel();
+        AlarmSink.Raise(AlarmCodes.UserStopped, AlarmSeverity.Info, "Test", "stopped");
+        AlarmSink.Raise(AlarmCodes.PlcCommFailed, AlarmSeverity.Error, "Test", "plc down");
+
+        vm.ClearAlarmsCommand.Execute(null);
+
+        Assert.Empty(AlarmSink.Entries);
+        Assert.Empty(vm.FilteredAlarms);
+    }
+
+    [Fact]
+    public void SelectedAlarm_WithoutCode_FallsBackToNoDetailText()
+    {
+        AlarmSink.Entries.Clear();
+        using var vm = new AlarmWindowViewModel();
+        AlarmSink.Raise(AlarmSeverity.Warning, "Test", "legacy alarm without code");
+        vm.SelectedAlarm = Assert.Single(vm.FilteredAlarms);
+
+        Assert.Equal(vm.CauseText, vm.ActionText);
+        Assert.NotEqual("Alarm_NoDetail", vm.CauseText);
     }
 
     private static void SetPlcController(IPlcController? plc)

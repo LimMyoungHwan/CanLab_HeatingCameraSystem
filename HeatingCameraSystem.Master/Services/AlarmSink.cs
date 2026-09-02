@@ -14,7 +14,12 @@ namespace HeatingCameraSystem.Master.Services
         public AlarmSeverity Severity { get; init; }
         public string Source { get; init; } = string.Empty;
         public string Message { get; init; } = string.Empty;
+
+        /// <summary><see cref="AlarmCodes"/>의 코드. 비어 있으면 원인·해결책 문구가 없는 구형 알람이다.</summary>
+        public string Code { get; init; } = string.Empty;
+
         public string TimeText => Time.ToString("HH:mm:ss");
+        public string Title => string.IsNullOrEmpty(Code) ? Source : $"[{Code}] {Source}";
     }
 
     /// <summary>
@@ -34,6 +39,9 @@ namespace HeatingCameraSystem.Master.Services
         /// 디스패처가 없으면(테스트 등) 호출 스레드에서 바로 실행한다.
         /// </summary>
         public static void Raise(AlarmSeverity severity, string source, string message)
+            => Raise(string.Empty, severity, source, message);
+
+        public static void Raise(string code, AlarmSeverity severity, string source, string message)
         {
             void Add()
             {
@@ -42,7 +50,8 @@ namespace HeatingCameraSystem.Master.Services
                     Time = DateTime.Now,
                     Severity = severity,
                     Source = source,
-                    Message = message
+                    Message = message,
+                    Code = code
                 });
                 while (Entries.Count > MaxEntries)
                     Entries.RemoveAt(Entries.Count - 1);
@@ -54,7 +63,8 @@ namespace HeatingCameraSystem.Master.Services
                         Timestamp = DateTime.Now,
                         Severity = severity,
                         Source = source,
-                        Message = message
+                        Message = message,
+                        Code = code
                     });
                 }
                 catch (Exception ex)
@@ -82,6 +92,18 @@ namespace HeatingCameraSystem.Master.Services
                 RemoveEntry();
             else
                 dispatcher.Invoke(RemoveEntry);
+        }
+
+        /// <summary>실시간 목록을 모두 비운다. 영속 이력은 그대로 남으므로 이력 화면에서 다시 볼 수 있다.</summary>
+        public static void Clear()
+        {
+            void ClearEntries() => Entries.Clear();
+
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess())
+                ClearEntries();
+            else
+                dispatcher.Invoke(ClearEntries);
         }
     }
 }

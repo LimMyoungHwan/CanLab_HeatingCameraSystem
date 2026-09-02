@@ -54,7 +54,8 @@ namespace HeatingCameraSystem.Master.Services
                 double frac = Math.Min((_utcNow() - startedAt).TotalSeconds / durationSeconds, 1.0);
                 float sv = start + (float)((target - start) * frac);
                 await _plcController.SetControlTemperatureAsync(sv);
-                progress?.Report($"온도 램프 {sv:F1}℃ / {target:F1}℃");
+                progress?.Report(string.Format(
+                    Localization.LocalizationManager.Instance["Recipe_Phase_TempRamp"], sv, target));
                 if (frac >= 1.0) break;
                 await _delay(_stepDelay, ct);
             }

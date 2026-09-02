@@ -53,60 +53,34 @@ namespace HeatingCameraSystem.Master.ViewModels
         private StatusMonitorViewModel? _statusMonitorViewModel;
         private string _currentTitleKey = "Title_Dashboard";
 
-        [ObservableProperty]
-        private AlarmFilterOption? _selectedAlarmFilter;
-
         public ObservableCollection<AlarmEntry> Alarms => AlarmSink.Entries;
-        public ObservableCollection<AlarmEntry> FilteredAlarms { get; } = new();
-        public ObservableCollection<AlarmFilterOption> AlarmFilters { get; } = new();
 
         public PlcStatusService? PlcStatus => AppServices.PlcStatus;
 
         public MainViewModel()
         {
-            AlarmFilters.Add(new AlarmFilterOption("Nav_AlarmsFilterAll", null, string.Empty));
-            AlarmFilters.Add(new AlarmFilterOption("Nav_AlarmsFilterInfo", AlarmSeverity.Info, string.Empty));
-            AlarmFilters.Add(new AlarmFilterOption("Nav_AlarmsFilterWarning", AlarmSeverity.Warning, string.Empty));
-            AlarmFilters.Add(new AlarmFilterOption("Nav_AlarmsFilterError", AlarmSeverity.Error, string.Empty));
-            SelectedAlarmFilter = AlarmFilters[0];
-            UpdateAlarmFilterLabels();
-            AlarmSink.Entries.CollectionChanged += OnAlarmEntriesChanged;
             LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
-            RefreshFilteredAlarms();
             NavigateToDashboard();
         }
 
-        private void OnAlarmEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e) => RefreshFilteredAlarms();
-
         private void OnLocalizationChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-        {
-            UpdateAlarmFilterLabels();
-            UpdateTitle();
-        }
+            => UpdateTitle();
 
-        private void UpdateAlarmFilterLabels()
-        {
-            foreach (var filter in AlarmFilters)
-                filter.UpdateLabel(LocalizationManager.Instance[filter.Key]);
-        }
-
-        /// <summary>선택된 심각도 필터를 적용해 표시용 알람 목록을 다시 만든다.</summary>
-        private void RefreshFilteredAlarms()
-        {
-            FilteredAlarms.Clear();
-            foreach (var alarm in AlarmSink.Entries)
-            {
-                if (SelectedAlarmFilter?.Severity is AlarmSeverity severity && alarm.Severity != severity)
-                    continue;
-                FilteredAlarms.Add(alarm);
-            }
-        }
-
-        partial void OnSelectedAlarmFilterChanged(AlarmFilterOption? value) => RefreshFilteredAlarms();
-
-        /// <summary>알람 1건을 목록에서 제거한다.</summary>
+        /// <summary>알람 창을 연다. 이미 떠 있으면 그 창을 앞으로 가져온다.</summary>
         [RelayCommand]
-        private void DeleteAlarm(AlarmEntry? entry) => AlarmSink.Remove(entry);
+        private void OpenAlarmWindow()
+        {
+            foreach (System.Windows.Window window in System.Windows.Application.Current.Windows)
+            {
+                if (window is Views.AlarmWindow existing)
+                {
+                    existing.Activate();
+                    return;
+                }
+            }
+
+            new Views.AlarmWindow { Owner = System.Windows.Application.Current.MainWindow }.Show();
+        }
 
         private void UpdateTitle() => CurrentViewTitle = LocalizationManager.Instance[_currentTitleKey];
 

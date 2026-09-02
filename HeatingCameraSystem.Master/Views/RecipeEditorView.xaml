@@ -74,16 +74,17 @@
                     <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
-                        <TextBlock Text="PLC 온습도 설정" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
+                        <TextBlock Text="PLC 온도 설정" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
                     </StackPanel>
                     <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
                     <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
                         <StackPanel Margin="0,0,16,0"><TextBlock Text="CHAMBER °C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding TargetChamberTemperature}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
-                        <StackPanel Margin="0,0,16,0"><TextBlock Text="CHAMBER %RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding TargetChamberHumidity}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0"><TextBlock Text="도달 오차 ±°C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding StabilizationToleranceC}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0"><TextBlock Text="도달 후 유지(분)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding SoakMinutes}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
                         <StackPanel Width="170" Margin="0,0,16,0">
                             <TextBlock Text="진행 방식" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <ComboBox SelectedValuePath="Tag" SelectedValue="{Binding WaitForChamberStabilization}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">
-                                <ComboBoxItem Content="온·습도 도달까지 대기"><ComboBoxItem.Tag><sys:Boolean>True</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
+                                <ComboBoxItem Content="온도 도달까지 대기"><ComboBoxItem.Tag><sys:Boolean>True</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
                                 <ComboBoxItem Content="설정만 하고 진행"><ComboBoxItem.Tag><sys:Boolean>False</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
                             </ComboBox>
                         </StackPanel>
@@ -94,6 +95,42 @@
                                 <TextBlock Text="~" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="6,0"/>
                                 <TextBox Text="{Binding SafetyTempMax}" Width="70" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                             </StackPanel>
+                        </StackPanel>
+                        <StackPanel Width="170">
+                            <CheckBox Content="습도 안전범위" IsChecked="{Binding UseSafetyHumidity}" Foreground="{StaticResource TextOnSurface}" FontSize="11"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0" IsEnabled="{Binding UseSafetyHumidity}">
+                                <TextBox Text="{Binding SafetyHumidityMin}" Width="70" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                                <TextBlock Text="~" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="6,0"/>
+                                <TextBox Text="{Binding SafetyHumidityMax}" Width="70" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="HumidityStepTemplate">
+            <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
+                    AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
+                        <TextBlock Text="PLC 습도 설정" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
+                        <StackPanel Margin="0,0,16,0"><TextBlock Text="CHAMBER %RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding TargetChamberHumidity}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0"><TextBlock Text="도달 오차 ±%RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding StabilizationToleranceRh}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0"><TextBlock Text="도달 후 유지(분)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding SoakMinutes}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Width="170" Margin="0,0,16,0">
+                            <TextBlock Text="진행 방식" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <ComboBox SelectedValuePath="Tag" SelectedValue="{Binding WaitForChamberStabilization}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">
+                                <ComboBoxItem Content="습도 도달까지 대기"><ComboBoxItem.Tag><sys:Boolean>True</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
+                                <ComboBoxItem Content="설정만 하고 진행"><ComboBoxItem.Tag><sys:Boolean>False</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
+                            </ComboBox>
                         </StackPanel>
                         <StackPanel Width="170">
                             <CheckBox Content="습도 안전범위" IsChecked="{Binding UseSafetyHumidity}" Foreground="{StaticResource TextOnSurface}" FontSize="11"/>
@@ -125,17 +162,21 @@
                             <TextBlock Text="CAMERA COMMAND" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <ComboBox ItemsSource="{Binding DataContext.CameraOperationOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Value" SelectedValue="{Binding CameraOperation}" DisplayMemberPath="Label" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
                         </StackPanel>
-                        <StackPanel Margin="0,0,16,0" Width="90">
+                        <StackPanel Margin="0,0,16,0" Width="90" IsEnabled="{Binding IsCaptureOperation}">
                             <TextBlock Text="촬영 장수" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <TextBox Text="{Binding ShotCount}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                         </StackPanel>
-                        <StackPanel Margin="0,0,16,0" Width="100">
+                        <StackPanel Margin="0,0,16,0" Width="100" IsEnabled="{Binding IsCaptureOperation}">
                             <TextBlock Text="간격(초) 0=1회" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <TextBox Text="{Binding CaptureIntervalSeconds}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                         </StackPanel>
-                        <StackPanel Margin="0,0,16,0" Width="100">
+                        <StackPanel Margin="0,0,16,0" Width="100" IsEnabled="{Binding IsCaptureOperation}">
                             <TextBlock Text="전체 시간(초)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <TextBox Text="{Binding CaptureDurationSeconds}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,16,0" Width="110" IsEnabled="{Binding IsBiasOperation}">
+                            <TextBlock Text="BIAS 목표 0=기본" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <TextBox Text="{Binding BiasTargetLevel}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                         </StackPanel>
                         <StackPanel Width="260">
                             <TextBlock Text="대상 카메라 (복수 선택)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
@@ -170,6 +211,14 @@
                         <StackPanel Margin="0,0,16,0" Width="100">
                             <TextBlock Text="BB 1 설정 °C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <TextBox Text="{Binding BlackbodyRef1}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,16,0" Width="100">
+                            <TextBlock Text="도달 오차 ±°C" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <TextBox Text="{Binding StabilizationToleranceC}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,0,16,0" Width="100">
+                            <TextBlock Text="도달 후 유지(분)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <TextBox Text="{Binding SoakMinutes}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                         </StackPanel>
                         <StackPanel Width="170">
                             <TextBlock Text="진행 방식" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
@@ -373,6 +422,7 @@
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.MotorMove}"><Setter Property="ContentTemplate" Value="{StaticResource MotorStepTemplate}"/></DataTrigger>
                                                     <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.ChamberControl}"><Setter Property="ContentTemplate" Value="{StaticResource ChamberStepTemplate}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.HumidityControl}"><Setter Property="ContentTemplate" Value="{StaticResource HumidityStepTemplate}"/></DataTrigger>
                                                     <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.CameraCommand}"><Setter Property="ContentTemplate" Value="{StaticResource CameraStepTemplate}"/></DataTrigger>
                                                     <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.BlackBodyControl}"><Setter Property="ContentTemplate" Value="{StaticResource BlackBodyStepTemplate}"/></DataTrigger>
                                                 </Style.Triggers>
@@ -385,7 +435,8 @@
                         
                         <WrapPanel Margin="0,16,0,0">
                             <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.MotorMove}" Content="+ PLC 모터 이동" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
-                            <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.ChamberControl}" Content="+ PLC 온습도 설정" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
+                            <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.ChamberControl}" Content="+ PLC 온도 설정" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
+                            <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.HumidityControl}" Content="+ PLC 습도 설정" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
                             <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.CameraCommand}" Content="+ 카메라 명령" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
                             <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.BlackBodyControl}" Content="+ 블랙바디 온도 제어" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
                         </WrapPanel>

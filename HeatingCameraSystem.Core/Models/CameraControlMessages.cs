@@ -17,6 +17,9 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>명령 완료 ACK를 해당 레시피 스텝과 안전하게 연결하는 요청 식별자.</summary>
         public string RequestId { get; set; } = string.Empty;
 
+        /// <summary>BIAS 계열 <see cref="Op"/>에서만 쓰는 목표 레벨. 0이면 Agent 기본값을 쓴다.</summary>
+        public double BiasTargetLevel { get; set; }
+
         public DateTime Timestamp { get; set; }
     }
 

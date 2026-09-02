@@ -214,6 +214,7 @@ namespace HeatingCameraSystem.Tests
             var ackCallbacks = new Dictionary<string, Action<CameraControlAckMessage>>();
 
             mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(30.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(60.0f);
             mockPlc.Setup(p => p.MoveServoToPositionAsync(It.IsAny<int>())).Returns(Task.CompletedTask);
             mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
             mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
@@ -237,7 +238,8 @@ namespace HeatingCameraSystem.Tests
                 {
                     new() { Kind = RecipeStepKind.MotorMove, PositionX = 10, PositionY = 20 },
                     new() { Kind = RecipeStepKind.MotorMove, MotorMoveType = MotorMoveType.Automatic, TargetPositionIndex = 7 },
-                    new() { Kind = RecipeStepKind.ChamberControl, TargetChamberTemperature = 30, TargetChamberHumidity = 60 },
+                    new() { Kind = RecipeStepKind.ChamberControl, TargetChamberTemperature = 30 },
+                    new() { Kind = RecipeStepKind.HumidityControl, TargetChamberHumidity = 60 },
                     new()
                     {
                         Kind = RecipeStepKind.CameraCommand,
@@ -298,7 +300,6 @@ namespace HeatingCameraSystem.Tests
 
             mockPlc.Verify(p => p.SetTargetTemperatureAsync(80), Times.Once);
             mockPlc.Verify(p => p.SetControlTemperatureAsync(80), Times.Once);
-            mockPlc.Verify(p => p.SetTargetHumidityAsync(40), Times.Once);
             mockPlc.Verify(p => p.StopChamberAsync(), Times.Once);
         }
 
@@ -330,6 +331,41 @@ namespace HeatingCameraSystem.Tests
             mockBlackBody.Verify(b => b.SetTemperatureAsync(1, 51.0f), Times.Once);
             mockBlackBody.Verify(b => b.GetCurrentTemperatureAsync(0), Times.AtLeastOnce);
             mockBlackBody.Verify(b => b.GetCurrentTemperatureAsync(1), Times.AtLeastOnce);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_BlackBodyControl_UsesStepTolerance()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+            var mockBlackBody = new Mock<IBlackBodyController>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+            mockBlackBody.Setup(b => b.SetTemperatureAsync(It.IsAny<int>(), It.IsAny<float>())).Returns(Task.CompletedTask);
+            mockBlackBody.Setup(b => b.GetCurrentTemperatureAsync(It.IsAny<int>())).ReturnsAsync(47.0f);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new()
+                    {
+                        Kind = RecipeStepKind.BlackBodyControl,
+                        TargetBlackBodyTemperature = 50.0f,
+                        TargetBlackBodyTemperature1 = 50.0f,
+                        StabilizationToleranceC = 5,
+                        WaitForStabilization = true
+                    }
+                }
+            };
+
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object, blackBody: mockBlackBody.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            mockBlackBody.Verify(b => b.GetCurrentTemperatureAsync(0), Times.AtLeastOnce);
         }
 
         [Fact]
@@ -617,21 +653,14 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
-        public async Task ExecuteRecipeAsync_ChamberControl_WritesHumidityBeforeTemperature()
+        public async Task ExecuteRecipeAsync_ChamberControl_WritesTemperatureOnly()
         {
             var mockPlc = new Mock<IPlcController>();
             var mockNats = new Mock<INatsCommunicationService>();
             var mockHistory = new Mock<ICaptureHistoryRepository>();
 
-            var order = new List<string>();
             mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
             mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
-            mockPlc.Setup(p => p.SetTargetHumidityAsync(It.IsAny<float>()))
-                   .Callback(() => order.Add("humidity"))
-                   .Returns(Task.CompletedTask);
-            mockPlc.Setup(p => p.SetTargetTemperatureAsync(It.IsAny<float>()))
-                   .Callback(() => order.Add("temperature"))
-                   .Returns(Task.CompletedTask);
 
             var recipe = new Recipe
             {
@@ -651,7 +680,134 @@ namespace HeatingCameraSystem.Tests
                 .ExecuteRecipeAsync(recipe)
                 .WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(new[] { "humidity", "temperature" }, order);
+            mockPlc.Verify(p => p.SetTargetTemperatureAsync(30f), Times.AtLeastOnce);
+            mockPlc.Verify(p => p.SetTargetHumidityAsync(It.IsAny<float>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_HumidityControl_WritesHumidityOnly()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new RecipeStep
+                    {
+                        Kind = RecipeStepKind.HumidityControl,
+                        TargetChamberHumidity = 60,
+                        WaitForChamberStabilization = false
+                    }
+                }
+            };
+
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            mockPlc.Verify(p => p.SetTargetHumidityAsync(60f), Times.Once);
+            mockPlc.Verify(p => p.SetTargetTemperatureAsync(It.IsAny<float>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_HumidityControl_WaitsUntilWithinStepTolerance()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(57f);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new RecipeStep
+                    {
+                        Kind = RecipeStepKind.HumidityControl,
+                        TargetChamberHumidity = 60,
+                        StabilizationToleranceRh = 5,
+                        WaitForChamberStabilization = true
+                    }
+                }
+            };
+
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            mockPlc.Verify(p => p.GetCurrentHumidityAsync(), Times.AtLeastOnce);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_BiasStep_PublishesStepTargetLevel()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+            var published = new List<CameraControlMessage>();
+            var ackCallbacks = new Dictionary<string, Action<CameraControlAckMessage>>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+            mockNats.Setup(n => n.SubscribeCameraControlAckAsync(It.IsAny<string>(), It.IsAny<Action<CameraControlAckMessage>>()))
+                .Callback<string, Action<CameraControlAckMessage>>((agentId, callback) => ackCallbacks[agentId] = callback)
+                .Returns(Task.CompletedTask);
+            mockNats.Setup(n => n.PublishCameraControlAsync(It.IsAny<CameraControlMessage>()))
+                .Callback<CameraControlMessage>(message =>
+                {
+                    published.Add(message);
+                    ackCallbacks[message.AgentId](new CameraControlAckMessage
+                    {
+                        AgentId = message.AgentId,
+                        CameraIndex = message.CameraIndex,
+                        Op = message.Op,
+                        RequestId = message.RequestId,
+                        IsSuccess = true
+                    });
+                })
+                .Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new()
+                    {
+                        Kind = RecipeStepKind.CameraCommand,
+                        CameraOperation = CameraControlOps.BiasMid,
+                        BiasTargetLevel = 5200,
+                        CameraTargets = new List<RecipeCameraTarget> { new() { AgentId = "Agent_1", CameraIndex = 1 } }
+                    }
+                }
+            };
+
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            var message = Assert.Single(published);
+            Assert.Equal(CameraControlOps.BiasMid, message.Op);
+            Assert.Equal(5200, message.BiasTargetLevel);
+        }
+
+        [Theory]
+        [InlineData(0, 0)]
+        [InlineData(5, 5)]
+        [InlineData(-1, 0)]
+        public void SoakDuration_ConvertsMinutesAndTreatsNonPositiveAsNoWait(int soakMinutes, int expectedMinutes)
+        {
+            var step = new RecipeStep { Kind = RecipeStepKind.ChamberControl, SoakMinutes = soakMinutes };
+
+            Assert.Equal(TimeSpan.FromMinutes(expectedMinutes), RecipeEngine.SoakDuration(step));
         }
 
         private static Recipe HappyPathRecipe() => new Recipe

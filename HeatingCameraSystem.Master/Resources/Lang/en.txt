@@ -263,7 +263,153 @@ Nav_AlarmsFilterInfo=Info
 Nav_AlarmsFilterWarning=Warning
 Nav_AlarmsFilterError=Error
 Nav_AlarmsDeleteTooltip=Delete alarm
-Nav_AlarmsEmpty=No alarms
+Nav_AlarmsEmpty=No alarms
+
+Nav_AlarmWindow=Alarms
+
+# Alarm window
+
+Alarm_WindowTitle=Alarms
+
+Alarm_ColTime=Time
+
+Alarm_ColCode=Code
+
+Alarm_ColSource=Source
+
+Alarm_ColMessage=Message
+
+Alarm_DetailTitle=Details
+
+Alarm_Cause=Cause
+
+Alarm_Action=Remedy
+
+Alarm_NoSelection=Select an alarm from the list.
+
+Alarm_NoDetail=No cause or remedy text is registered for this alarm.
+
+Alarm_BtnBuzzerOff=Buzzer Off
+
+Alarm_BtnResetError=Reset PLC Alarm
+
+Alarm_BtnClear=Clear List
+
+Alarm_BtnDelete=Delete Selected
+
+Alarm_ClearHint=Clears the list only. History remains available on the history screen.
+
+# Alarm cause / action per code
+
+Alarm_PLC_001_Cause=PLC communication was lost while the recipe was running. The step was aborted and a chamber stop was attempted.
+
+Alarm_PLC_001_Action=Check PLC power and the network cable. Reconnection is retried every 30 seconds. Restart the recipe after the link is restored.
+
+Alarm_PLC_002_Cause=Temperature and humidity could not be read from the PLC for the safety check, so the recipe was stopped.
+
+Alarm_PLC_002_Action=Inspect the chamber directly; it may still be hot. Restart only after PLC communication is restored.
+
+Alarm_PLC_003_Cause=Both chamber stop attempts failed. The heater may still be running.
+
+Alarm_PLC_003_Action=Stop the chamber manually at the PLC panel now. Do not wait for the link to recover.
+
+Alarm_NATS_001_Cause=A command could not be sent to the camera Agent (NATS link down). Only that camera was skipped; the chamber sequence continued.
+
+Alarm_NATS_001_Action=Check the NATS broker and the camera PC network. Capture data for this interval is missing.
+
+Alarm_CAM_001_Cause=The camera Agent did not answer within the timeout.
+
+Alarm_CAM_001_Action=Check that the camera PC is powered on and the Agent is running.
+
+Alarm_CAM_002_Cause=Only some of the requested shots were stored. The rest failed or arrived too late.
+
+Alarm_CAM_002_Action=Check the camera state and free space on the storage path. This step holds partial data only.
+
+Alarm_CAM_003_Cause=A repeat capture round slipped past its interval. The round was skipped instead of firing back-to-back.
+
+Alarm_CAM_003_Action=Increase the interval or reduce the shot count, and investigate why the camera slowed down.
+
+Alarm_BB_001_Cause=Setting or reading the black body temperature failed. The next step ran without reaching the target.
+
+Alarm_BB_001_Action=Check black body power and wiring. Captures in this interval may not match the reference temperature.
+
+Alarm_RCP_001_Cause=The operator stopped the recipe.
+
+Alarm_RCP_001_Action=No action required. The stop point is recorded in the message.
+
+Alarm_RCP_002_Cause=The recipe was aborted by an emergency stop.
+
+Alarm_RCP_002_Action=Clear the cause, release the emergency stop, verify the chamber state, then restart the recipe.
+
+Alarm_RCP_003_Cause=Chamber temperature or humidity left the safety band defined on the step. The recipe waits for operator confirmation.
+
+Alarm_RCP_003_Action=Check the chamber and decide whether to continue. Also verify the safety band values themselves.
+
+Alarm_RCP_004_Cause=The recipe contains a step kind this version does not understand, so it was skipped.
+
+Alarm_RCP_004_Action=Verify that the Master version running matches the one that saved the recipe.
+
+# Alarm source / message text
+
+Alarm_Src_Recipe=Recipe
+
+Alarm_Msg_StepKindUnsupported=Unsupported step kind: {0}
+
+Alarm_Msg_Stopped='{0}' stopped at step {1}/{2}
+
+Alarm_Msg_StepFailed='{0}' step {1}/{2} failed: {3}
+
+Alarm_Msg_ChamberStopFailed=Chamber stop failed: {0}
+
+Alarm_Msg_BlackBodySetFailed=Step {0} black body {1} temperature set failed: {2}
+
+Alarm_Msg_BlackBodyReadFailed=Step {0} black body {1} temperature read failed: {2}
+
+Alarm_Msg_ControlPublishFailed=Step {0} camera {1} command send failed: {2}
+
+Alarm_Msg_ControlTimeout=Step {0} camera {1} command failed or timed out
+
+Alarm_Msg_CaptureSlip=Step {0} capture round {1}/{2} was {3:F0}s late (interval {4}s).
+
+Alarm_Msg_CapturePublishFailed=Step {0} camera {1} capture command send failed: {2}
+
+Alarm_Msg_PartialCapture=Step {0} camera {1} capture: only {2}/{3} shots succeeded (failed or timed out)
+
+Alarm_Msg_SafetyCheckFailed=Safety range check failed: {0}
+
+Alarm_Msg_SafetyHold={0} Waiting for operator confirmation.
+
+Safety_BelowMinTemp=Below safety minimum: temperature {0:F1}℃ < {1:F1}℃.
+
+Safety_AboveMaxTemp=Above safety maximum: temperature {0:F1}℃ > {1:F1}℃.
+
+Safety_BelowMinHumidity=Below safety minimum: humidity {0:F1}%RH < {1:F1}%RH.
+
+Safety_AboveMaxHumidity=Above safety maximum: humidity {0:F1}%RH > {1:F1}%RH.
+
+# Recipe progress phases
+
+Recipe_Phase_ServoMove=Servo move ({0}/{1})
+
+Recipe_Phase_TempSet=Temperature set ({0}/{1})
+
+Recipe_Phase_HumiditySet=Humidity set ({0}/{1})
+
+Recipe_Phase_BlackBodySet=BB 0, 1 temperature set ({0}/{1})
+
+Recipe_Phase_BlackBodyWait=BB 0, 1 stabilization wait ({0}/{1})
+
+Recipe_Phase_Soak=Soak {0} min ({1}/{2})
+
+Recipe_Phase_CameraOp=Camera {0} ({1}/{2})
+
+Recipe_Phase_CaptureRound=Capture {0}/{1} ({2}/{3})
+
+Recipe_Phase_SafetyHold=Safety limit exceeded — waiting for operator
+
+Recipe_Phase_TempRamp=Temperature ramp {0:F1}℃ / {1:F1}℃
+
+Recipe_Phase_Done=Done
 
 # Status view (hero + card labels)
 Status_HeroChamberTemp=Chamber Temp

@@ -298,76 +298,23 @@
                     BorderThickness="1"
                     FontSize="16"
                     FontWeight="Bold" />
-                <StackPanel DockPanel.Dock="Bottom" Height="280">
-                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" Height="260">
-                        <StackPanel Width="210">
-                            <Border Margin="0,0,0,12" BorderBrush="#3b4949" BorderThickness="0,1,0,0" />
-                            <Grid Margin="0,0,0,10">
-                                <TextBlock FontSize="13" FontWeight="Bold" Foreground="#9fb0c0" Text="{loc:Loc Nav_AlarmsTitle}" />
-                                <TextBlock Text="{Binding Alarms.Count}" FontSize="11" FontWeight="Bold" Foreground="#ff8f88" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                            </Grid>
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{loc:Loc Nav_AlarmsFilterType}" Foreground="#8fa0b0" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <ComboBox Grid.Column="1" ItemsSource="{Binding AlarmFilters}" SelectedItem="{Binding SelectedAlarmFilter, Mode=TwoWay}" DisplayMemberPath="Label" Height="22" FontSize="11" />
-                            </Grid>
-                            <TextBlock Text="{loc:Loc Nav_AlarmsEmpty}" Foreground="#8fa0b0" FontSize="10" HorizontalAlignment="Center" Margin="0,4,0,4">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding FilteredAlarms.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                            <ScrollViewer MaxHeight="125" VerticalScrollBarVisibility="Auto">
-                                <ScrollViewer.Style>
-                                    <Style TargetType="ScrollViewer">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding FilteredAlarms.Count}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ScrollViewer.Style>
-                                <ItemsControl ItemsSource="{Binding FilteredAlarms}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="#1f2430" CornerRadius="4" Padding="4" Margin="0,0,0,2">
-                                                <Grid>
-                                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                    <StackPanel Orientation="Horizontal" Grid.Row="0" Grid.Column="0">
-                                                        <Border CornerRadius="3" Padding="4,1" Margin="0,0,6,0">
-                                                            <Border.Style>
-                                                                <Style TargetType="Border">
-                                                                    <Setter Property="Background" Value="#243040"/>
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding Severity}" Value="Error"><Setter Property="Background" Value="#5a1512"/></DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Severity}" Value="Warning"><Setter Property="Background" Value="#4a3512"/></DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </Border.Style>
-                                                            <TextBlock Text="{Binding Source}" FontSize="9" FontWeight="Bold" Foreground="White"/>
-                                                        </Border>
-                                                        <TextBlock Text="{Binding TimeText}" FontSize="10" Foreground="#8fa0b0" VerticalAlignment="Center"/>
-                                                    </StackPanel>
-                                                    <Button Grid.Row="0" Grid.Column="1" Command="{Binding DataContext.DeleteAlarmCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" ToolTip="{loc:Loc Nav_AlarmsDeleteTooltip}" Background="Transparent" BorderThickness="0" Foreground="#ff8f88" Padding="2,0" Cursor="Hand">
-                                                        <TextBlock Text="✕" FontWeight="Bold" FontSize="10"/>
-                                                    </Button>
-                                                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Text="{Binding Message}" FontSize="11" Foreground="#bac9c9" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                        </StackPanel>
-                    </Viewbox>
-                </StackPanel>
+                <Button
+                    DockPanel.Dock="Bottom"
+                    Command="{Binding OpenAlarmWindowCommand}"
+                    Height="44"
+                    Margin="0,8,0,0"
+                    Background="#2f3444"
+                    Foreground="#e6edf3"
+                    BorderBrush="#4a5468"
+                    BorderThickness="1"
+                    FontSize="13"
+                    FontWeight="Bold"
+                    Cursor="Hand">
+                    <Grid Width="190">
+                        <TextBlock Text="{loc:Loc Nav_AlarmsTitle}" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Alarms.Count}" Foreground="#ff8f88" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                    </Grid>
+                </Button>
             </DockPanel>
         </Border>
 

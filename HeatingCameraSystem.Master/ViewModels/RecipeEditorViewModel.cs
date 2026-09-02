@@ -41,6 +41,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private float _positionY;
         [ObservableProperty] private double _targetChamberTemperature;
         [ObservableProperty] private double _targetChamberHumidity;
+        [ObservableProperty] private double _biasTargetLevel;
+        [ObservableProperty] private double _stabilizationToleranceC;
+        [ObservableProperty] private double _stabilizationToleranceRh;
+        [ObservableProperty] private int _soakMinutes;
         [ObservableProperty] private RecipeStepKind _kind = RecipeStepKind.LegacyCapture;
         [ObservableProperty] private MotorMoveType _motorMoveType = MotorMoveType.Manual;
         [ObservableProperty] private string _cameraOperation = CameraControlOps.Capture;
@@ -59,8 +63,11 @@ namespace HeatingCameraSystem.Master.ViewModels
         public bool ShowsLegacyFields => Kind == RecipeStepKind.LegacyCapture;
         public bool ShowsMotorFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.MotorMove;
         public bool ShowsChamberFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.ChamberControl;
+        public bool ShowsHumidityFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.HumidityControl;
         public bool ShowsCameraFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.CameraCommand;
         public bool ShowsCameraOperation => Kind == RecipeStepKind.CameraCommand;
+        public bool IsCaptureOperation => CameraOperation == CameraControlOps.Capture;
+        public bool IsBiasOperation => CameraOperation is CameraControlOps.BiasLow or CameraControlOps.BiasMid or CameraControlOps.BiasHigh;
         public bool ShowsBlackBodyFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.BlackBodyControl;
         public bool ShowsBlackBodyStabilization => Kind == RecipeStepKind.BlackBodyControl;
 
@@ -69,12 +76,19 @@ namespace HeatingCameraSystem.Master.ViewModels
             OnPropertyChanged(nameof(ShowsLegacyFields));
             OnPropertyChanged(nameof(ShowsMotorFields));
             OnPropertyChanged(nameof(ShowsChamberFields));
+            OnPropertyChanged(nameof(ShowsHumidityFields));
             OnPropertyChanged(nameof(ShowsCameraFields));
             OnPropertyChanged(nameof(ShowsCameraOperation));
             OnPropertyChanged(nameof(ShowsBlackBodyFields));
             OnPropertyChanged(nameof(ShowsBlackBodyStabilization));
             OnPropertyChanged(nameof(ShowsAutomaticPoint));
             OnPropertyChanged(nameof(ShowsManualCoordinates));
+        }
+
+        partial void OnCameraOperationChanged(string value)
+        {
+            OnPropertyChanged(nameof(IsCaptureOperation));
+            OnPropertyChanged(nameof(IsBiasOperation));
         }
 
         partial void OnMotorMoveTypeChanged(MotorMoveType value)
@@ -168,7 +182,8 @@ namespace HeatingCameraSystem.Master.ViewModels
         public RecipeStepKindOption[] StepKindOptions { get; } =
         {
             new() { Value = RecipeStepKind.MotorMove, Label = "PLC 모터 이동" },
-            new() { Value = RecipeStepKind.ChamberControl, Label = "PLC 온습도 설정" },
+            new() { Value = RecipeStepKind.ChamberControl, Label = "PLC 온도 설정" },
+            new() { Value = RecipeStepKind.HumidityControl, Label = "PLC 습도 설정" },
             new() { Value = RecipeStepKind.CameraCommand, Label = "카메라 명령" },
             new() { Value = RecipeStepKind.BlackBodyControl, Label = "블랙바디 온도 제어" }
         };
@@ -416,7 +431,11 @@ namespace HeatingCameraSystem.Master.ViewModels
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
-                    TargetChamberHumidity = s.TargetChamberHumidity
+                    TargetChamberHumidity = s.TargetChamberHumidity,
+                    StabilizationToleranceC = s.StabilizationToleranceC,
+                    StabilizationToleranceRh = s.StabilizationToleranceRh,
+                    SoakMinutes = s.SoakMinutes,
+                    BiasTargetLevel = s.BiasTargetLevel
                 }).ToList()
             };
         }
@@ -467,7 +486,11 @@ namespace HeatingCameraSystem.Master.ViewModels
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
-                    TargetChamberHumidity = s.TargetChamberHumidity
+                    TargetChamberHumidity = s.TargetChamberHumidity,
+                    StabilizationToleranceC = s.StabilizationToleranceC,
+                    StabilizationToleranceRh = s.StabilizationToleranceRh,
+                    SoakMinutes = s.SoakMinutes,
+                    BiasTargetLevel = s.BiasTargetLevel
                 });
             }
             return r;
@@ -515,7 +538,11 @@ namespace HeatingCameraSystem.Master.ViewModels
                     PositionX = s.PositionX,
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
-                    TargetChamberHumidity = s.TargetChamberHumidity
+                    TargetChamberHumidity = s.TargetChamberHumidity,
+                    StabilizationToleranceC = s.StabilizationToleranceC,
+                    StabilizationToleranceRh = s.StabilizationToleranceRh,
+                    SoakMinutes = s.SoakMinutes,
+                    BiasTargetLevel = s.BiasTargetLevel
                 };
                 foreach (var target in s.CameraTargets)
                     step.CameraTargets.Add(new CameraTargetModel { AgentId = target.AgentId, CameraIndex = target.CameraIndex, IsSelected = true });
