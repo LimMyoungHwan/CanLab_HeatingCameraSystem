@@ -41,6 +41,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private float _positionY;
         [ObservableProperty] private double _targetChamberTemperature;
         [ObservableProperty] private double _targetChamberHumidity;
+        [ObservableProperty] private bool _disableHumidityControl;
         [ObservableProperty] private double _biasTargetLevel;
         [ObservableProperty] private double _stabilizationToleranceC;
         [ObservableProperty] private double _stabilizationToleranceRh;
@@ -68,6 +69,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         public bool ShowsCameraOperation => Kind == RecipeStepKind.CameraCommand;
         public bool IsCaptureOperation => CameraOperation == CameraControlOps.Capture;
         public bool IsBiasOperation => CameraOperation is CameraControlOps.BiasLow or CameraControlOps.BiasMid or CameraControlOps.BiasHigh;
+        public bool HumidityControlEnabled => !DisableHumidityControl;
         public bool ShowsBlackBodyFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.BlackBodyControl;
         public bool ShowsBlackBodyStabilization => Kind == RecipeStepKind.BlackBodyControl;
 
@@ -84,6 +86,8 @@ namespace HeatingCameraSystem.Master.ViewModels
             OnPropertyChanged(nameof(ShowsAutomaticPoint));
             OnPropertyChanged(nameof(ShowsManualCoordinates));
         }
+
+        partial void OnDisableHumidityControlChanged(bool value) => OnPropertyChanged(nameof(HumidityControlEnabled));
 
         partial void OnCameraOperationChanged(string value)
         {
@@ -435,7 +439,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                     StabilizationToleranceC = s.StabilizationToleranceC,
                     StabilizationToleranceRh = s.StabilizationToleranceRh,
                     SoakMinutes = s.SoakMinutes,
-                    BiasTargetLevel = s.BiasTargetLevel
+                    BiasTargetLevel = s.BiasTargetLevel,
+                    DisableHumidityControl = s.DisableHumidityControl
                 }).ToList()
             };
         }
@@ -490,7 +495,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                     StabilizationToleranceC = s.StabilizationToleranceC,
                     StabilizationToleranceRh = s.StabilizationToleranceRh,
                     SoakMinutes = s.SoakMinutes,
-                    BiasTargetLevel = s.BiasTargetLevel
+                    BiasTargetLevel = s.BiasTargetLevel,
+                    DisableHumidityControl = s.DisableHumidityControl
                 });
             }
             return r;
@@ -542,7 +548,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                     StabilizationToleranceC = s.StabilizationToleranceC,
                     StabilizationToleranceRh = s.StabilizationToleranceRh,
                     SoakMinutes = s.SoakMinutes,
-                    BiasTargetLevel = s.BiasTargetLevel
+                    BiasTargetLevel = s.BiasTargetLevel,
+                    DisableHumidityControl = s.DisableHumidityControl
                 };
                 foreach (var target in s.CameraTargets)
                     step.CameraTargets.Add(new CameraTargetModel { AgentId = target.AgentId, CameraIndex = target.CameraIndex, IsSelected = true });

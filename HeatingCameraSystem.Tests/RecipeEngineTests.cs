@@ -60,7 +60,7 @@ namespace HeatingCameraSystem.Tests
             var recipe = SafetyBandRecipe();
 
             bool gateInvoked = false;
-            Func<CancellationToken, Task> neverResume = ct =>
+            Func<CancellationToken, Task<bool>> neverResume = ct =>
             {
                 gateInvoked = true;
                 throw new OperationCanceledException(ct);
@@ -95,11 +95,11 @@ namespace HeatingCameraSystem.Tests
             var recipe = SafetyBandRecipe();
 
             int gateCalls = 0;
-            Func<CancellationToken, Task> resume = ct =>
+            Func<CancellationToken, Task<bool>> resume = ct =>
             {
                 gateCalls++;
                 resumed = true;
-                return Task.CompletedTask;
+                return Task.FromResult(false);
             };
 
             AlarmSink.Entries.Clear();
@@ -637,10 +637,10 @@ namespace HeatingCameraSystem.Tests
                 }
             };
 
-            Func<CancellationToken, Task> resume = ct =>
+            Func<CancellationToken, Task<bool>> resume = ct =>
             {
                 resumeInvoked = true;
-                return Task.CompletedTask;
+                return Task.FromResult(false);
             };
 
             AlarmSink.Entries.Clear();
@@ -712,7 +712,43 @@ namespace HeatingCameraSystem.Tests
                 .WaitAsync(TimeSpan.FromSeconds(5));
 
             mockPlc.Verify(p => p.SetTargetHumidityAsync(60f), Times.Once);
+            mockPlc.Verify(p => p.SetHumidityControlAsync(true), Times.Once);
             mockPlc.Verify(p => p.SetTargetTemperatureAsync(It.IsAny<float>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_HumidityControl_WhenDisabled_TurnsControlOffWithoutWritingTarget()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new RecipeStep
+                    {
+                        Kind = RecipeStepKind.HumidityControl,
+                        TargetChamberHumidity = 60,
+                        DisableHumidityControl = true,
+
+                        // 대기 옵션이 켜져 있어도 제어를 끄면 도달을 기다리지 않아야 한다.
+                        WaitForChamberStabilization = true
+                    }
+                }
+            };
+
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            mockPlc.Verify(p => p.SetHumidityControlAsync(false), Times.Once);
+            mockPlc.Verify(p => p.SetTargetHumidityAsync(It.IsAny<float>()), Times.Never);
+            mockPlc.Verify(p => p.GetCurrentHumidityAsync(), Times.Never);
         }
 
         [Fact]
@@ -799,6 +835,125 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal(5200, message.BiasTargetLevel);
         }
 
+        [Fact]
+        public async Task ExecuteRecipeAsync_WhenCameraOffline_RaisesPreflightAlarmAndWaits()
+        {
+            var (mockPlc, mockNats, mockHistory, published) = WireCameraControlRoundTrip();
+            var directory = new AgentDirectory();
+            directory.Note(new AgentStatusMessage { AgentId = "Agent_1" });
+
+            bool resumeInvoked = false;
+            Func<CancellationToken, Task<bool>> resume = _ =>
+            {
+                resumeInvoked = true;
+                return Task.FromResult(false);
+            };
+
+            AlarmSink.Entries.Clear();
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object, agentDirectory: directory)
+                .ExecuteRecipeAsync(TwoCameraNucRecipe(), CancellationToken.None, null, resume)
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.True(resumeInvoked);
+            Assert.Contains(AlarmSink.Entries, e => e.Code == AlarmCodes.CameraOffline);
+
+            // 스킵을 고르지 않았으므로 오프라인 카메라에도 명령은 나간다.
+            Assert.Contains(published, m => m.AgentId == "Agent_2");
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_WhenOperatorSkips_ExcludesOnlyTheOfflineCamera()
+        {
+            var (mockPlc, mockNats, mockHistory, published) = WireCameraControlRoundTrip();
+            var directory = new AgentDirectory();
+            directory.Note(new AgentStatusMessage { AgentId = "Agent_1" });
+
+            Func<CancellationToken, Task<bool>> skip = _ => Task.FromResult(true);
+
+            AlarmSink.Entries.Clear();
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object, agentDirectory: directory)
+                .ExecuteRecipeAsync(TwoCameraNucRecipe(), CancellationToken.None, null, skip)
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Contains(published, m => m.AgentId == "Agent_1");
+            Assert.DoesNotContain(published, m => m.AgentId == "Agent_2");
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_WhenAllCamerasOnline_SkipsPreflightAlarm()
+        {
+            var (mockPlc, mockNats, mockHistory, published) = WireCameraControlRoundTrip();
+            var directory = new AgentDirectory();
+            directory.Note(new AgentStatusMessage { AgentId = "Agent_1" });
+            directory.Note(new AgentStatusMessage { AgentId = "Agent_2" });
+
+            bool resumeInvoked = false;
+            Func<CancellationToken, Task<bool>> resume = _ =>
+            {
+                resumeInvoked = true;
+                return Task.FromResult(false);
+            };
+
+            AlarmSink.Entries.Clear();
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object, agentDirectory: directory)
+                .ExecuteRecipeAsync(TwoCameraNucRecipe(), CancellationToken.None, null, resume)
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.False(resumeInvoked);
+            Assert.DoesNotContain(AlarmSink.Entries, e => e.Code == AlarmCodes.CameraOffline);
+            Assert.Equal(2, published.Count);
+        }
+
+        private static Recipe TwoCameraNucRecipe() => new Recipe
+        {
+            Name = "Preflight",
+            Steps = new List<RecipeStep>
+            {
+                new()
+                {
+                    Kind = RecipeStepKind.CameraCommand,
+                    CameraOperation = CameraControlOps.Nuc,
+                    CameraTargets = new List<RecipeCameraTarget>
+                    {
+                        new() { AgentId = "Agent_1", CameraIndex = 1 },
+                        new() { AgentId = "Agent_2", CameraIndex = 2 }
+                    }
+                }
+            }
+        };
+
+        private static (Mock<IPlcController>, Mock<INatsCommunicationService>, Mock<ICaptureHistoryRepository>, List<CameraControlMessage>)
+            WireCameraControlRoundTrip()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+            var published = new List<CameraControlMessage>();
+            var ackCallbacks = new Dictionary<string, Action<CameraControlAckMessage>>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+            mockNats.Setup(n => n.SubscribeCameraControlAckAsync(It.IsAny<string>(), It.IsAny<Action<CameraControlAckMessage>>()))
+                .Callback<string, Action<CameraControlAckMessage>>((agentId, callback) => ackCallbacks[agentId] = callback)
+                .Returns(Task.CompletedTask);
+            mockNats.Setup(n => n.PublishCameraControlAsync(It.IsAny<CameraControlMessage>()))
+                .Callback<CameraControlMessage>(message =>
+                {
+                    published.Add(message);
+                    ackCallbacks[message.AgentId](new CameraControlAckMessage
+                    {
+                        AgentId = message.AgentId,
+                        CameraIndex = message.CameraIndex,
+                        Op = message.Op,
+                        RequestId = message.RequestId,
+                        IsSuccess = true
+                    });
+                })
+                .Returns(Task.CompletedTask);
+
+            return (mockPlc, mockNats, mockHistory, published);
+        }
+
         [Theory]
         [InlineData(0, 0)]
         [InlineData(5, 5)]
@@ -829,8 +984,14 @@ namespace HeatingCameraSystem.Tests
                 new RecipeStep
                 {
                     Kind = RecipeStepKind.ChamberControl,
-                    TargetChamberTemperature = 25.0,
+                    TargetChamberTemperature = 25.0
+                },
+                // 습도 한계는 습도 스텝이 정한다. 온도 스텝에 넣으면 감시되지 않는다.
+                new RecipeStep
+                {
+                    Kind = RecipeStepKind.HumidityControl,
                     TargetChamberHumidity = 50.0,
+                    WaitForChamberStabilization = false,
                     UseSafetyHumidity = true,
                     SafetyHumidityMin = 45.0f,
                     SafetyHumidityMax = 55.0f

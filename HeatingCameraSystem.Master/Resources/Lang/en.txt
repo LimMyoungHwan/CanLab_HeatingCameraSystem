@@ -379,6 +379,18 @@ Alarm_Msg_SafetyCheckFailed=Safety range check failed: {0}
 
 Alarm_Msg_SafetyHold={0} Waiting for operator confirmation.
 
+Alarm_Msg_CameraOffline=Unresponsive cameras: {0}
+
+Alarm_CAM_004_Cause=Some cameras this recipe will command are not sending heartbeats. They are powered off or their Agent is not running.
+
+Alarm_CAM_004_Action=Check power and the Agent process on those camera PCs, then resume. To run without them, tick 'Skip unresponsive cameras' before resuming and they are excluded for the rest of the run.
+
+Recipe_Phase_CameraOfflineHold=Unresponsive cameras — waiting for operator
+
+Dash_SkipUnresponsive=Skip unresponsive cameras
+
+Dash_SkipUnresponsiveHint=Tick and resume to exclude unresponsive cameras for the rest of the run. The remaining cameras keep running.
+
 Safety_BelowMinTemp=Below safety minimum: temperature {0:F1}℃ < {1:F1}℃.
 
 Safety_AboveMaxTemp=Above safety maximum: temperature {0:F1}℃ > {1:F1}℃.

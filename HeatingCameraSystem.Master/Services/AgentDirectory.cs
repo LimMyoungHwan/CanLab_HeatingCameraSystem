@@ -15,13 +15,19 @@ namespace HeatingCameraSystem.Master.Services
     /// </summary>
     public sealed class AgentDirectory
     {
+        /// <summary>하트비트가 이 시간 안에 들어왔으면 온라인으로 본다. 하트비트 주기(5초)의 3배다.</summary>
+        public static readonly TimeSpan OnlineThreshold = TimeSpan.FromSeconds(15);
+
         private readonly ConcurrentDictionary<string, string> _byAlias = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, double> _cameraTemperatures = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, DateTime> _lastSeen = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>하트비트 한 건에서 alias → AgentId 매핑과 카메라 온도를 갱신한다.</summary>
         public void Note(AgentStatusMessage message)
         {
             if (message is null || string.IsNullOrWhiteSpace(message.AgentId)) return;
+
+            _lastSeen[message.AgentId] = DateTime.UtcNow;
 
             // 온도는 alias가 없어도 AgentId만 있으면 기록한다. null이면 직전 값을 지우지 않는다.
             if (message.CameraTemperature.HasValue)
@@ -34,6 +40,15 @@ namespace HeatingCameraSystem.Master.Services
         /// <summary>하트비트로 들어온 AgentId별 최신 카메라 온도 스냅샷.</summary>
         public IReadOnlyDictionary<string, double> CameraTemperatures =>
             new Dictionary<string, double>(_cameraTemperatures, StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// 하트비트가 <see cref="OnlineThreshold"/> 안에 들어온 Agent인지 본다.
+        /// 한 번도 못 본 AgentId도 false다 — 레시피는 이 둘을 구분할 필요가 없다(둘 다 명령이 못 간다).
+        /// </summary>
+        public bool IsAgentOnline(string? agentId) =>
+            !string.IsNullOrWhiteSpace(agentId)
+            && _lastSeen.TryGetValue(agentId, out DateTime seen)
+            && DateTime.UtcNow - seen <= OnlineThreshold;
 
         /// <summary>alias로 현재 AgentId를 찾는다. 모르는 alias면 null을 돌려준다.</summary>
         public string? ResolveByAlias(string? alias) =>

@@ -88,20 +88,12 @@
                                 <ComboBoxItem Content="설정만 하고 진행"><ComboBoxItem.Tag><sys:Boolean>False</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
                             </ComboBox>
                         </StackPanel>
-                        <StackPanel Margin="0,0,16,0" Width="170">
+                        <StackPanel Width="170">
                             <CheckBox Content="온도 안전범위" IsChecked="{Binding UseSafetyTemperature}" Foreground="{StaticResource TextOnSurface}" FontSize="11"/>
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,0" IsEnabled="{Binding UseSafetyTemperature}">
                                 <TextBox Text="{Binding SafetyTempMin}" Width="70" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                                 <TextBlock Text="~" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="6,0"/>
                                 <TextBox Text="{Binding SafetyTempMax}" Width="70" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
-                            </StackPanel>
-                        </StackPanel>
-                        <StackPanel Width="170">
-                            <CheckBox Content="습도 안전범위" IsChecked="{Binding UseSafetyHumidity}" Foreground="{StaticResource TextOnSurface}" FontSize="11"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0" IsEnabled="{Binding UseSafetyHumidity}">
-                                <TextBox Text="{Binding SafetyHumidityMin}" Width="70" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
-                                <TextBlock Text="~" Foreground="{StaticResource TextOnSurfaceVariant}" VerticalAlignment="Center" Margin="6,0"/>
-                                <TextBox Text="{Binding SafetyHumidityMax}" Width="70" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                             </StackPanel>
                         </StackPanel>
                     </StackPanel>
@@ -122,15 +114,20 @@
                     </StackPanel>
                     <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
                     <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
-                        <StackPanel Margin="0,0,16,0"><TextBlock Text="CHAMBER %RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding TargetChamberHumidity}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
-                        <StackPanel Margin="0,0,16,0"><TextBlock Text="도달 오차 ±%RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding StabilizationToleranceRh}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
-                        <StackPanel Margin="0,0,16,0"><TextBlock Text="도달 후 유지(분)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding SoakMinutes}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
-                        <StackPanel Width="170" Margin="0,0,16,0">
+                        <StackPanel Margin="0,0,16,0" IsEnabled="{Binding HumidityControlEnabled}"><TextBlock Text="CHAMBER %RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding TargetChamberHumidity}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0" IsEnabled="{Binding HumidityControlEnabled}"><TextBlock Text="도달 오차 ±%RH" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding StabilizationToleranceRh}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0" IsEnabled="{Binding HumidityControlEnabled}"><TextBlock Text="도달 후 유지(분)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding SoakMinutes}" Width="100" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Width="170" Margin="0,0,16,0" IsEnabled="{Binding HumidityControlEnabled}">
                             <TextBlock Text="진행 방식" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <ComboBox SelectedValuePath="Tag" SelectedValue="{Binding WaitForChamberStabilization}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">
                                 <ComboBoxItem Content="습도 도달까지 대기"><ComboBoxItem.Tag><sys:Boolean>True</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
                                 <ComboBoxItem Content="설정만 하고 진행"><ComboBoxItem.Tag><sys:Boolean>False</sys:Boolean></ComboBoxItem.Tag></ComboBoxItem>
                             </ComboBox>
+                        </StackPanel>
+                        <StackPanel Width="150" Margin="0,0,16,0">
+                            <TextBlock Text="제어" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <CheckBox Content="습도 제어 끄기" IsChecked="{Binding DisableHumidityControl}" Foreground="{StaticResource TextOnSurface}" FontSize="11" Margin="0,4,0,0"
+                                      ToolTip="체크하면 목표를 쓰지 않고 챔버 습도 제어를 끕니다. 다음 습도 스텝에서 다시 켜집니다."/>
                         </StackPanel>
                         <StackPanel Width="170">
                             <CheckBox Content="습도 안전범위" IsChecked="{Binding UseSafetyHumidity}" Foreground="{StaticResource TextOnSurface}" FontSize="11"/>

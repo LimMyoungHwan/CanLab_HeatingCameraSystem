@@ -379,6 +379,18 @@ Alarm_Msg_SafetyCheckFailed=안전 범위 확인 실패: {0}
 
 Alarm_Msg_SafetyHold={0} 사용자 확인 대기.
 
+Alarm_Msg_CameraOffline=응답 없는 카메라: {0}
+
+Alarm_CAM_004_Cause=레시피가 명령할 카메라 중 일부가 하트비트를 보내지 않고 있습니다. 전원이 꺼졌거나 Agent가 실행 중이 아닙니다.
+
+Alarm_CAM_004_Action=해당 카메라 PC의 전원과 Agent 실행을 확인한 뒤 재개하세요. 그 카메라 없이 진행하려면 '응답 없는 카메라 건너뛰기'를 체크하고 재개하면 남은 실행에서 제외됩니다.
+
+Recipe_Phase_CameraOfflineHold=응답 없는 카메라 — 사용자 확인 대기
+
+Dash_SkipUnresponsive=응답 없는 카메라 건너뛰기
+
+Dash_SkipUnresponsiveHint=체크하고 재개하면 응답 없는 카메라는 남은 실행에서 제외됩니다. 나머지 카메라는 정상 진행합니다.
+
 Safety_BelowMinTemp=안전 하한 미만: 온도 {0:F1}℃ < {1:F1}℃.
 
 Safety_AboveMaxTemp=안전 상한 초과: 온도 {0:F1}℃ > {1:F1}℃.

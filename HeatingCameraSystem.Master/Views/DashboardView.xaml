@@ -779,6 +779,7 @@
                                     Visibility="{Binding IsRecipePaused, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <StackPanel>
                                     <TextBlock Text="{loc:Loc Dash_Paused}" Foreground="{StaticResource Error}" FontSize="11" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <CheckBox Content="{loc:Loc Dash_SkipUnresponsive}" IsChecked="{Binding SkipUnresponsiveCameras}" Foreground="{StaticResource TextOnSurface}" FontSize="11" Margin="0,0,0,8" ToolTip="{loc:Loc Dash_SkipUnresponsiveHint}"/>
                                     <Button Content="{loc:Loc Dash_Resume}" Background="{StaticResource Secondary}" Foreground="#00210c" FontSize="16" FontWeight="Bold" Padding="0,10" BorderThickness="0" Command="{Binding ResumeRecipeCommand}"/>
                                 </StackPanel>
                             </Border>

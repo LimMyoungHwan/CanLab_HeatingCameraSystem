@@ -129,6 +129,12 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>스텝별 챔버 목표 습도(%RH).</summary>
         public double TargetChamberHumidity { get; set; }
 
+        /// <summary>
+        /// true면 습도 스텝이 목표를 쓰는 대신 챔버 습도 제어를 끈다.
+        /// PLC는 마지막 목표를 계속 쫓으므로, 한 번 맞춘 뒤 방치하려면 이 스텝이 필요하다.
+        /// </summary>
+        public bool DisableHumidityControl { get; set; }
+
         /// <summary>true면 챔버가 목표값에 도달할 때까지 대기하고, false면 설정만 하고 다음 스텝으로 넘어간다.</summary>
         public bool WaitForChamberStabilization { get; set; } = true;
 

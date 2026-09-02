@@ -172,6 +172,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         [NotifyCanExecuteChangedFor(nameof(ResumeRecipeCommand))]
         private bool _isRecipePaused;
 
+        [ObservableProperty]
+        private bool _skipUnresponsiveCameras;
+
         public ObservableCollection<DashboardSlot> CameraFeeds { get; } = new ObservableCollection<DashboardSlot>();
         public ObservableCollection<AgentNode> Agents { get; } = new ObservableCollection<AgentNode>();
         public ObservableCollection<Recipe> Recipes { get; } = new ObservableCollection<Recipe>();
@@ -950,7 +953,11 @@ namespace HeatingCameraSystem.Master.ViewModels
             RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopping"];
         }
 
-        private async Task WaitForResumeAsync(CancellationToken cancellationToken)
+        /// <summary>
+        /// 레시피를 세우고 운영자 확인을 기다린다. 돌려주는 값은 운영자가 켠 "동일 증상 스킵" 여부이며,
+        /// 레시피 엔진은 이 값이 true일 때 응답 없는 카메라를 남은 실행에서 제외한다.
+        /// </summary>
+        private async Task<bool> WaitForResumeAsync(CancellationToken cancellationToken)
         {
             var gate = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
             _pauseGate = gate;
@@ -959,6 +966,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             try
             {
                 await gate.Task.ConfigureAwait(false);
+                return SkipUnresponsiveCameras;
             }
             finally
             {

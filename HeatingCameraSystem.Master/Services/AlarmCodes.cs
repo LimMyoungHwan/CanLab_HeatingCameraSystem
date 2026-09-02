@@ -14,6 +14,7 @@ namespace HeatingCameraSystem.Master.Services
         public const string AgentTimeout = "CAM-001";
         public const string PartialCapture = "CAM-002";
         public const string CaptureScheduleSlip = "CAM-003";
+        public const string CameraOffline = "CAM-004";
         public const string BlackBodyFailed = "BB-001";
         public const string UserStopped = "RCP-001";
         public const string EmergencyStopped = "RCP-002";
