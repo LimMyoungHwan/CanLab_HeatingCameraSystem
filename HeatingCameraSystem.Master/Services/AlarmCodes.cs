@@ -10,6 +10,7 @@ namespace HeatingCameraSystem.Master.Services
         public const string PlcCommFailed = "PLC-001";
         public const string SafetyCheckFailed = "PLC-002";
         public const string ChamberStopFailed = "PLC-003";
+        public const string MotorMoveTimeout = "PLC-004";
         public const string NatsPublishFailed = "NATS-001";
         public const string AgentTimeout = "CAM-001";
         public const string PartialCapture = "CAM-002";

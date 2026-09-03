@@ -313,6 +313,10 @@ Alarm_PLC_003_Cause=Both chamber stop attempts failed. The heater may still be r
 
 Alarm_PLC_003_Action=Stop the chamber manually at the PLC panel now. Do not wait for the link to recover.
 
+Alarm_PLC_004_Cause=The motor move step did not reach the target point within the time limit. The move command may not have executed, or the servo may be stalled.
+
+Alarm_PLC_004_Action=Check servo drive power, alarms, and cabling. Verify the target point coordinates, then restart the recipe.
+
 Alarm_NATS_001_Cause=A command could not be sent to the camera Agent (NATS link down). Only that camera was skipped; the chamber sequence continued.
 
 Alarm_NATS_001_Action=Check the NATS broker and the camera PC network. Capture data for this interval is missing.
@@ -361,6 +365,8 @@ Alarm_Msg_StepFailed='{0}' step {1}/{2} failed: {3}
 
 Alarm_Msg_ChamberStopFailed=Chamber stop failed: {0}
 
+Alarm_Msg_MotorTimeout=Step {0}/{1} motor move did not finish within {2} min.
+
 Alarm_Msg_BlackBodySetFailed=Step {0} black body {1} temperature set failed: {2}
 
 Alarm_Msg_BlackBodyReadFailed=Step {0} black body {1} temperature read failed: {2}
@@ -402,6 +408,8 @@ Safety_AboveMaxHumidity=Above safety maximum: humidity {0:F1}%RH > {1:F1}%RH.
 # Recipe progress phases
 
 Recipe_Phase_ServoMove=Servo move ({0}/{1})
+
+Recipe_Phase_Wait=Wait {2} ({0}/{1})
 
 Recipe_Phase_TempSet=Temperature set ({0}/{1})
 

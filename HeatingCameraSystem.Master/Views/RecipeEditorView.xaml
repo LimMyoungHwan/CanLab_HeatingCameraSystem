@@ -65,6 +65,27 @@
             </Border>
         </DataTemplate>
 
+        <DataTemplate x:Key="WaitStepTemplate">
+            <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
+                    AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
+                        <TextBlock Text="대기" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
+                        <StackPanel Margin="0,0,16,0" Width="100"><TextBlock Text="시 (H)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding WaitHours}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0" Width="100"><TextBlock Text="분 (M)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding WaitMinutes}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                        <StackPanel Width="100"><TextBlock Text="초 (S)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding WaitSeconds}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
         <DataTemplate x:Key="ChamberStepTemplate">
             <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
                     AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
@@ -422,6 +443,7 @@
                                                     <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.HumidityControl}"><Setter Property="ContentTemplate" Value="{StaticResource HumidityStepTemplate}"/></DataTrigger>
                                                     <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.CameraCommand}"><Setter Property="ContentTemplate" Value="{StaticResource CameraStepTemplate}"/></DataTrigger>
                                                     <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.BlackBodyControl}"><Setter Property="ContentTemplate" Value="{StaticResource BlackBodyStepTemplate}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.Wait}"><Setter Property="ContentTemplate" Value="{StaticResource WaitStepTemplate}"/></DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </ContentControl.Style>
@@ -436,6 +458,7 @@
                             <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.HumidityControl}" Content="+ PLC 습도 설정" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
                             <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.CameraCommand}" Content="+ 카메라 명령" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
                             <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.BlackBodyControl}" Content="+ 블랙바디 온도 제어" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
+                            <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.Wait}" Content="+ 대기" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
                         </WrapPanel>
                     </StackPanel>
                 </ScrollViewer>

@@ -30,6 +30,7 @@ namespace HeatingCameraSystem.Master.Services
         private readonly float _tempTolerance;
         private readonly int _rampStepIntervalSeconds;
         private readonly TimeSpan _captureTimeout;
+        private readonly TimeSpan _motorMoveTimeout;
         private readonly string? _imageCacheDir;
         private readonly ICameraDeviceRepository? _deviceRepo;
         private readonly IBlackBodyController _blackBody;
@@ -97,6 +98,7 @@ namespace HeatingCameraSystem.Master.Services
             _tempTolerance  = s.TemperatureTolerance;
             _rampStepIntervalSeconds = s.RampStepIntervalSeconds;
             _captureTimeout = TimeSpan.FromSeconds(s.CaptureResultTimeoutSeconds);
+            _motorMoveTimeout = TimeSpan.FromSeconds(s.MotorMoveTimeoutSeconds);
             _imageCacheDir  = imageCacheDir;
             _deviceRepo     = deviceRepo;
             _blackBody      = blackBody ?? new HeatingCameraSystem.Protocols.PlcBlackBodyAdapter(plcController);
@@ -299,12 +301,13 @@ namespace HeatingCameraSystem.Master.Services
                                 await _plcController.MoveServoToPositionAsync(step.TargetPositionIndex);
                             else
                                 await _plcController.MoveToCoordinateAsync(step.PositionX, step.PositionY);
-                            while (!cancellationToken.IsCancellationRequested)
-                            {
-                                PlcStatusSnapshot status = await _plcController.ReadStatusAsync();
-                                if (!status.ServoXBusy && !status.ServoYBusy) break;
-                                await Task.Delay(500, cancellationToken);
-                            }
+                            await WaitForMotorMoveAsync(step, i, totalSteps, cancellationToken);
+                            break;
+
+                        case RecipeStepKind.Wait:
+                            progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = L("Recipe_Phase_Wait", i + 1, totalSteps, FormatDuration(step.WaitDurationSeconds)) });
+                            if (step.WaitDurationSeconds > 0)
+                                await Task.Delay(TimeSpan.FromSeconds(step.WaitDurationSeconds), cancellationToken);
                             break;
 
                         case RecipeStepKind.ChamberControl:
@@ -388,6 +391,43 @@ namespace HeatingCameraSystem.Master.Services
             }
 
             progress?.Report(new RecipeProgress { CurrentStep = totalSteps, TotalSteps = totalSteps, CurrentPhase = LocalizationManager.Instance["Recipe_Phase_Done"] });
+        }
+
+        /// <summary>
+        /// 모터 이동 완료를 기다린다. 자동(포인트) 이동은 현재 포인트가 목표 인덱스가 되고 두 축이
+        /// 모두 정지할 때까지, 수동(좌표) 이동은 두 축이 정지할 때까지 폴링한다. 이동 트리거가
+        /// 모멘터리라 명령 직후엔 아직 Busy가 서지 않아 곧장 통과하던 문제(가끔 이동 없이 다음
+        /// 스텝으로 넘어감)를 포인트 값 확인으로 막는다. 제한 시간 초과 시 알람 후 예외로 중단한다.
+        /// </summary>
+        private async Task WaitForMotorMoveAsync(RecipeStep step, int index, int totalSteps, CancellationToken cancellationToken)
+        {
+            bool automatic = step.MotorMoveType == MotorMoveType.Automatic;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                PlcStatusSnapshot status = await _plcController.ReadStatusAsync();
+                bool idle = !status.ServoXBusy && !status.ServoYBusy;
+                bool arrived = automatic ? idle && status.CurrentPoint == step.TargetPositionIndex : idle;
+                if (arrived) return;
+
+                if (clock.Elapsed >= _motorMoveTimeout)
+                {
+                    AlarmSink.Raise(AlarmCodes.MotorMoveTimeout, AlarmSeverity.Error, RecipeSource,
+                        L("Alarm_Msg_MotorTimeout", index + 1, totalSteps, (int)_motorMoveTimeout.TotalMinutes));
+                    throw new TimeoutException($"Servo move timed out after {_motorMoveTimeout.TotalMinutes:F0} min at step {index + 1}/{totalSteps}.");
+                }
+
+                await Task.Delay(500, cancellationToken);
+            }
+        }
+
+        private static string FormatDuration(int totalSeconds)
+        {
+            TimeSpan t = TimeSpan.FromSeconds(totalSeconds < 0 ? 0 : totalSeconds);
+            return $"{(int)t.TotalHours:D2}:{t.Minutes:D2}:{t.Seconds:D2}";
         }
 
         private async Task ExecuteBlackBodyStepAsync(

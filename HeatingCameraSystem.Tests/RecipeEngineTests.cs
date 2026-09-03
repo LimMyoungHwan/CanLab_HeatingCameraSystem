@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using HeatingCameraSystem.Core.Config;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Master.Services;
@@ -216,7 +217,7 @@ namespace HeatingCameraSystem.Tests
             mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(30.0f);
             mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(60.0f);
             mockPlc.Setup(p => p.MoveServoToPositionAsync(It.IsAny<int>())).Returns(Task.CompletedTask);
-            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, CurrentPoint = 7 });
             mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
             mockNats.Setup(n => n.SubscribeCameraControlAckAsync(It.IsAny<string>(), It.IsAny<Action<CameraControlAckMessage>>()))
                 .Callback<string, Action<CameraControlAckMessage>>((agentId, callback) => ackCallbacks[agentId] = callback)
@@ -963,6 +964,96 @@ namespace HeatingCameraSystem.Tests
             var step = new RecipeStep { Kind = RecipeStepKind.ChamberControl, SoakMinutes = soakMinutes };
 
             Assert.Equal(TimeSpan.FromMinutes(expectedMinutes), RecipeEngine.SoakDuration(step));
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_AutomaticMotorMove_WaitsUntilCurrentPointReachesTarget()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.MoveServoToPositionAsync(It.IsAny<int>())).Returns(Task.CompletedTask);
+            mockPlc.SetupSequence(p => p.ReadStatusAsync())
+                .ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, CurrentPoint = 0 })
+                .ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, CurrentPoint = 0 })
+                .ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, CurrentPoint = 5 });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.MotorMove, MotorMoveType = MotorMoveType.Automatic, TargetPositionIndex = 5 }
+                }
+            };
+
+            AlarmSink.Entries.Clear();
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(10));
+
+            mockPlc.Verify(p => p.MoveServoToPositionAsync(5), Times.Once);
+            mockPlc.Verify(p => p.ReadStatusAsync(), Times.AtLeast(3));
+            Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Error);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_AutomaticMotorMove_TimesOutRaisesAlarmAndAborts()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.MoveServoToPositionAsync(It.IsAny<int>())).Returns(Task.CompletedTask);
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, CurrentPoint = 0 });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.MotorMove, MotorMoveType = MotorMoveType.Automatic, TargetPositionIndex = 9 },
+                    new() { Kind = RecipeStepKind.CameraCommand, CameraOperation = CameraControlOps.Capture, CameraIndex = 1 }
+                }
+            };
+
+            var engine = new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object,
+                new RecipeEngineSettings { MotorMoveTimeoutSeconds = 0 });
+
+            AlarmSink.Entries.Clear();
+            await Assert.ThrowsAsync<TimeoutException>(
+                () => engine.ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(5)));
+
+            Assert.Contains(AlarmSink.Entries, e => e.Code == AlarmCodes.MotorMoveTimeout && e.Severity == AlarmSeverity.Error);
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_WaitStep_BlocksForDurationWithoutTouchingPlc()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.Wait, WaitDurationSeconds = 1 }
+                }
+            };
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            AlarmSink.Entries.Clear();
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(10));
+            clock.Stop();
+
+            Assert.True(clock.Elapsed >= TimeSpan.FromSeconds(1), $"wait step should block for at least 1s but took {clock.Elapsed}");
+            mockPlc.Verify(p => p.ReadStatusAsync(), Times.Never);
+            mockPlc.Verify(p => p.StartChamberAsync(), Times.Never);
+            Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Error);
         }
 
         private static Recipe HappyPathRecipe() => new Recipe

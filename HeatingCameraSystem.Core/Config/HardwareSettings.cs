@@ -245,5 +245,11 @@ namespace HeatingCameraSystem.Core.Config
         /// 기본 60초(예: 10→20℃, 도달시간 10분 → 분당 1℃).
         /// </summary>
         public int RampStepIntervalSeconds { get; set; } = 60;
+
+        /// <summary>
+        /// 모터 이동 스텝이 목표 도달을 기다리는 최대 시간(초). 이 시간 안에 포인트가 목표에
+        /// 도달하지 않으면 알람을 올리고 레시피를 중단한다. 기본 300초(5분).
+        /// </summary>
+        public int MotorMoveTimeoutSeconds { get; set; } = 300;
     }
 }

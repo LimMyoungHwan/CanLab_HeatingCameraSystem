@@ -46,6 +46,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private double _stabilizationToleranceC;
         [ObservableProperty] private double _stabilizationToleranceRh;
         [ObservableProperty] private int _soakMinutes;
+        [ObservableProperty] private int _waitHours;
+        [ObservableProperty] private int _waitMinutes;
+        [ObservableProperty] private int _waitSeconds;
         [ObservableProperty] private RecipeStepKind _kind = RecipeStepKind.LegacyCapture;
         [ObservableProperty] private MotorMoveType _motorMoveType = MotorMoveType.Manual;
         [ObservableProperty] private string _cameraOperation = CameraControlOps.Capture;
@@ -189,7 +192,8 @@ namespace HeatingCameraSystem.Master.ViewModels
             new() { Value = RecipeStepKind.ChamberControl, Label = "PLC 온도 설정" },
             new() { Value = RecipeStepKind.HumidityControl, Label = "PLC 습도 설정" },
             new() { Value = RecipeStepKind.CameraCommand, Label = "카메라 명령" },
-            new() { Value = RecipeStepKind.BlackBodyControl, Label = "블랙바디 온도 제어" }
+            new() { Value = RecipeStepKind.BlackBodyControl, Label = "블랙바디 온도 제어" },
+            new() { Value = RecipeStepKind.Wait, Label = "대기" }
         };
         public CameraOperationOption[] CameraOperationOptions { get; } =
         {
@@ -440,7 +444,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                     StabilizationToleranceRh = s.StabilizationToleranceRh,
                     SoakMinutes = s.SoakMinutes,
                     BiasTargetLevel = s.BiasTargetLevel,
-                    DisableHumidityControl = s.DisableHumidityControl
+                    DisableHumidityControl = s.DisableHumidityControl,
+                    WaitDurationSeconds = s.WaitDurationSeconds
                 }).ToList()
             };
         }
@@ -496,7 +501,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                     StabilizationToleranceRh = s.StabilizationToleranceRh,
                     SoakMinutes = s.SoakMinutes,
                     BiasTargetLevel = s.BiasTargetLevel,
-                    DisableHumidityControl = s.DisableHumidityControl
+                    DisableHumidityControl = s.DisableHumidityControl,
+                    WaitDurationSeconds = s.WaitHours * 3600 + s.WaitMinutes * 60 + s.WaitSeconds
                 });
             }
             return r;
@@ -549,7 +555,10 @@ namespace HeatingCameraSystem.Master.ViewModels
                     StabilizationToleranceRh = s.StabilizationToleranceRh,
                     SoakMinutes = s.SoakMinutes,
                     BiasTargetLevel = s.BiasTargetLevel,
-                    DisableHumidityControl = s.DisableHumidityControl
+                    DisableHumidityControl = s.DisableHumidityControl,
+                    WaitHours = s.WaitDurationSeconds / 3600,
+                    WaitMinutes = (s.WaitDurationSeconds % 3600) / 60,
+                    WaitSeconds = s.WaitDurationSeconds % 60
                 };
                 foreach (var target in s.CameraTargets)
                     step.CameraTargets.Add(new CameraTargetModel { AgentId = target.AgentId, CameraIndex = target.CameraIndex, IsSelected = true });

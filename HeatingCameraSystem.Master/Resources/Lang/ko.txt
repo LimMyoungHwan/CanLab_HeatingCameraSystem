@@ -313,6 +313,10 @@ Alarm_PLC_003_Cause=챔버 정지 명령이 두 번 모두 실패했습니다. �
 
 Alarm_PLC_003_Action=즉시 PLC 조작반에서 챔버를 수동으로 정지시키세요. 통신 복구를 기다리지 마세요.
 
+Alarm_PLC_004_Cause=모터 이동 스텝이 제한 시간 안에 목표 포인트에 도달하지 못했습니다. 이동 명령이 실행되지 않았거나 서보가 멈춰 있을 수 있습니다.
+
+Alarm_PLC_004_Action=서보 드라이브 전원과 알람, 케이블을 확인하세요. 목표 포인트 좌표가 올바른지 확인한 뒤 레시피를 다시 시작하세요.
+
 Alarm_NATS_001_Cause=카메라 Agent로 명령을 보내지 못했습니다(NATS 연결 끊김). 해당 카메라만 건너뛰고 챔버 시퀀스는 계속 진행했습니다.
 
 Alarm_NATS_001_Action=NATS 브로커 서버와 카메라 PC 네트워크를 확인하세요. 이 구간의 촬영 데이터는 누락되었습니다.
@@ -361,6 +365,8 @@ Alarm_Msg_StepFailed='{0}' 스텝 {1}/{2} 실행 실패: {3}
 
 Alarm_Msg_ChamberStopFailed=챔버 정지 실패: {0}
 
+Alarm_Msg_MotorTimeout=스텝 {0}/{1} 모터 이동이 {2}분 안에 완료되지 않았습니다.
+
 Alarm_Msg_BlackBodySetFailed=스텝 {0} 블랙바디 {1} 온도 설정 실패: {2}
 
 Alarm_Msg_BlackBodyReadFailed=스텝 {0} 블랙바디 {1} 온도 읽기 실패: {2}
@@ -402,6 +408,8 @@ Safety_AboveMaxHumidity=안전 상한 초과: 습도 {0:F1}%RH > {1:F1}%RH.
 # Recipe progress phases
 
 Recipe_Phase_ServoMove=서보 이동 ({0}/{1})
+
+Recipe_Phase_Wait=대기 {2} ({0}/{1})
 
 Recipe_Phase_TempSet=온도 설정 ({0}/{1})
 

@@ -45,7 +45,10 @@ namespace HeatingCameraSystem.Core.Models
         BlackBodyControl,
 
         /// <summary>챔버 습도 전용 스텝.</summary>
-        HumidityControl
+        HumidityControl,
+
+        /// <summary>지정한 시간(시·분·초)만큼 아무 동작 없이 대기하는 스텝.</summary>
+        Wait
     }
 
     public enum MotorMoveType
@@ -162,5 +165,11 @@ namespace HeatingCameraSystem.Core.Models
 
         public float SafetyHumidityMin { get; set; }
         public float SafetyHumidityMax { get; set; }
+
+        /// <summary>
+        /// 대기 스텝의 총 대기 시간(초). 편집 UI의 시·분·초 입력을 합산한 값이며
+        /// <see cref="RecipeStepKind.Wait"/>에서만 사용한다. 0이면 즉시 다음 스텝으로 넘어간다.
+        /// </summary>
+        public int WaitDurationSeconds { get; set; }
     }
 }
