@@ -317,6 +317,10 @@ Alarm_PLC_004_Cause=The motor move step did not reach the target point within th
 
 Alarm_PLC_004_Action=Check servo drive power, alarms, and cabling. Verify the target point coordinates, then restart the recipe.
 
+Alarm_PLC_005_Cause=The servo finished moving and stopped, but the PLC current-point value does not match the target point. The move did happen, so the recipe continued. The current-point address (D2740) or its encoding may not match this machine.
+
+Alarm_PLC_005_Action=Check that the captured images were taken at the intended position. If the position is correct, fix the current-point address (D2740) in the PLC settings to match the actual equipment. If the position is wrong, stop the recipe and review the servo point setup.
+
 Alarm_NATS_001_Cause=A command could not be sent to the camera Agent (NATS link down). Only that camera was skipped; the chamber sequence continued.
 
 Alarm_NATS_001_Action=Check the NATS broker and the camera PC network. Capture data for this interval is missing.
@@ -366,6 +370,8 @@ Alarm_Msg_StepFailed='{0}' step {1}/{2} failed: {3}
 Alarm_Msg_ChamberStopFailed=Chamber stop failed: {0}
 
 Alarm_Msg_MotorTimeout=Step {0}/{1} motor move did not finish within {2} min.
+
+Alarm_Msg_MotorPointMismatch=Step {0}/{1} servo stopped but the current point is not the target ({2}); it reads {3}. Treating the move as done and continuing.
 
 Alarm_Msg_BlackBodySetFailed=Step {0} black body {1} temperature set failed: {2}
 

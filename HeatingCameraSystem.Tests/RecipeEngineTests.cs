@@ -1029,6 +1029,49 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
+        public async Task ExecuteRecipeAsync_AutomaticMotorMove_WhenServoMovedButPointMismatches_WarnsAndContinues()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            // 첫 폴에서만 구동(Busy)을 보여 이동이 실제로 일어났음을 알리고, 그 뒤로는 정지 상태에서
+            // 목표(7)와 다른 포인트를 계속 준다 — D2740 의미가 설비와 다른 상황을 흉내낸다.
+            int reads = 0;
+            mockPlc.Setup(p => p.MoveServoToPositionAsync(It.IsAny<int>())).Returns(Task.CompletedTask);
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(() =>
+            {
+                reads++;
+                return reads == 1
+                    ? new PlcStatusSnapshot { ServoXBusy = true, ServoYBusy = false, CurrentPoint = 0 }
+                    : new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, CurrentPoint = 0 };
+            });
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
+            WireCaptureRoundTrip(mockNats);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.MotorMove, MotorMoveType = MotorMoveType.Automatic, TargetPositionIndex = 7 },
+                    new() { Kind = RecipeStepKind.CameraCommand, CameraOperation = CameraControlOps.Capture, CameraIndex = 1 }
+                }
+            };
+
+            var engine = new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object,
+                new RecipeEngineSettings { MotorMoveTimeoutSeconds = 30 });
+
+            AlarmSink.Entries.Clear();
+            await engine.ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(20));
+
+            Assert.Contains(AlarmSink.Entries, e => e.Code == AlarmCodes.MotorPointMismatch && e.Severity == AlarmSeverity.Warning);
+            Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Error);
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Once);
+        }
+
+        [Fact]
         public async Task ExecuteRecipeAsync_WaitStep_BlocksForDurationWithoutTouchingPlc()
         {
             var mockPlc = new Mock<IPlcController>();

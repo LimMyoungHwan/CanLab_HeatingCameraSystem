@@ -19,6 +19,13 @@ namespace HeatingCameraSystem.Master.Services
     {
         private const float DefaultHumidityTolerance = 5f;
 
+        /// <summary>
+        /// 자동 이동에서 두 축이 멈춘 뒤 현재 포인트 워드가 갱신되기를 기다려 주는 유예.
+        /// 정지 직후엔 포인트가 아직 안 올라와 있을 수 있어, 이 시간이 지나도 목표와 다를 때만
+        /// 불일치로 판정한다.
+        /// </summary>
+        private static readonly TimeSpan PointSettleGrace = TimeSpan.FromSeconds(2);
+
         private static string L(string key, params object?[] args)
             => string.Format(LocalizationManager.Instance[key], args);
 
@@ -397,12 +404,20 @@ namespace HeatingCameraSystem.Master.Services
         /// 모터 이동 완료를 기다린다. 자동(포인트) 이동은 현재 포인트가 목표 인덱스가 되고 두 축이
         /// 모두 정지할 때까지, 수동(좌표) 이동은 두 축이 정지할 때까지 폴링한다. 이동 트리거가
         /// 모멘터리라 명령 직후엔 아직 Busy가 서지 않아 곧장 통과하던 문제(가끔 이동 없이 다음
-        /// 스텝으로 넘어감)를 포인트 값 확인으로 막는다. 제한 시간 초과 시 알람 후 예외로 중단한다.
+        /// 스텝으로 넘어감)를 포인트 값 확인으로 막는다.
+        ///
+        /// 서보가 실제로 구동(Busy)한 뒤 정지했는데 포인트 워드만 목표와 다르면 이동 자체는
+        /// 일어난 것이므로 경고(PLC-005)만 남기고 진행한다. ServoCurrentPoint(D2740)의 주소·인코딩은
+        /// 설비마다 다를 수 있는데, 그 불일치로 레시피를 중단시키면 이후 캡처가 통째로 사라지기
+        /// 때문이다. 구동을 한 번도 못 본 채 제한 시간을 넘기면(이동 명령 미실행 또는 서보 정지가
+        /// 의심되는 경우) 종전대로 알람(PLC-004)을 올리고 예외로 중단한다.
         /// </summary>
         private async Task WaitForMotorMoveAsync(RecipeStep step, int index, int totalSteps, CancellationToken cancellationToken)
         {
             bool automatic = step.MotorMoveType == MotorMoveType.Automatic;
             var clock = System.Diagnostics.Stopwatch.StartNew();
+            bool sawBusy = false;
+            TimeSpan? idleSince = null;
 
             while (true)
             {
@@ -410,8 +425,32 @@ namespace HeatingCameraSystem.Master.Services
 
                 PlcStatusSnapshot status = await _plcController.ReadStatusAsync();
                 bool idle = !status.ServoXBusy && !status.ServoYBusy;
-                bool arrived = automatic ? idle && status.CurrentPoint == step.TargetPositionIndex : idle;
-                if (arrived) return;
+
+                if (!idle)
+                {
+                    sawBusy = true;
+                    idleSince = null;
+                }
+                else
+                {
+                    idleSince ??= clock.Elapsed;
+                }
+
+                if (!automatic)
+                {
+                    if (idle) return;
+                }
+                else if (idle)
+                {
+                    if (status.CurrentPoint == step.TargetPositionIndex) return;
+
+                    if (sawBusy && clock.Elapsed - idleSince!.Value >= PointSettleGrace)
+                    {
+                        AlarmSink.Raise(AlarmCodes.MotorPointMismatch, AlarmSeverity.Warning, RecipeSource,
+                            L("Alarm_Msg_MotorPointMismatch", index + 1, totalSteps, step.TargetPositionIndex, status.CurrentPoint));
+                        return;
+                    }
+                }
 
                 if (clock.Elapsed >= _motorMoveTimeout)
                 {
