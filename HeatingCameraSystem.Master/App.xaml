@@ -146,5 +146,21 @@
             </Setter>
         </Style>
 
+        <!-- DataGridColumnHeader: dark header so the light column-title text stays visible.
+             The WPF default header chrome is near-white; each grid sets a light Foreground
+             (e.g. #dee2f7), so on the default header the title text became invisible.
+             Grids with an explicit local ColumnHeaderStyle (e.g. AgentSettingsView) still
+             override this global default. -->
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background"                 Value="#252a39"/>
+            <Setter Property="Foreground"                 Value="#dee2f7"/>
+            <Setter Property="Padding"                    Value="8,6"/>
+            <Setter Property="FontWeight"                 Value="SemiBold"/>
+            <Setter Property="BorderBrush"                Value="#3b4949"/>
+            <Setter Property="BorderThickness"            Value="0,0,1,1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment"   Value="Center"/>
+        </Style>
+
     </Application.Resources>
 </Application>
