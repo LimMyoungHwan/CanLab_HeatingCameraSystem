@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -47,6 +48,9 @@ namespace HeatingCameraSystem.AgentUI
         private IVideoDeviceEnumerator? _videoEnumerator;
         private int _rebuildInFlight;
         private int _rebuildDirty;
+
+        /// <summary>온도 조회에서 패널을 못 찾은 AgentId. 하트비트마다 같은 경고를 반복하지 않으려고 기억한다.</summary>
+        private readonly ConcurrentDictionary<string, byte> _temperaturePanelMisses = new(StringComparer.OrdinalIgnoreCase);
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -219,9 +223,7 @@ namespace HeatingCameraSystem.AgentUI
                 // 시리얼 제어가 없다는 뜻이므로 false — 영상 전용 구성은 지원 대상이 아니다.
                 serialHealth: descriptor => _mainViewModel?.Cameras
                     .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.HasSerialControl ?? false,
-                readCameraTemperature: descriptor => _mainViewModel?.Cameras
-                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.ReadCameraTemperatureAsync()
-                    ?? Task.FromResult<double?>(null));
+                readCameraTemperature: ReadCameraTemperatureForAsync);
             _natsConnector.Start(config.NatsUrl);
 
             if (!config.SimulationMode)
@@ -254,6 +256,31 @@ namespace HeatingCameraSystem.AgentUI
         }
 
         // 자동 등록 + 시리얼/영상 reconcile이 공유하는 (비싼) 페어링 1회 수행. 실패 시 빈 목록.
+        /// <summary>
+        /// 하트비트와 캡처가 부르는 카메라 온도 조회. 패널을 못 찾으면 온도가 조용히 빠져
+        /// Master 레시피 결과의 "카메라 온도"가 빈 값이 되므로 AgentId마다 한 번은 사유를 남긴다.
+        /// </summary>
+        private Task<double?> ReadCameraTemperatureForAsync(CameraDescriptor descriptor)
+        {
+            CameraPanelViewModel? panel = _mainViewModel?.Cameras
+                .FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId);
+
+            if (panel is not null)
+            {
+                _temperaturePanelMisses.TryRemove(descriptor.AgentId, out _);
+                return panel.ReadCameraTemperatureAsync();
+            }
+
+            if (_temperaturePanelMisses.TryAdd(descriptor.AgentId, 0))
+            {
+                AgentUiLog.Logger.Warning(
+                    "[{AgentId}] 카메라(FPA) 온도를 읽지 못했습니다 — 카메라 패널을 찾지 못했습니다(패널 미생성 또는 AgentId 불일치). Master 레시피 결과의 카메라 온도가 빈 값이 됩니다.",
+                    descriptor.AgentId);
+            }
+
+            return Task.FromResult<double?>(null);
+        }
+
         private static IReadOnlyList<CameraComPair> GetPairsOrEmpty(ICameraComPairingService pairing)
         {
             try

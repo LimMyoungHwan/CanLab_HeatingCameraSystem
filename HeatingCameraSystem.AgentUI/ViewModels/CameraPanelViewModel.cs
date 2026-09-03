@@ -26,6 +26,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private readonly string _agentId;
         private readonly int _captureBurstCount;
         private readonly Func<CaptureResultMessage, Task>? _publishResult;
+        private string? _lastTemperatureFailure;
 
         [ObservableProperty]
         private string _title;
@@ -217,11 +218,52 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             }
         }
 
+        /// <summary>
+        /// 하트비트와 캡처가 Master로 실어 보낼 카메라(FPA) 온도를 읽는다. 실패는 null로 흡수하되
+        /// 사유를 로그에 남긴다 — 이 값이 null이면 Master 레시피 결과의 "카메라 온도"가 조용히
+        /// 비어 버려서, 로그가 없으면 현장에서 원인을 찾을 방법이 없다.
+        /// </summary>
         public async Task<double?> ReadCameraTemperatureAsync()
         {
-            if (_serial is null) return null;
-            try { return await _serial.ReadFpaTemperatureAsync().ConfigureAwait(false); }
-            catch { return null; }
+            if (_serial is null)
+            {
+                NoteTemperatureFailure("시리얼 연결 없음(영상 전용으로 등록되었거나 COM 포트 열기 실패)");
+                return null;
+            }
+
+            try
+            {
+                double value = await _serial.ReadFpaTemperatureAsync().ConfigureAwait(false);
+                NoteTemperatureRecovered(value);
+                return value;
+            }
+            catch (Exception ex)
+            {
+                NoteTemperatureFailure($"시리얼 읽기 실패: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 같은 사유는 한 번만 남긴다. 하트비트가 5초마다 이 경로를 타므로 매번 남기면
+        /// 로그가 같은 줄로 가득 차 정작 다른 단서가 묻힌다.
+        /// </summary>
+        private void NoteTemperatureFailure(string reason)
+        {
+            if (_lastTemperatureFailure == reason) return;
+
+            _lastTemperatureFailure = reason;
+            AgentUiLog.Logger.Warning(
+                "[{AgentId}] 카메라(FPA) 온도를 읽지 못했습니다 — {Reason}. Master 레시피 결과의 카메라 온도가 빈 값이 됩니다.",
+                _agentId, reason);
+        }
+
+        private void NoteTemperatureRecovered(double value)
+        {
+            if (_lastTemperatureFailure is null) return;
+
+            _lastTemperatureFailure = null;
+            AgentUiLog.Logger.Information("[{AgentId}] 카메라(FPA) 온도 읽기가 복구되었습니다: {Temperature:F1}℃", _agentId, value);
         }
 
         /// <summary>셔터를 닫아 평면필드를 캡처해 NUC 보정 테이블을 갱신한 뒤 셔터를 다시 연다.</summary>
