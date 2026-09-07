@@ -357,11 +357,51 @@ Alarm_RCP_004_Cause=레시피에 이 버전이 모르는 스텝 종류가 들어
 
 Alarm_RCP_004_Action=레시피를 저장한 Master 버전과 실행 중인 버전이 같은지 확인하세요.
 
+Alarm_RCP_005_Cause=저장 규칙 폴더명을 만들지 못해 이 카메라는 규칙 저장 없이 촬영했습니다.
+
+Alarm_RCP_005_Action=레시피 카메라 타겟의 챔버 대역·블랙바디 설정과, 촬영 시점 챔버 온도가 해당 대역의 허용 온도인지 확인하세요.
+
 # Alarm source / message text
 
 Alarm_Src_Recipe=레시피
 
 Alarm_Msg_StepKindUnsupported=지원하지 않는 스텝 종류: {0}
+
+Alarm_Msg_ProductionNamingFailed=스텝 {0} 카메라 {1}: 저장 규칙 폴더명 생성 실패 — {2}
+
+Dash_SyncingCaptures=촬영 파일 복사 중… {0} / {1}
+
+Dialog_ProductionRun_Title=촬영 데이터 저장 설정
+
+Dialog_ProductionRun_Hint=저장 폴더 아래에 카메라마다 "센서번호_제품번호" 폴더가 만들어집니다. 센서 번호는 카메라에서 자동으로 읽습니다.
+
+Dialog_ProductionRun_SaveRoot=저장 폴더
+
+Dialog_ProductionRun_ProductNumber=제품 번호
+
+Dialog_ProductionRun_Browse=찾아보기…
+
+Dialog_ProductionRun_Ok=시작
+
+Dialog_ProductionRun_Cancel=취소
+
+Dialog_ProductionRun_NeedPath=저장 폴더를 지정하세요.
+
+Dialog_ProductionRun_NeedProduct=제품 번호를 입력하세요.
+
+Dialog_AbortNoAck_Title=촬영 중단 응답 없음
+
+Dialog_AbortNoAck_Message={0} 카메라가 촬영 중단에 응답하지 않았습니다. 아직 촬영 중일 수 있으며, 이 상태로 모터나 흑체를 움직이면 이후 데이터가 오염됩니다.
+
+[예] 무시하고 진행    [아니오] 레시피 중지    [취소] 중단 다시 시도
+
+Alarm_Msg_CaptureAborted=스텝 {0} 카메라 {1}: 촬영을 중단했습니다.
+
+Alarm_Msg_CaptureAbortNoAck=스텝 {0} 카메라 {1}: 촬영 중단 응답이 없습니다. 카메라가 아직 촬영 중일 수 있습니다.
+
+Alarm_CAM_005_Cause=촬영 중단을 지시했지만 카메라가 응답하지 않았습니다.
+
+Alarm_CAM_005_Action=해당 Agent PC의 상태와 네트워크를 확인하세요. 촬영이 계속되는 중에 모터·흑체를 움직이면 이후 데이터가 오염됩니다.
 
 Alarm_Msg_Stopped='{0}' 스텝 {1}/{2}에서 중단됨
 

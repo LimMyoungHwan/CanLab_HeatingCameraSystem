@@ -91,6 +91,22 @@ Modbus → **XGT 전용 프로토콜**(TCP 2004)로 변경됨. 구현: `PlcXgtCl
 - 전체 상태 일괄: `IPlcController.ReadStatusAsync()` → `PlcStatusSnapshot` (Master 상태 화면 1초 폴링).
 - 온도 램프: `Recipe.TemperatureRampMinutes`(분) — RecipeEngine이 현재온도→타겟을 선형 스텝(히터 급출력 방지).
 
+### 생산 저장 규칙 (`.raw` 트리)
+
+고객 규칙(`docs/PRODUCTION-[AISEN-TI][GEN3][열캘]...pdf`)대로 촬영 데이터를 Master에 모은다.
+설계·결정 이력은 `docs/01-plan/features/production-capture-storage.plan.md`.
+
+```
+{SaveRootPath}/{센서번호}_{제품번호}/{대역코드}{온도코드}/{hot|cold|room}/BB{bb}_{nnn}.raw
+                                                        └ cold일 때 이 계층에 bias.json
+```
+
+- 폴더·파일명·장수 계산은 **`CaptureNamingRule` 한 곳**. Master가 계산해 `CaptureCommandMessage`에 실어 보내고 AgentUI는 자기 센서번호만 앞에 붙인다.
+- 유효 (대역, 챔버온도) 조합은 **9개뿐**. 그 밖이면 예외 → `RCP-005` 알람. 임의 조합을 허용하도록 고치지 말 것.
+- `.raw`는 **NUC 미보정 원본**이고 픽셀(0,0)에 FPA 온도 **raw 값**(℃ 아님)이 들어간다. 후처리 툴 계약이다.
+- 저장 파일은 Agent 로컬 버퍼 → 폴더 완성 후 `robocopy /MOVE` → Master UNC. 기존 `.y16` 경로는 별개이며 건드리지 않는다.
+- 레퍼런스 구현: `참고/AISEN_CODE/main.py:950-1066`(저장), `:1531-1599`(bias).
+
 ### Agent ↔ 카메라 매핑
 `RecipeStep.CameraIndex` → NATS 대상 `Agent_{CameraIndex}`.  
 Agent `agent.json`의 `AgentId`와 `CameraIndex`가 일치해야 함.

@@ -29,8 +29,36 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>기록 조건: 경과 시간(초). 0이면 미사용.</summary>
         public int RecordIntervalSeconds { get; set; }
 
+        /// <summary>
+        /// 생산 저장 규칙의 Master 측 저장 루트. 레시피 시작 시 운영자가 지정하며,
+        /// 비어 있으면 규칙 저장을 하지 않는다.
+        /// </summary>
+        public string SaveRootPath { get; set; } = string.Empty;
+
+        /// <summary>레시피 시작 시 운영자가 입력하는 제품 번호. 배치 전체에 공통으로 쓰인다.</summary>
+        public string ProductNumber { get; set; } = string.Empty;
+
         /// <summary>순차적으로 실행될 스텝 목록.</summary>
         public List<RecipeStep> Steps { get; set; } = new();
+    }
+
+    /// <summary>
+    /// 카메라 Tecless 온도대역. 챔버 목표 온도와는 별개의 축이며, 같은 챔버 온도라도
+    /// 대역이 다르면 다른 저장 폴더가 된다(+40℃ → 상온이면 RPP40, 고온이면 H1PP40).
+    /// </summary>
+    public enum ChamberRange
+    {
+        Low,
+        Mid,
+        High
+    }
+
+    /// <summary>촬영 시점에 카메라 앞에 있는 흑체의 역할. <see cref="Room"/>은 흑체 없음을 뜻한다.</summary>
+    public enum BlackBodyRole
+    {
+        Hot,
+        Cold,
+        Room
     }
 
     /// <summary>레시피 스텝의 실행 대상이다. 기본값은 이전 버전의 일괄 촬영 스텝과 호환된다.</summary>
@@ -48,7 +76,13 @@ namespace HeatingCameraSystem.Core.Models
         HumidityControl,
 
         /// <summary>지정한 시간(시·분·초)만큼 아무 동작 없이 대기하는 스텝.</summary>
-        Wait
+        Wait,
+
+        /// <summary>
+        /// 결과를 기다리지 않고 넘어간(<see cref="RecipeStep.WaitForCaptureResult"/>=false) 캡처들이
+        /// 모두 끝날 때까지 대기하는 스텝.
+        /// </summary>
+        CaptureJoin
     }
 
     public enum MotorMoveType
@@ -61,6 +95,18 @@ namespace HeatingCameraSystem.Core.Models
     {
         public string AgentId { get; set; } = string.Empty;
         public int CameraIndex { get; set; }
+
+        /// <summary>
+        /// 이 카메라의 Tecless 온도대역. 저장 폴더의 앞 코드(LN/RP/H1P)가 되고, 캡처 전
+        /// 대역별 BIAS를 적용하는 근거가 된다. null이면 규칙 저장을 하지 않는다.
+        /// </summary>
+        public ChamberRange? TargetChamber { get; set; }
+
+        /// <summary>
+        /// 촬영 시점에 이 카메라 앞에 놓인 흑체의 역할. 흑체 유닛이 아니라 카메라에 붙는 이유는
+        /// 카메라가 고정이고 흑체가 이동하기 때문이다. null이면 규칙 저장을 하지 않는다.
+        /// </summary>
+        public BlackBodyRole? TargetBlackBody { get; set; }
     }
 
     /// <summary>레시피의 개별 스텝. PLC 또는 카메라의 한 동작을 정의한다.</summary>
@@ -171,5 +217,17 @@ namespace HeatingCameraSystem.Core.Models
         /// <see cref="RecipeStepKind.Wait"/>에서만 사용한다. 0이면 즉시 다음 스텝으로 넘어간다.
         /// </summary>
         public int WaitDurationSeconds { get; set; }
+
+        /// <summary>
+        /// false면 캡처 명령만 보내고 결과를 기다리지 않는다(fork). 이 경우 뒤에
+        /// <see cref="RecipeStepKind.CaptureJoin"/> 스텝을 두지 않으면 촬영 중에 모터가 움직여
+        /// 데이터가 오염될 수 있으며, 그 책임은 레시피 작성자에게 있다.
+        /// </summary>
+        public bool WaitForCaptureResult { get; set; } = true;
+
+        /// <summary>
+        /// <see cref="RecipeStepKind.CaptureJoin"/> 스텝의 대기 한도(초). 0이면 전역 설정을 쓴다.
+        /// </summary>
+        public int CaptureJoinTimeoutSeconds { get; set; }
     }
 }

@@ -245,6 +245,25 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         }
 
         /// <summary>
+        /// 생산 저장 규칙의 <c>.raw</c> 픽셀(0,0)에 심을 FPA 레지스터 원시값.
+        /// 실패는 null로 흡수한다 — FPA를 못 읽었다고 촬영 자체를 버릴 이유는 없다.
+        /// </summary>
+        public async Task<short?> ReadFpaTemperatureRawAsync()
+        {
+            if (_serial is null) return null;
+
+            try
+            {
+                return await _serial.ReadFpaTemperatureRawAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                AgentUiLog.Logger.Warning("[{AgentId}] FPA raw 읽기 실패: {Reason}", _agentId, ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
         /// 같은 사유는 한 번만 남긴다. 하트비트가 5초마다 이 경로를 타므로 매번 남기면
         /// 로그가 같은 줄로 가득 차 정작 다른 단서가 묻힌다.
         /// </summary>
@@ -298,6 +317,18 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
         private const double BiasTargetTolerance = 100;
 
+        // 탐색 대상은 GSK_LSB 하나뿐이고 나머지 레지스터는 고정값이다(참고/AISEN_CODE/main.py:1531-1574).
+        private const byte TintMsbValue = 0x02;
+        private const byte TintLsbValue = 0x73;
+        private const byte GskMsbValue = 0x01;
+        private const byte GfidValue = 0xAE;
+
+        /// <summary>
+        /// 마지막 BIAS 보정 결과를 고객 규칙의 bias.json 형식으로 담아 둔다. cold 조건 캡처가
+        /// 이 문자열을 그대로 파일로 남긴다. 아직 보정한 적이 없으면 null이다.
+        /// </summary>
+        public string? LastBiasJson { get; private set; }
+
         [RelayCommand(CanExecute = nameof(HasSerialControl))]
         private Task RunBiasLowAsync(double? targetOverride) => RunAutoBiasAsync("LOW", targetOverride ?? 8500, 0x93);
 
@@ -319,16 +350,31 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
             if (_serial is null) return;
 
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintMsb, 0x02);
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintLsb, 0x73);
+            await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintMsb, TintMsbValue);
+            await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintLsb, TintLsbValue);
             await _serial.SetBiasRegisterAsync(CameraBiasRegister.Cint, cint);
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.GskMsb, 0x01);
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.Gfid, 0xAE);
+            await _serial.SetBiasRegisterAsync(CameraBiasRegister.GskMsb, GskMsbValue);
+            await _serial.SetBiasRegisterAsync(CameraBiasRegister.Gfid, GfidValue);
             SerialStatus = $"BIAS: {target:F0} 탐색 중";
             (byte best, double bestError) = await FindBiasInRangeAsync(targetMin, targetMax, MeasureBiasAsync);
             await _serial.SetBiasAsync(best);
+            LastBiasJson = BuildBiasJson(cint, best);
             SerialStatus = $"BIAS 완료: 0x{best:X2} (오차 {bestError:F0})";
         }
+
+        // 키 이름과 값 표기(GSK_MSB만 정수, 나머지는 대문자 hex 문자열)는 후처리 툴이 파싱하는
+        // 계약이다 — 참고/AISEN_CODE/main.py:1593-1599, 1632-1646.
+        private static string BuildBiasJson(byte cint, byte gskLsb)
+            => System.Text.Json.JsonSerializer.Serialize(
+                new
+                {
+                    CINT = $"{cint:X2}",
+                    TINT = $"{TintMsbValue:X}{TintLsbValue:X2}",
+                    GSK_MSB = (int)GskMsbValue,
+                    GSK_LSB = $"{gskLsb:X2}",
+                    GFID = $"{GfidValue:X2}"
+                },
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
 
         private static async Task<(byte Value, double Error)> FindBiasInRangeAsync(
             double targetMin, double targetMax, Func<byte, Task<double>> measure)

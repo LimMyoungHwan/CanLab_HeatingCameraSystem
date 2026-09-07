@@ -35,11 +35,23 @@ namespace HeatingCameraSystem.Core.Models
         public const string ShutterClose = "shutterClose";
         public const string Capture = "capture";
         public const string Nuc = "nuc";
+        /// <summary>
+        /// 카메라 타겟의 온도대역을 따라 <see cref="BiasLow"/>/<see cref="BiasMid"/>/<see cref="BiasHigh"/>
+        /// 중 하나로 치환되는 레시피 전용 값. Agent에는 절대 이 값 그대로 전달되지 않는다.
+        /// </summary>
+        public const string Bias = "bias";
+
         public const string BiasLow = "biasLow";
         public const string BiasMid = "biasMid";
         public const string BiasHigh = "biasHigh";
         public const string SaveConfig = "saveConfig";
         public const string RefreshInfo = "refreshInfo";
+
+        /// <summary>
+        /// 진행 중인 버스트 캡처를 중단한다. ACK가 오지 않으면 카메라가 아직 촬영 중일 수 있으므로
+        /// Master는 이후 모터/흑체/챔버 동작을 진행해서는 안 된다.
+        /// </summary>
+        public const string CaptureAbort = "captureAbort";
 
         // [S7] 카메라 단위 런타임 로드/언로드 — 위의 시리얼 Run/Stop과는 다른 개념이다.
         // Manager(재정의된 AgentSupervisor)가 AgentUI 프로세스를 죽이지 않고 그 안의 카메라

@@ -56,6 +56,12 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.FromResult(30.0 + (sum % 30) / 10.0);
         }
 
+        public async Task<short> ReadFpaTemperatureRawAsync(CancellationToken ct = default)
+        {
+            double celsius = await ReadFpaTemperatureAsync(ct).ConfigureAwait(false);
+            return (short)Math.Round((celsius - 415.48) / -188.65 * 32768.0 / 4.096);
+        }
+
         /// <summary>실제 전송 없이 <see cref="ShutterOpen"/> 플래그만 기록한다.</summary>
         public Task SetShutterAsync(bool open, CancellationToken ct = default)
         {

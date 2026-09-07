@@ -86,6 +86,30 @@
             </Border>
         </DataTemplate>
 
+        <DataTemplate x:Key="CaptureJoinStepTemplate">
+            <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
+                    AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
+                        <TextBlock Text="촬영 대기" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
+                        <StackPanel Margin="0,0,16,0" Width="140">
+                            <TextBlock Text="타임아웃(초) 0=기본" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <TextBox Text="{Binding CaptureJoinTimeoutSeconds}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                        </StackPanel>
+                        <TextBlock VerticalAlignment="Bottom" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"
+                                   Text="결과를 기다리지 않고 넘어간 촬영이 모두 끝날 때까지 대기합니다. 타임아웃이면 중단을 지시합니다."/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
         <DataTemplate x:Key="ChamberStepTemplate">
             <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12"
                     AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
@@ -196,11 +220,27 @@
                             <TextBlock Text="BIAS 목표 0=기본" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <TextBox Text="{Binding BiasTargetLevel}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                         </StackPanel>
-                        <StackPanel Width="260">
-                            <TextBlock Text="대상 카메라 (복수 선택)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                        <StackPanel Margin="0,0,16,0" Width="110" IsEnabled="{Binding IsCaptureOperation}">
+                            <TextBlock Text="결과 대기" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <CheckBox IsChecked="{Binding WaitForCaptureResult}" Content="기다림" Margin="0,6,0,0" Foreground="{StaticResource TextOnSurface}"/>
+                        </StackPanel>
+                        <StackPanel Width="440">
+                            <TextBlock Text="대상 카메라 (복수 선택 · 대역/흑체는 카메라마다 지정)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <ComboBox ItemsSource="{Binding CameraTargets}" IsEditable="True" IsReadOnly="True" Text="{Binding SelectedCameraSummary, Mode=OneWay}" StaysOpenOnEdit="True" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">
                                 <ComboBox.ItemTemplate>
-                                    <DataTemplate><CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Foreground="{StaticResource TextOnSurface}" PreviewMouseDown="CameraTargetCheckBox_PreviewMouseDown"/></DataTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Width="160" VerticalAlignment="Center" Foreground="{StaticResource TextOnSurface}" PreviewMouseDown="CameraTargetCheckBox_PreviewMouseDown"/>
+                                            <ComboBox Width="110" Margin="8,0,0,0"
+                                                      ItemsSource="{Binding DataContext.ChamberRangeOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      SelectedValuePath="Value" SelectedValue="{Binding TargetChamber, Mode=TwoWay}" DisplayMemberPath="Label"
+                                                      Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
+                                            <ComboBox Width="130" Margin="8,0,0,0"
+                                                      ItemsSource="{Binding DataContext.BlackBodyRoleOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      SelectedValuePath="Value" SelectedValue="{Binding TargetBlackBody, Mode=TwoWay}" DisplayMemberPath="Label"
+                                                      Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
                         </StackPanel>
@@ -444,6 +484,7 @@
                                                     <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.CameraCommand}"><Setter Property="ContentTemplate" Value="{StaticResource CameraStepTemplate}"/></DataTrigger>
                                                     <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.BlackBodyControl}"><Setter Property="ContentTemplate" Value="{StaticResource BlackBodyStepTemplate}"/></DataTrigger>
                                                     <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.Wait}"><Setter Property="ContentTemplate" Value="{StaticResource WaitStepTemplate}"/></DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="{x:Static model:RecipeStepKind.CaptureJoin}"><Setter Property="ContentTemplate" Value="{StaticResource CaptureJoinStepTemplate}"/></DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </ContentControl.Style>
@@ -459,6 +500,7 @@
                             <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.CameraCommand}" Content="+ 카메라 명령" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
                             <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.BlackBodyControl}" Content="+ 블랙바디 온도 제어" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
                             <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.Wait}" Content="+ 대기" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
+                    <Button Command="{Binding DataContext.AddStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{x:Static model:RecipeStepKind.CaptureJoin}" Content="+ 촬영 대기" Background="Transparent" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="2" Foreground="{StaticResource TextOnSurfaceVariant}" Padding="14,10" Margin="0,0,8,8" Cursor="Hand"/>
                         </WrapPanel>
                     </StackPanel>
                 </ScrollViewer>

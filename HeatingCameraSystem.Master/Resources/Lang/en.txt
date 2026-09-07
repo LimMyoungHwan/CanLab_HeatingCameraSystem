@@ -357,11 +357,51 @@ Alarm_RCP_004_Cause=The recipe contains a step kind this version does not unders
 
 Alarm_RCP_004_Action=Verify that the Master version running matches the one that saved the recipe.
 
+Alarm_RCP_005_Cause=The production folder name could not be built, so this camera was captured without rule-based storage.
+
+Alarm_RCP_005_Action=Check the camera target's chamber range and black body settings, and whether the chamber temperature at capture time is one of that range's allowed values.
+
 # Alarm source / message text
 
 Alarm_Src_Recipe=Recipe
 
 Alarm_Msg_StepKindUnsupported=Unsupported step kind: {0}
+
+Alarm_Msg_ProductionNamingFailed=Step {0} camera {1}: production folder naming failed — {2}
+
+Dash_SyncingCaptures=Copying capture files… {0} / {1}
+
+Dialog_ProductionRun_Title=Capture Data Storage
+
+Dialog_ProductionRun_Hint=A "sensor_product" folder is created per camera under the save folder. The sensor number is read from the camera automatically.
+
+Dialog_ProductionRun_SaveRoot=Save folder
+
+Dialog_ProductionRun_ProductNumber=Product number
+
+Dialog_ProductionRun_Browse=Browse…
+
+Dialog_ProductionRun_Ok=Start
+
+Dialog_ProductionRun_Cancel=Cancel
+
+Dialog_ProductionRun_NeedPath=Choose a save folder.
+
+Dialog_ProductionRun_NeedProduct=Enter a product number.
+
+Dialog_AbortNoAck_Title=No response to capture abort
+
+Dialog_AbortNoAck_Message=Camera {0} did not respond to the capture abort. It may still be capturing, and moving motors or black bodies now corrupts the data that follows.
+
+[Yes] Continue anyway    [No] Stop recipe    [Cancel] Retry the abort
+
+Alarm_Msg_CaptureAborted=Step {0} camera {1}: capture aborted.
+
+Alarm_Msg_CaptureAbortNoAck=Step {0} camera {1}: no response to the capture abort. The camera may still be capturing.
+
+Alarm_CAM_005_Cause=A capture abort was issued but the camera did not respond.
+
+Alarm_CAM_005_Action=Check that Agent PC and the network. Moving motors or black bodies while a capture is still running corrupts the data that follows.
 
 Alarm_Msg_Stopped='{0}' stopped at step {1}/{2}
 

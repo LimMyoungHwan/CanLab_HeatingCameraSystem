@@ -48,9 +48,21 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
 
         public async Task<double> ReadFpaTemperatureAsync(CancellationToken ct = default)
         {
+            (byte msb, byte lsb) = await ReadFpaRegistersAsync(ct).ConfigureAwait(false);
+            return ClPacket.DecodeFpaTemperature(msb, lsb);
+        }
+
+        public async Task<short> ReadFpaTemperatureRawAsync(CancellationToken ct = default)
+        {
+            (byte msb, byte lsb) = await ReadFpaRegistersAsync(ct).ConfigureAwait(false);
+            return ClPacket.DecodeFpaTemperatureRaw(msb, lsb);
+        }
+
+        private async Task<(byte Msb, byte Lsb)> ReadFpaRegistersAsync(CancellationToken ct)
+        {
             byte msb = await QueryAsync((byte)ClMainId.Detector, (byte)ClDetectorSubId.FpaTempMsb, ClRw.Read, 0, ct).ConfigureAwait(false);
             byte lsb = await QueryAsync((byte)ClMainId.Detector, (byte)ClDetectorSubId.FpaTempLsb, ClRw.Read, 0, ct).ConfigureAwait(false);
-            return ClPacket.DecodeFpaTemperature(msb, lsb);
+            return (msb, lsb);
         }
 
         public Task SetShutterAsync(bool open, CancellationToken ct = default)

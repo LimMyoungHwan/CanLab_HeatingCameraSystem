@@ -44,14 +44,23 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
         /// </summary>
         public static double DecodeFpaTemperature(byte msb, byte lsb)
         {
+            double v = DecodeFpaTemperatureRaw(msb, lsb) / 32768.0 * 4.096;
+            return -188.65 * v + 415.48;
+        }
+
+        /// <summary>
+        /// FPA 온도 레지스터를 부호 있는 16비트 원시값 그대로 돌려준다. 생산 저장 규칙의 <c>.raw</c>
+        /// 파일은 ℃가 아니라 이 값을 픽셀(0,0)에 담으며, ℃에서 역산하면 반올림 오차가 생긴다.
+        /// </summary>
+        public static short DecodeFpaTemperatureRaw(byte msb, byte lsb)
+        {
             int raw = (msb << 8) | lsb;
             if (raw > 32767)
             {
                 raw -= 65536;
             }
 
-            double v = raw / 32768.0 * 4.096;
-            return -188.65 * v + 415.48;
+            return (short)raw;
         }
     }
 }

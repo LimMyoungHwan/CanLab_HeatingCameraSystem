@@ -35,6 +35,12 @@ namespace HeatingCameraSystem.Core.Interfaces
         /// <summary>카메라 FPA(초점 평면 어레이) 온도를 ℃로 읽는다.</summary>
         Task<double> ReadFpaTemperatureAsync(CancellationToken ct = default);
 
+        /// <summary>
+        /// FPA 온도를 레지스터 원시값(부호 있는 16비트)으로 읽는다. 생산 저장 규칙의 <c>.raw</c>가
+        /// ℃가 아니라 이 값을 담기 때문에 별도로 필요하다.
+        /// </summary>
+        Task<short> ReadFpaTemperatureRawAsync(CancellationToken ct = default);
+
         /// <summary>true이면 셔터를 열고, false이면 닫는다.</summary>
         Task SetShutterAsync(bool open, CancellationToken ct = default);
 

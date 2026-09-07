@@ -77,5 +77,17 @@ namespace HeatingCameraSystem.Tests.Protocols
 
             Assert.Equal(801.84, temperature, 2);
         }
+
+        [Fact]
+        public void DecodeFpaTemperatureRaw_PositiveBytes_ReturnsSignedWord()
+        {
+            Assert.Equal((short)0x4000, ClPacket.DecodeFpaTemperatureRaw(0x40, 0x00));
+        }
+
+        [Fact]
+        public void DecodeFpaTemperatureRaw_HighBitSet_ReturnsNegativeWord()
+        {
+            Assert.Equal((short)-16384, ClPacket.DecodeFpaTemperatureRaw(0xC0, 0x00));
+        }
     }
 }

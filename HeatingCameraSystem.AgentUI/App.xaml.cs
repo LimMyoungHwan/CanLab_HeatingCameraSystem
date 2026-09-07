@@ -223,7 +223,11 @@ namespace HeatingCameraSystem.AgentUI
                 // 시리얼 제어가 없다는 뜻이므로 false — 영상 전용 구성은 지원 대상이 아니다.
                 serialHealth: descriptor => _mainViewModel?.Cameras
                     .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.HasSerialControl ?? false,
-                readCameraTemperature: ReadCameraTemperatureForAsync);
+                readCameraTemperature: ReadCameraTemperatureForAsync,
+                readFpaRaw: ReadFpaRawForAsync,
+                readBiasJson: descriptor => _mainViewModel?.Cameras
+                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.LastBiasJson,
+                productionSink: new ProductionCaptureSink(Path.Combine(storageDir, "production")));
             _natsConnector.Start(config.NatsUrl);
 
             if (!config.SimulationMode)
@@ -260,6 +264,14 @@ namespace HeatingCameraSystem.AgentUI
         /// 하트비트와 캡처가 부르는 카메라 온도 조회. 패널을 못 찾으면 온도가 조용히 빠져
         /// Master 레시피 결과의 "카메라 온도"가 빈 값이 되므로 AgentId마다 한 번은 사유를 남긴다.
         /// </summary>
+        private Task<short?> ReadFpaRawForAsync(CameraDescriptor descriptor)
+        {
+            CameraPanelViewModel? panel = _mainViewModel?.Cameras
+                .FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId);
+
+            return panel is null ? Task.FromResult<short?>(null) : panel.ReadFpaTemperatureRawAsync();
+        }
+
         private Task<double?> ReadCameraTemperatureForAsync(CameraDescriptor descriptor)
         {
             CameraPanelViewModel? panel = _mainViewModel?.Cameras

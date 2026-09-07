@@ -63,6 +63,12 @@ namespace HeatingCameraSystem.Master.ViewModels
         public bool ShowsAutomaticPoint => Kind == RecipeStepKind.MotorMove && MotorMoveType == MotorMoveType.Automatic;
         public bool ShowsManualCoordinates => Kind == RecipeStepKind.MotorMove && MotorMoveType == MotorMoveType.Manual;
         public ObservableCollection<CameraTargetModel> CameraTargets { get; } = new();
+
+        /// <summary>false면 캡처 결과를 기다리지 않고 다음 스텝으로 넘어간다(fork).</summary>
+        [ObservableProperty] private bool _waitForCaptureResult = true;
+
+        /// <summary>촬영 대기 스텝의 타임아웃(초). 0이면 전역 설정을 쓴다.</summary>
+        [ObservableProperty] private int _captureJoinTimeoutSeconds;
         public string SelectedCameraSummary => string.Join(", ", CameraTargets.Where(target => target.IsSelected).Select(target => target.Label).DefaultIfEmpty("카메라 선택"));
         public bool ShowsLegacyFields => Kind == RecipeStepKind.LegacyCapture;
         public bool ShowsMotorFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.MotorMove;
@@ -142,11 +148,30 @@ namespace HeatingCameraSystem.Master.ViewModels
         public string Label { get; init; } = string.Empty;
     }
 
+    public sealed class ChamberRangeOption
+    {
+        public ChamberRange? Value { get; init; }
+        public string Label { get; init; } = string.Empty;
+    }
+
+    public sealed class BlackBodyRoleOption
+    {
+        public BlackBodyRole? Value { get; init; }
+        public string Label { get; init; } = string.Empty;
+    }
+
     public partial class CameraTargetModel : ObservableObject
     {
         [ObservableProperty] private string _agentId = string.Empty;
         [ObservableProperty] private int _cameraIndex;
         [ObservableProperty] private bool _isSelected;
+
+        /// <summary>이 카메라의 온도대역. BIAS 명령과 저장 폴더가 함께 이 값을 쓴다.</summary>
+        [ObservableProperty] private ChamberRange? _targetChamber;
+
+        /// <summary>촬영 시점에 이 카메라 앞에 놓인 흑체. 흑체가 이동하고 카메라는 고정이라 여기에 붙는다.</summary>
+        [ObservableProperty] private BlackBodyRole? _targetBlackBody;
+
         public string Label => $"{AgentId} (CAM-{CameraIndex:D2})";
 
         partial void OnAgentIdChanged(string value) => OnPropertyChanged(nameof(Label));
@@ -193,13 +218,31 @@ namespace HeatingCameraSystem.Master.ViewModels
             new() { Value = RecipeStepKind.HumidityControl, Label = "PLC 습도 설정" },
             new() { Value = RecipeStepKind.CameraCommand, Label = "카메라 명령" },
             new() { Value = RecipeStepKind.BlackBodyControl, Label = "블랙바디 온도 제어" },
-            new() { Value = RecipeStepKind.Wait, Label = "대기" }
+            new() { Value = RecipeStepKind.Wait, Label = "대기" },
+            new() { Value = RecipeStepKind.CaptureJoin, Label = "촬영 대기" }
+        };
+
+        public ChamberRangeOption[] ChamberRangeOptions { get; } =
+        {
+            new() { Value = null, Label = "(지정 안 함)" },
+            new() { Value = ChamberRange.Low, Label = "저온" },
+            new() { Value = ChamberRange.Mid, Label = "상온" },
+            new() { Value = ChamberRange.High, Label = "고온" }
+        };
+
+        public BlackBodyRoleOption[] BlackBodyRoleOptions { get; } =
+        {
+            new() { Value = null, Label = "(지정 안 함)" },
+            new() { Value = BlackBodyRole.Hot, Label = "hot" },
+            new() { Value = BlackBodyRole.Cold, Label = "cold" },
+            new() { Value = BlackBodyRole.Room, Label = "room (흑체 없음)" }
         };
         public CameraOperationOption[] CameraOperationOptions { get; } =
         {
             new() { Value = CameraControlOps.Capture, Label = "캡처" },
             new() { Value = CameraControlOps.ShutterOpen, Label = "셔터 열기" },
             new() { Value = CameraControlOps.ShutterClose, Label = "셔터 닫기" },
+            new() { Value = CameraControlOps.Bias, Label = "BIAS (카메라 대역 따름)" },
             new() { Value = CameraControlOps.BiasLow, Label = "BIAS LOW" },
             new() { Value = CameraControlOps.BiasMid, Label = "BIAS MID" },
             new() { Value = CameraControlOps.BiasHigh, Label = "BIAS HIGH" },
@@ -418,8 +461,12 @@ namespace HeatingCameraSystem.Master.ViewModels
                     CameraTargets = s.CameraTargets.Select(target => new RecipeCameraTarget
                     {
                         AgentId = target.AgentId,
-                        CameraIndex = target.CameraIndex
+                        CameraIndex = target.CameraIndex,
+                        TargetChamber = target.TargetChamber,
+                        TargetBlackBody = target.TargetBlackBody
                     }).ToList(),
+                    WaitForCaptureResult = s.WaitForCaptureResult,
+                    CaptureJoinTimeoutSeconds = s.CaptureJoinTimeoutSeconds,
                     TargetPositionIndex = s.TargetPositionIndex,
                     TargetBlackBodyTemperature = s.TargetBlackBodyTemperature,
                     BlackBodyIndex = s.BlackBodyIndex,
@@ -469,7 +516,13 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 var targets = s.CameraTargets
                     .Where(target => target.IsSelected)
-                    .Select(target => new RecipeCameraTarget { AgentId = target.AgentId, CameraIndex = target.CameraIndex })
+                    .Select(target => new RecipeCameraTarget
+                    {
+                        AgentId = target.AgentId,
+                        CameraIndex = target.CameraIndex,
+                        TargetChamber = target.TargetChamber,
+                        TargetBlackBody = target.TargetBlackBody
+                    })
                     .ToList();
                 r.Steps.Add(new RecipeStep
                 {
@@ -502,6 +555,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                     SoakMinutes = s.SoakMinutes,
                     BiasTargetLevel = s.BiasTargetLevel,
                     DisableHumidityControl = s.DisableHumidityControl,
+                    WaitForCaptureResult = s.WaitForCaptureResult,
+                    CaptureJoinTimeoutSeconds = s.CaptureJoinTimeoutSeconds,
                     WaitDurationSeconds = s.WaitHours * 3600 + s.WaitMinutes * 60 + s.WaitSeconds
                 });
             }
@@ -556,12 +611,21 @@ namespace HeatingCameraSystem.Master.ViewModels
                     SoakMinutes = s.SoakMinutes,
                     BiasTargetLevel = s.BiasTargetLevel,
                     DisableHumidityControl = s.DisableHumidityControl,
+                    WaitForCaptureResult = s.WaitForCaptureResult,
+                    CaptureJoinTimeoutSeconds = s.CaptureJoinTimeoutSeconds,
                     WaitHours = s.WaitDurationSeconds / 3600,
                     WaitMinutes = (s.WaitDurationSeconds % 3600) / 60,
                     WaitSeconds = s.WaitDurationSeconds % 60
                 };
                 foreach (var target in s.CameraTargets)
-                    step.CameraTargets.Add(new CameraTargetModel { AgentId = target.AgentId, CameraIndex = target.CameraIndex, IsSelected = true });
+                    step.CameraTargets.Add(new CameraTargetModel
+                {
+                    AgentId = target.AgentId,
+                    CameraIndex = target.CameraIndex,
+                    TargetChamber = target.TargetChamber,
+                    TargetBlackBody = target.TargetBlackBody,
+                    IsSelected = true
+                });
                 if (step.CameraTargets.Count == 0 && s.CameraIndex > 0)
                     step.CameraTargets.Add(new CameraTargetModel { CameraIndex = s.CameraIndex, IsSelected = true });
                 vm.Steps.Add(step);

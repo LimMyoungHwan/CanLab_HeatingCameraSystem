@@ -36,7 +36,11 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly Func<CameraDescriptor, CameraControlMessage, Task<(bool Success, string Message)>>? _cameraControlHandler;
         private readonly Func<CameraDescriptor, bool>? _serialHealth;
         private readonly Func<CameraDescriptor, Task<double?>>? _readCameraTemperature;
+        private readonly Func<CameraDescriptor, Task<short?>>? _readFpaRaw;
+        private readonly Func<CameraDescriptor, string?>? _readBiasJson;
+        private readonly ProductionCaptureSink? _productionSink;
 
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, CancellationTokenSource> _captureAborts = new(StringComparer.Ordinal);
         private readonly CancellationTokenSource _cts = new();
         private readonly SemaphoreSlim _subscriptionGate = new(1, 1);
         private readonly HashSet<string> _subscribedAgentIds = new(StringComparer.Ordinal);
@@ -55,7 +59,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
             Action<AgentConfigSnapshot>? applyConfigSnapshot = null,
             Func<CameraDescriptor, CameraControlMessage, Task<(bool Success, string Message)>>? cameraControlHandler = null,
             Func<CameraDescriptor, bool>? serialHealth = null,
-            Func<CameraDescriptor, Task<double?>>? readCameraTemperature = null)
+            Func<CameraDescriptor, Task<double?>>? readCameraTemperature = null,
+            Func<CameraDescriptor, Task<short?>>? readFpaRaw = null,
+            Func<CameraDescriptor, string?>? readBiasJson = null,
+            ProductionCaptureSink? productionSink = null)
         {
             _nats = nats ?? throw new ArgumentNullException(nameof(nats));
             _manager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -69,6 +76,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _cameraControlHandler = cameraControlHandler;
             _serialHealth = serialHealth;
             _readCameraTemperature = readCameraTemperature;
+            _readFpaRaw = readFpaRaw;
+            _readBiasJson = readBiasJson;
+            _productionSink = productionSink;
         }
 
         public bool IsConnected => _connected;
@@ -219,8 +229,30 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 catch (Exception ex) { Debug.WriteLine($"[CameraNats] camera info read failed for {descriptor.AgentId}: {ex.Message}"); }
             }
 
+            bool production = _productionSink is not null && ProductionCaptureSink.IsEnabled(cmd);
+
+            // FPA는 시리얼 왕복이라 장마다 읽으면 촬영이 멈춘다. AISEN 원본처럼 배치당 한 번만 읽어
+            // 모든 장의 픽셀(0,0)에 같은 값을 심는다.
+            short? fpaRaw = null;
+            if (production && _readFpaRaw is not null)
+            {
+                try { fpaRaw = await _readFpaRaw(descriptor).ConfigureAwait(false); }
+                catch (Exception ex) { Debug.WriteLine($"[CameraNats] FPA raw read failed for {descriptor.AgentId}: {ex.Message}"); }
+            }
+
+            using var abort = new CancellationTokenSource();
+            _captureAborts[descriptor.AgentId] = abort;
+
+            try
+            {
             for (int i = 0; i < shots; i++)
             {
+                if (abort.IsCancellationRequested)
+                {
+                    Debug.WriteLine($"[CameraNats] capture aborted for {descriptor.AgentId} at shot {i + 1}/{shots}");
+                    break;
+                }
+
                 bool success = false;
                 string imagePath = string.Empty;
                 byte[]? bytes = null;
@@ -245,6 +277,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
                             imagePath = record.Y16Path;
                             bytes = ThermalPreviewEncoder.EncodeJpeg(frame);
                             success = true;
+
+                            // 후처리 툴이 캘리브레이션을 직접 하므로 .raw는 NUC 미보정 원본(snap)이어야 한다.
+                            if (production) _productionSink!.WriteShot(descriptor, cmd, snap, fpaRaw, i);
                         }
                     }
                 }
@@ -278,6 +313,31 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     Debug.WriteLine($"[CameraNats] publish result failed for {descriptor.AgentId}: {ex.Message}");
                 }
             }
+            }
+            finally
+            {
+                _captureAborts.TryRemove(descriptor.AgentId, out _);
+            }
+
+            if (production && cmd.WriteBiasJson)
+            {
+                string? biasJson = _readBiasJson?.Invoke(descriptor);
+                if (string.IsNullOrWhiteSpace(biasJson))
+                    Debug.WriteLine($"[CameraNats] bias.json skipped for {descriptor.AgentId}: no bias result yet");
+                else
+                    _productionSink!.WriteBiasJson(descriptor, cmd, biasJson!);
+            }
+
+            // 폴더가 완성된 뒤에만 전송한다 — 파일 단위로 옮기면 후처리 툴이 복사 도중인 파일을 읽는다.
+            if (production) await _productionSink!.SyncFolderAsync(descriptor, cmd, _cts.Token).ConfigureAwait(false);
+        }
+
+        /// <summary>진행 중인 버스트를 취소한다. 취소할 것이 없어도 성공으로 응답한다(멱등).</summary>
+        private bool AbortCapture(string agentId)
+        {
+            if (!_captureAborts.TryGetValue(agentId, out CancellationTokenSource? abort)) return false;
+            try { abort.Cancel(); } catch (ObjectDisposedException) { }
+            return true;
         }
 
         /// <summary>카메라 제어 명령을 주입된 핸들러에 위임하고 성패를 ACK로 발행한다.</summary>
@@ -285,6 +345,14 @@ namespace HeatingCameraSystem.Protocols.Cameras
         {
             bool success = false;
             string message = "control handler not wired";
+
+            // 중단은 패널 명령이 아니라 커넥터가 직접 처리한다 — 진행 중인 버스트 루프를 아는 곳이 여기다.
+            if (msg.Op == CameraControlOps.CaptureAbort)
+            {
+                bool aborted = AbortCapture(cam.AgentId);
+                await PublishControlAckAsync(cam, msg, true, aborted ? "capture aborted" : "no capture in progress").ConfigureAwait(false);
+                return;
+            }
 
             try
             {
@@ -299,6 +367,11 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 Debug.WriteLine($"[CameraNats] camera control failed for {cam.AgentId}: {ex.Message}");
             }
 
+            await PublishControlAckAsync(cam, msg, success, message).ConfigureAwait(false);
+        }
+
+        private async Task PublishControlAckAsync(CameraDescriptor cam, CameraControlMessage msg, bool success, string message)
+        {
             try
             {
                 await _nats.PublishCameraControlAckAsync(new CameraControlAckMessage
@@ -431,7 +504,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     Timestamp = DateTime.UtcNow,
                     HostAgentIds = inventory,
                     IsSerialConnected = ReadSerialHealth(cam),
-                    CameraTemperature = await ReadCameraTemperatureSafeAsync(cam).ConfigureAwait(false)
+                    CameraTemperature = await ReadCameraTemperatureSafeAsync(cam).ConfigureAwait(false),
+                    PendingSyncFiles = _productionSink?.PendingFiles
                 }).ConfigureAwait(false);
             }
             catch (Exception ex)

@@ -312,6 +312,8 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             await _natsService.SubscribeAgentStatusAsync(msg =>
             {
+                if (msg.PendingSyncFiles is int pending) _pendingSyncFiles[msg.AgentId] = pending;
+
                 RunOnUi(() =>
                 {
                     string hostName = string.IsNullOrWhiteSpace(msg.HostName) ? LocalizationManager.Instance["Dash_UnknownPc"] : msg.HostName;
@@ -902,6 +904,18 @@ namespace HeatingCameraSystem.Master.ViewModels
             if (SelectedRecipe == null) { RecipeStatus = LocalizationManager.Instance["Dash_SelectRecipeNeeded"]; return; }
             if (AppServices.RecipeEngine.IsEmergencyStopRequested) { RecipeStatus = "비상정지 상태에서는 레시피를 시작할 수 없습니다."; return; }
 
+            // 입력값을 레시피에 되저장해 다음 실행의 기본값이 되게 한다.
+            if (_dialogService is not null)
+            {
+                ProductionRunInput? input = _dialogService.PromptProductionRun(SelectedRecipe.SaveRootPath, SelectedRecipe.ProductNumber);
+                if (input is null) { RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopped"]; return; }
+
+                SelectedRecipe.SaveRootPath = input.SaveRootPath;
+                SelectedRecipe.ProductNumber = input.ProductNumber;
+                if (AppServices.RecipeRepo is not null) await AppServices.RecipeRepo.SaveAsync(SelectedRecipe);
+                AppServices.RecipeEngine.AbortDecisionRequested = agentId => Task.FromResult(_dialogService.AskCaptureAbortDecision(agentId));
+            }
+
             _recipeCts?.Cancel();
             _recipeCts = new CancellationTokenSource();
             RecipeStatus = Localize("Dash_RecipeRunning", SelectedRecipe.Name);
@@ -926,6 +940,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             try
             {
                 await AppServices.RecipeEngine.ExecuteRecipeAsync(SelectedRecipe, _recipeCts.Token, progress, WaitForResumeAsync);
+                await WaitForCaptureSyncAsync(_recipeCts.Token);
                 RecipeStatus = LocalizationManager.Instance["Dash_RecipeDone"];
             }
             catch (OperationCanceledException)
@@ -942,6 +957,33 @@ namespace HeatingCameraSystem.Master.ViewModels
                 _activeRecipeStepIndex = -1;
                 if (CurrentViewMode == 1)
                     RunOnUi(LoadCameraFeeds);
+            }
+        }
+
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _pendingSyncFiles = new();
+
+        /// <summary>
+        /// Agent가 아직 Master로 못 옮긴 촬영 파일이 0이 될 때까지 기다린다. 진행률은 레시피
+        /// 진행바를 그대로 쓰고, 중지 버튼이 그대로 취소 수단이 된다.
+        /// 하트비트가 갱신하는 값이라 폴링 주기를 하트비트보다 짧게 잡을 이유가 없다.
+        /// </summary>
+        private async Task WaitForCaptureSyncAsync(CancellationToken cancellationToken)
+        {
+            int Remaining() => _pendingSyncFiles.Values.Sum();
+
+            int total = Remaining();
+            if (total == 0) return;
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                int remaining = Remaining();
+                if (remaining == 0) break;
+
+                if (remaining > total) total = remaining;
+                RecipeProgressValue = (double)(total - remaining) / total * 100;
+                RecipeStatus = Localize("Dash_SyncingCaptures", total - remaining, total);
+
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
             }
         }
 

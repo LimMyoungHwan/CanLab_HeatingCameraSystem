@@ -76,6 +76,13 @@ namespace HeatingCameraSystem.Core.Models
         /// <br/>null = 읽지 못했거나 보고하지 않는 발신자 → Master는 직전 값을 유지한다.
         /// </summary>
         public double? CameraTemperature { get; set; }
+
+        /// <summary>
+        /// 아직 Master로 복사되지 않은 로컬 캡처 파일 수. 레시피 종료 후 동기화 진행률이
+        /// 이 값들의 합으로 계산된다.
+        /// <br/>null = 보고하지 않는 구버전 발신자 → Master는 진행률에서 제외한다.
+        /// </summary>
+        public int? PendingSyncFiles { get; set; }
     }
 
     /// <summary>캡처를 유발한 주체. 이력 화면의 "촬영 구분" 필터가 이 값을 쓴다.</summary>
@@ -102,6 +109,27 @@ namespace HeatingCameraSystem.Core.Models
         /// 0 이하이면 Agent 로컬 설정(CaptureBurstCount)을 따른다.
         /// </summary>
         public int ShotCount { get; set; }
+
+        /// <summary>
+        /// 생산 저장 규칙의 최종 목적지 루트(Master 공유 경로). 비어 있으면 규칙 저장을 하지 않고
+        /// 기존 동작만 수행한다.
+        /// </summary>
+        public string StorageRootUnc { get; set; } = string.Empty;
+
+        /// <summary>운영자가 레시피 시작 시 입력한 제품 번호. 폴더는 <c>{센서번호}_{제품번호}</c>가 된다.</summary>
+        public string ProductNumber { get; set; } = string.Empty;
+
+        /// <summary>온도대역+챔버온도 코드 폴더명(예: <c>RPP40</c>). Master가 계산해 내려보낸다.</summary>
+        public string ConditionFolder { get; set; } = string.Empty;
+
+        /// <summary>블랙바디 역할 폴더명: <c>hot</c> / <c>cold</c> / <c>room</c>.</summary>
+        public string BlackBodyFolder { get; set; } = string.Empty;
+
+        /// <summary>파일명 접두사(예: <c>BB80</c>). 최종 파일은 <c>{접두사}_{000}.raw</c>다.</summary>
+        public string FilePrefix { get; set; } = string.Empty;
+
+        /// <summary>true면 <see cref="ConditionFolder"/> 계층에 bias.json을 남긴다(cold 조건).</summary>
+        public bool WriteBiasJson { get; set; }
     }
 
     /// <summary>
