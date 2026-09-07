@@ -243,6 +243,12 @@ namespace HeatingCameraSystem.Protocols.Cameras
             using var abort = new CancellationTokenSource();
             _captureAborts[descriptor.AgentId] = abort;
 
+            // 규칙 저장에서는 .raw가 방사 측정 원본이므로 .y16을 장마다 또 쓰지 않는다. 결과 화면용으로
+            // 마지막 성공 프레임 한 장만 남기고, 결과도 배치당 1건만 발행한다(장마다 JPEG을 붙이면
+            // 100장 x 카메라수 만큼의 미리보기가 Master 메모리에 쌓인다).
+            ThermalFrame? representative = null;
+            int captured = 0;
+
             try
             {
             for (int i = 0; i < shots; i++)
@@ -273,13 +279,22 @@ namespace HeatingCameraSystem.Protocols.Cameras
                             {
                                 frame = nuc.Apply(frame);
                             }
-                            CaptureRecord record = _store.Save(frame, descriptor.AgentId, descriptor.OpenCvIndex, cmd.RecipeStepId);
-                            imagePath = record.Y16Path;
-                            bytes = ThermalPreviewEncoder.EncodeJpeg(frame);
-                            success = true;
 
-                            // 후처리 툴이 캘리브레이션을 직접 하므로 .raw는 NUC 미보정 원본(snap)이어야 한다.
-                            if (production) _productionSink!.WriteShot(descriptor, cmd, snap, fpaRaw, i);
+                            if (production)
+                            {
+                                // 후처리 툴이 캘리브레이션을 직접 하므로 .raw는 NUC 미보정 원본(snap)이어야 한다.
+                                _productionSink!.WriteShot(descriptor, cmd, snap, fpaRaw, i);
+                                representative = frame;
+                            }
+                            else
+                            {
+                                CaptureRecord record = _store.Save(frame, descriptor.AgentId, descriptor.OpenCvIndex, cmd.RecipeStepId);
+                                imagePath = record.Y16Path;
+                                bytes = ThermalPreviewEncoder.EncodeJpeg(frame);
+                            }
+
+                            captured++;
+                            success = true;
                         }
                     }
                 }
@@ -289,34 +304,26 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     success = false;
                 }
 
-                try
-                {
-                    await _nats.PublishCaptureResultAsync(new CaptureResultMessage
-                    {
-                        AgentId = descriptor.AgentId,
-                        Alias = descriptor.Alias,
-                        CameraIndex = descriptor.OpenCvIndex,
-                        RecipeStepId = cmd.RecipeStepId,
-                        Source = cmd.Source != CaptureSource.Unknown
-                            ? cmd.Source
-                            : (string.IsNullOrEmpty(cmd.RecipeStepId) ? CaptureSource.Manual : CaptureSource.Recipe),
-                        CaptureId = Guid.NewGuid().ToString(),
-                        IsSuccess = success,
-                        ImagePath = imagePath,
-                        ImageBytes = bytes,
-                        Timestamp = DateTime.UtcNow,
-                        CameraTemperature = cameraTemperature
-                    }).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[CameraNats] publish result failed for {descriptor.AgentId}: {ex.Message}");
-                }
+                if (!production) await PublishCaptureResultAsync(descriptor, cmd, success, imagePath, bytes, cameraTemperature).ConfigureAwait(false);
             }
             }
             finally
             {
                 _captureAborts.TryRemove(descriptor.AgentId, out _);
+            }
+
+            if (production)
+            {
+                string imagePath = string.Empty;
+                byte[]? bytes = null;
+                if (representative is not null)
+                {
+                    CaptureRecord record = _store.Save(representative, descriptor.AgentId, descriptor.OpenCvIndex, cmd.RecipeStepId);
+                    imagePath = record.Y16Path;
+                    bytes = ThermalPreviewEncoder.EncodeJpeg(representative);
+                }
+
+                await PublishCaptureResultAsync(descriptor, cmd, captured == shots, imagePath, bytes, cameraTemperature).ConfigureAwait(false);
             }
 
             if (production && cmd.WriteBiasJson)
@@ -330,6 +337,39 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
             // 폴더가 완성된 뒤에만 전송한다 — 파일 단위로 옮기면 후처리 툴이 복사 도중인 파일을 읽는다.
             if (production) await _productionSink!.SyncFolderAsync(descriptor, cmd, _cts.Token).ConfigureAwait(false);
+        }
+
+        private async Task PublishCaptureResultAsync(
+            CameraDescriptor descriptor,
+            CaptureCommandMessage cmd,
+            bool success,
+            string imagePath,
+            byte[]? bytes,
+            double? cameraTemperature)
+        {
+            try
+            {
+                await _nats.PublishCaptureResultAsync(new CaptureResultMessage
+                {
+                    AgentId = descriptor.AgentId,
+                    Alias = descriptor.Alias,
+                    CameraIndex = descriptor.OpenCvIndex,
+                    RecipeStepId = cmd.RecipeStepId,
+                    Source = cmd.Source != CaptureSource.Unknown
+                        ? cmd.Source
+                        : (string.IsNullOrEmpty(cmd.RecipeStepId) ? CaptureSource.Manual : CaptureSource.Recipe),
+                    CaptureId = Guid.NewGuid().ToString(),
+                    IsSuccess = success,
+                    ImagePath = imagePath,
+                    ImageBytes = bytes,
+                    Timestamp = DateTime.UtcNow,
+                    CameraTemperature = cameraTemperature
+                }).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[CameraNats] publish result failed for {descriptor.AgentId}: {ex.Message}");
+            }
         }
 
         /// <summary>진행 중인 버스트를 취소한다. 취소할 것이 없어도 성공으로 응답한다(멱등).</summary>

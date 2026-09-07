@@ -789,14 +789,18 @@ namespace HeatingCameraSystem.Master.Services
             };
         }
 
-        /// <summary>결과를 아직 거두지 않은 캡처 1건. fork된 캡처만 여기에 쌓인다.</summary>
+        /// <summary>
+        /// 결과를 아직 거두지 않은 캡처 1건. fork된 캡처만 여기에 쌓인다.
+        /// <paramref name="ExpectedResults"/>는 찍을 장수가 아니라 받기로 한 결과 건수다 —
+        /// 규칙 저장은 배치 전체를 1건으로 보고한다.
+        /// </summary>
         private sealed record PendingCapture(
             string RequestId,
             CaptureBatch Batch,
             RecipeStep Step,
             string AgentId,
             int CameraIndex,
-            int Shots,
+            int ExpectedResults,
             string RunId);
 
         /// <summary>운영자가 중단 실패 상황에서 고를 수 있는 선택지.</summary>
@@ -875,7 +879,11 @@ namespace HeatingCameraSystem.Master.Services
 
             // 규칙 저장에서는 장수도 규칙이 정한다(room 10장, 그 외 100장).
             int shots = production?.ShotCount ?? (step.ShotCount > 0 ? step.ShotCount : 1);
-            var batch = new CaptureBatch(shots);
+
+            // 규칙 저장은 배치 전체를 결과 1건으로 보고한다. 장마다 JPEG을 실어 보내면 100장 x
+            // 카메라수 만큼의 미리보기가 Master 메모리에 쌓이기 때문이다.
+            int expectedResults = production is null ? shots : 1;
+            var batch = new CaptureBatch(expectedResults);
             captureWaiters[requestId] = batch;
 
             try
@@ -903,7 +911,7 @@ namespace HeatingCameraSystem.Master.Services
                 return;
             }
 
-            var item = new PendingCapture(requestId, batch, step, agentId, target.CameraIndex, shots, runId);
+            var item = new PendingCapture(requestId, batch, step, agentId, target.CameraIndex, expectedResults, runId);
 
             // 결과를 기다리지 않는 스텝(fork)은 CaptureJoin 스텝이 대신 거둔다. 여기서 배치를
             // 지우면 그때까지 오는 결과가 갈 곳을 잃으므로 captureWaiters에서 빼지 않는다.
@@ -949,7 +957,7 @@ namespace HeatingCameraSystem.Master.Services
 
             if (items.Length == 0) return true;
 
-            int maxShots = items.Max(i => i.Shots);
+            int maxShots = items.Max(i => i.Step.ShotCount > 0 ? i.Step.ShotCount : 1);
             TimeSpan timeout = step.CaptureJoinTimeoutSeconds > 0
                 ? TimeSpan.FromSeconds(step.CaptureJoinTimeoutSeconds)
                 : TimeSpan.FromTicks(_captureTimeout.Ticks * maxShots);
@@ -968,7 +976,7 @@ namespace HeatingCameraSystem.Master.Services
             bool proceed = true;
             foreach (PendingCapture item in items)
             {
-                if (item.Batch.Snapshot().Count >= item.Shots) continue;
+                if (item.Batch.Snapshot().Count >= item.ExpectedResults) continue;
                 if (!await AbortCaptureAsync(item, controlWaiters, subscribedControlAgents, cancellationToken))
                     proceed = false;
             }
@@ -1056,9 +1064,9 @@ namespace HeatingCameraSystem.Master.Services
             }
 
             int stored = results.Count(r => r.IsSuccess);
-            if (stored < item.Shots)
+            if (stored < item.ExpectedResults)
             {
-                AlarmSink.Raise(AlarmCodes.PartialCapture, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_PartialCapture", item.Step.StepId, item.CameraIndex, stored, item.Shots));
+                AlarmSink.Raise(AlarmCodes.PartialCapture, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_PartialCapture", item.Step.StepId, item.CameraIndex, stored, item.ExpectedResults));
 
                 // 한 장도 못 받은 건 카메라가 죽었다는 뜻이다. 일부라도 왔으면 살아 있으니 스킵 대상이 아니다.
                 if (stored == 0) skipState.NoteFailure(item.AgentId);
