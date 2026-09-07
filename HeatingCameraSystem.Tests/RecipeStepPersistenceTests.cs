@@ -11,6 +11,23 @@ namespace HeatingCameraSystem.Tests
 {
     public class RecipeStepPersistenceTests
     {
+        [Theory]
+        [InlineData(30, 60, 1800, "30분 동안 1분 간격으로 30장씩 30회 · 총 900장")]
+        [InlineData(30, 1800, 1800, "30분 동안 30분 간격으로 30장씩 1회 · 총 30장   ⚠ 지속 시간이 간격의 2배 미만이라 1회만 찍습니다")]
+        [InlineData(3, 70, 1800, "30분 동안 70초 간격으로 3장씩 25회 · 총 75장   ⚠ 나누어떨어지지 않아 마지막 50초는 촬영하지 않습니다")]
+        [InlineData(10, 0, 1800, "즉시 10장 1회 · 총 10장")]
+        public void CapturePlanSummary_ReadsBackWhatTheOperatorEntered(int shots, int interval, int duration, string expected)
+        {
+            var step = new RecipeStepModel
+            {
+                ShotCount = shots,
+                CaptureIntervalSeconds = interval,
+                CaptureDurationSeconds = duration
+            };
+
+            Assert.Equal(expected, step.CapturePlanSummary);
+        }
+
         [Fact]
         public async Task RecipeStep_PerPositionFields_RoundTripThroughLiteDb()
         {

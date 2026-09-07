@@ -192,12 +192,16 @@
                     AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
                         <TextBlock Text="카메라 명령" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
                     </StackPanel>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" TextWrapping="Wrap" FontSize="11"
+                               Foreground="{StaticResource TextOnSurfaceVariant}"
+                               Text="{Binding CapturePlanSummary, Mode=OneWay, StringFormat='→ {0}'}"
+                               Visibility="{Binding IsCaptureOperation, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
                     <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
                         <StackPanel Margin="0,0,16,0" Width="170">
@@ -205,16 +209,16 @@
                             <ComboBox ItemsSource="{Binding DataContext.CameraOperationOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Value" SelectedValue="{Binding CameraOperation}" DisplayMemberPath="Label" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
                         </StackPanel>
                         <StackPanel Margin="0,0,16,0" Width="90" IsEnabled="{Binding IsCaptureOperation}">
-                            <TextBlock Text="촬영 장수" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
-                            <TextBox Text="{Binding ShotCount}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                            <TextBlock Text="1회당 장수" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <TextBox Text="{Binding ShotCount, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                         </StackPanel>
-                        <StackPanel Margin="0,0,16,0" Width="100" IsEnabled="{Binding IsCaptureOperation}">
-                            <TextBlock Text="간격(초) 0=1회" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
-                            <TextBox Text="{Binding CaptureIntervalSeconds}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                        <StackPanel Margin="0,0,16,0" Width="130" IsEnabled="{Binding IsCaptureOperation}">
+                            <TextBlock Text="반복 간격(초) 0=1회만" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <TextBox Text="{Binding CaptureIntervalSeconds, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                         </StackPanel>
-                        <StackPanel Margin="0,0,16,0" Width="100" IsEnabled="{Binding IsCaptureOperation}">
-                            <TextBlock Text="전체 시간(초)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
-                            <TextBox Text="{Binding CaptureDurationSeconds}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                        <StackPanel Margin="0,0,16,0" Width="130" IsEnabled="{Binding IsCaptureOperation}">
+                            <TextBlock Text="반복 지속 시간(초)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <TextBox Text="{Binding CaptureDurationSeconds, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                         </StackPanel>
                         <StackPanel Margin="0,0,16,0" Width="110" IsEnabled="{Binding IsBiasOperation}">
                             <TextBlock Text="BIAS 목표 0=기본" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>

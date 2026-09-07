@@ -330,13 +330,13 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         public string? LastBiasJson { get; private set; }
 
         [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task RunBiasLowAsync(double? targetOverride) => RunAutoBiasAsync("LOW", targetOverride ?? 8500, 0x93);
+        private Task RunBiasLowAsync(double? targetOverride) => RunAutoBiasAsync("LOW", targetOverride ?? CameraBiasDefaults.Low, 0x93);
 
         [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task RunBiasMidAsync(double? targetOverride) => RunAutoBiasAsync("MID", targetOverride ?? 5000, 0xA3);
+        private Task RunBiasMidAsync(double? targetOverride) => RunAutoBiasAsync("MID", targetOverride ?? CameraBiasDefaults.Mid, 0xA3);
 
         [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task RunBiasHighAsync(double? targetOverride) => RunAutoBiasAsync("HIGH", targetOverride ?? 5000, 0xD3);
+        private Task RunBiasHighAsync(double? targetOverride) => RunAutoBiasAsync("HIGH", targetOverride ?? CameraBiasDefaults.High, 0xD3);
 
         /// <summary>
         /// 목표 레벨 ±<see cref="BiasTargetTolerance"/> 안에 드는 바이어스 값을 탐색해 적용한다.

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Config;
@@ -44,6 +45,12 @@ namespace HeatingCameraSystem.Master.Services
         /// 모르므로, 저장 폴더의 온도 코드를 이 값으로 정한다. NaN이면 아직 한 건도 기록되지 않았다.
         /// </summary>
         private double _lastRecordedTemperature = double.NaN;
+
+        /// <summary>
+        /// 이번 실행의 제품 폴더명(<c>{제품번호}_{회차}</c>). 파일명이 <c>_000</c>부터 고정이라
+        /// 회차를 폴더로 갈라놓지 않으면 재실행이 이전 실행을 덮어쓴다.
+        /// </summary>
+        private string _runProductNumber = string.Empty;
         private readonly int _rampStepIntervalSeconds;
         private readonly TimeSpan _captureTimeout;
         private readonly TimeSpan _motorMoveTimeout;
@@ -175,6 +182,7 @@ namespace HeatingCameraSystem.Master.Services
             // 어떤 경로로 끝나든 finally에서 세운 뒤 마지막 기록까지 비워낸다.
             using var recordingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             string runId = Guid.NewGuid().ToString();
+            _runProductNumber = NextRunProductNumber(recipe.SaveRootPath, recipe.ProductNumber);
             Task recording = RecordMeasurementsAsync(recipe, runId, recordingCts.Token);
 
             try
@@ -711,9 +719,12 @@ namespace HeatingCameraSystem.Master.Services
         /// 캡처 반복 횟수. 간격이 0이면 1회, 아니면 <c>전체시간 / 간격</c>이다(최소 1회).
         /// </summary>
         internal static int CaptureRepeatCount(RecipeStep step)
+            => CaptureRepeatCount(step.CaptureIntervalSeconds, step.CaptureDurationSeconds);
+
+        internal static int CaptureRepeatCount(int intervalSeconds, int durationSeconds)
         {
-            if (step.CaptureIntervalSeconds <= 0) return 1;
-            int count = step.CaptureDurationSeconds / step.CaptureIntervalSeconds;
+            if (intervalSeconds <= 0) return 1;
+            int count = durationSeconds / intervalSeconds;
             return count < 1 ? 1 : count;
         }
 
@@ -825,7 +836,6 @@ namespace HeatingCameraSystem.Master.Services
             string ConditionFolder,
             string BlackBodyFolder,
             string FilePrefix,
-            int ShotCount,
             bool WriteBiasJson);
 
         /// <summary>
@@ -848,7 +858,6 @@ namespace HeatingCameraSystem.Master.Services
                     CaptureNamingRule.ConditionFolder(range, celsius, _tempTolerance),
                     CaptureNamingRule.BlackBodyFolder(role),
                     CaptureNamingRule.FilePrefix(range, role),
-                    CaptureNamingRule.ShotCount(role),
                     CaptureNamingRule.WritesBiasJson(role));
             }
             catch (Exception ex)
@@ -857,6 +866,49 @@ namespace HeatingCameraSystem.Master.Services
                     L("Alarm_Msg_ProductionNamingFailed", step.StepId, target.CameraIndex, ex.Message));
                 return null;
             }
+        }
+
+        /// <summary>
+        /// 첫 실행은 접미사 없이 <c>{센서}_{제품번호}</c>, 이후부터 <c>_1</c>, <c>_2</c>로 회차를 붙인다.
+        /// 센서번호는 Agent만 알기 때문에 앞부분은 비교에서 뺀다.
+        /// 제품번호가 비면 회차만 돌려줘 Agent가 <c>{센서}</c> → <c>{센서}_1</c>로 결합하게 한다.
+        /// ponytail: 이때는 제품번호로 걸러낼 수 없어 루트의 모든 폴더를 같은 계열로 본다.
+        /// 제품번호를 넣은 실행과 안 넣은 실행을 한 루트에 섞으면 회차가 함께 올라간다.
+        /// 접미사 없는 폴더를 지웠어도 남은 회차 다음 번호를 쓴다 — 번호를 재사용하면 남은 폴더를 덮어쓴다.
+        /// 루트를 읽지 못하면 접미사 없이 이전 동작을 유지한다.
+        /// </summary>
+        internal static string NextRunProductNumber(string saveRootPath, string productNumber)
+        {
+            bool hasProduct = !string.IsNullOrWhiteSpace(productNumber);
+            string bare = hasProduct ? "_" + productNumber : string.Empty;
+            bool bareExists = false;
+            int max = 0;
+
+            bool Matches(ReadOnlySpan<char> head) => !hasProduct || head.EndsWith(bare, StringComparison.Ordinal);
+
+            try
+            {
+                foreach (string dir in Directory.EnumerateDirectories(saveRootPath))
+                {
+                    string name = Path.GetFileName(dir);
+                    int cut = name.LastIndexOf('_');
+
+                    if (cut > 0 && int.TryParse(name.AsSpan(cut + 1), out int run) && Matches(name.AsSpan(0, cut)))
+                    {
+                        if (run > max) max = run;
+                        continue;
+                    }
+
+                    if (Matches(name)) bareExists = true;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                return productNumber;
+            }
+
+            if (!bareExists && max == 0) return productNumber;
+            return hasProduct ? $"{productNumber}_{max + 1}" : (max + 1).ToString();
         }
 
         private async Task CaptureOnceAsync(
@@ -877,8 +929,8 @@ namespace HeatingCameraSystem.Master.Services
 
             ProductionNaming? production = ResolveProductionNaming(recipe, step, target);
 
-            // 규칙 저장에서는 장수도 규칙이 정한다(room 10장, 그 외 100장).
-            int shots = production?.ShotCount ?? (step.ShotCount > 0 ? step.ShotCount : 1);
+            // 장수는 규칙 저장 여부와 무관하게 운영자가 스텝에 입력한 값만 쓴다.
+            int shots = step.ShotCount > 0 ? step.ShotCount : 1;
 
             // 규칙 저장은 배치 전체를 결과 1건으로 보고한다. 장마다 JPEG을 실어 보내면 100장 x
             // 카메라수 만큼의 미리보기가 Master 메모리에 쌓이기 때문이다.
@@ -896,7 +948,7 @@ namespace HeatingCameraSystem.Master.Services
                     ShotCount = shots,
                     Timestamp = DateTime.UtcNow,
                     StorageRootUnc = production is null ? string.Empty : recipe.SaveRootPath,
-                    ProductNumber = production is null ? string.Empty : recipe.ProductNumber,
+                    ProductNumber = production is null ? string.Empty : _runProductNumber,
                     ConditionFolder = production?.ConditionFolder ?? string.Empty,
                     BlackBodyFolder = production?.BlackBodyFolder ?? string.Empty,
                     FilePrefix = production?.FilePrefix ?? string.Empty,

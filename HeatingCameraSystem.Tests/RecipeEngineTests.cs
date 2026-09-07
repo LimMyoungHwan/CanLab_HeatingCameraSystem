@@ -13,6 +13,63 @@ namespace HeatingCameraSystem.Tests
 {
     public class RecipeEngineTests
     {
+        // 제품번호를 비우면 Agent가 {센서}+{반환값}으로 붙이므로 회차 숫자만 돌려준다.
+        [Fact]
+        public void NextRunProductNumber_NoProductNumber_NumbersSerialOnlyFolders()
+        {
+            string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "hcs_" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(root);
+
+            try
+            {
+                Assert.Equal("", RecipeEngine.NextRunProductNumber(root, ""));
+
+                System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "544112136"));
+                Assert.Equal("1", RecipeEngine.NextRunProductNumber(root, ""));
+
+                System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "544112136_1"));
+                Assert.Equal("2", RecipeEngine.NextRunProductNumber(root, ""));
+            }
+            finally
+            {
+                System.IO.Directory.Delete(root, true);
+            }
+        }
+
+        [Fact]
+        public void NextRunProductNumber_FirstRunHasNoSuffixThenCounts()
+        {
+            string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "hcs_" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(root);
+
+            try
+            {
+                Assert.Equal("P123", RecipeEngine.NextRunProductNumber(root, "P123"));
+
+                System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "544112136_P123"));
+                Assert.Equal("P123_1", RecipeEngine.NextRunProductNumber(root, "P123"));
+
+                System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "544112136_P123_1"));
+                Assert.Equal("P123_2", RecipeEngine.NextRunProductNumber(root, "P123"));
+
+                // 다른 센서가 이미 3회차까지 찍었으면 그 다음이다.
+                System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "999999999_P123_3"));
+                Assert.Equal("P123_4", RecipeEngine.NextRunProductNumber(root, "P123"));
+
+                // 무접미사 폴더를 지워도 번호를 재사용하지 않는다.
+                System.IO.Directory.Delete(System.IO.Path.Combine(root, "544112136_P123"));
+                Assert.Equal("P123_4", RecipeEngine.NextRunProductNumber(root, "P123"));
+
+                System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "544112136_OTHER_9"));
+                Assert.Equal("NEW", RecipeEngine.NextRunProductNumber(root, "NEW"));
+                Assert.Equal("P123", RecipeEngine.NextRunProductNumber(System.IO.Path.Combine(root, "missing"), "P123"));
+            }
+            finally
+            {
+                System.IO.Directory.Delete(root, true);
+            }
+        }
+
         // S1: chamber at target, no drift -> every step captures, no pause, no error alarm.
         [Fact]
         public async Task ExecuteRecipeAsync_ShouldRunAllStepsAndCallPlc()
@@ -1133,6 +1190,99 @@ namespace HeatingCameraSystem.Tests
                 new RecipeStep { Kind = RecipeStepKind.CameraCommand, CameraOperation = CameraControlOps.Capture, CameraIndex = 1 }
             }
         };
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_SameRecipeTwice_KeepsBothRunsInSeparateProductFolders()
+        {
+            string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "hcse2e_" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(root);
+            var sink = new HeatingCameraSystem.Protocols.Cameras.ProductionCaptureSink(root);
+            var camera = new CameraDescriptor("Agent_1", 0, "CAM-01", CameraSerialNumber: "544112136");
+
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+            var mockMeasure = new Mock<IRecipeMeasurementRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
+            mockMeasure.Setup(m => m.InsertAsync(It.IsAny<RecipeMeasurementRecord>())).Returns(Task.CompletedTask);
+
+            // Agent가 하는 일(CameraNatsConnector.HandleCaptureAsync)을 그대로 흉내낸다:
+            // 규칙 저장이면 장수만큼 .raw를 쓰고 결과는 배치당 1건만 돌려준다.
+            Action<CaptureResultMessage>? resultCb = null;
+            mockNats
+                .Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>()))
+                .Callback<Action<CaptureResultMessage>>(cb => resultCb = cb)
+                .Returns(Task.CompletedTask);
+            mockNats
+                .Setup(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()))
+                .Callback<CaptureCommandMessage>(cmd =>
+                {
+                    bool production = HeatingCameraSystem.Protocols.Cameras.ProductionCaptureSink.IsEnabled(cmd);
+                    if (production)
+                        for (int i = 0; i < cmd.ShotCount; i++)
+                            sink.WriteShot(camera, cmd, new ThermalFrame(new ushort[] { 1, 2, 3, 4 }, 2, 2, DateTimeOffset.Now), fpaRaw: 16560, shotIndex: i);
+
+                    int results = production ? 1 : Math.Max(cmd.ShotCount, 1);
+                    for (int i = 0; i < results; i++)
+                        resultCb?.Invoke(new CaptureResultMessage
+                        {
+                            AgentId = "Agent_1",
+                            RecipeStepId = cmd.RecipeStepId,
+                            IsSuccess = true,
+                            Timestamp = DateTime.UtcNow
+                        });
+                })
+                .Returns(Task.CompletedTask);
+
+            Recipe Build() => new()
+            {
+                Name = "E2E 상온 촬영",
+                SaveRootPath = root,
+                ProductNumber = "P123",
+                RecordIntervalSeconds = 1,
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.Wait, WaitDurationSeconds = 1 },
+                    new()
+                    {
+                        Kind = RecipeStepKind.CameraCommand,
+                        CameraOperation = CameraControlOps.Capture,
+                        CameraIndex = 1,
+                        ShotCount = 3,
+                        CameraTargets = new List<RecipeCameraTarget>
+                        {
+                            new() { AgentId = "Agent_1", CameraIndex = 1, TargetChamber = ChamberRange.Mid, TargetBlackBody = BlackBodyRole.Room }
+                        }
+                    }
+                }
+            };
+
+            AlarmSink.Entries.Clear();
+            try
+            {
+                var engine = new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object, measurementRepo: mockMeasure.Object);
+                await engine.ExecuteRecipeAsync(Build()).WaitAsync(TimeSpan.FromSeconds(20));
+                await engine.ExecuteRecipeAsync(Build()).WaitAsync(TimeSpan.FromSeconds(20));
+
+                string Shot(string productFolder, int index) =>
+                    System.IO.Path.Combine(root, productFolder, "RPP25", "room", $"BBroom_{index:D3}.raw");
+
+                foreach (string folder in new[] { "544112136_P123", "544112136_P123_1" })
+                    for (int i = 0; i < 3; i++)
+                        Assert.True(System.IO.File.Exists(Shot(folder, i)), $"missing {Shot(folder, i)}");
+
+                Assert.Equal(6, System.IO.Directory.GetFiles(root, "*.raw", System.IO.SearchOption.AllDirectories).Length);
+                Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Error);
+            }
+            finally
+            {
+                System.IO.Directory.Delete(root, true);
+            }
+        }
 
         private static void WireCaptureRoundTrip(Mock<INatsCommunicationService> mockNats)
         {

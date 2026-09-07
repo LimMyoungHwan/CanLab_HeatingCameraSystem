@@ -62,6 +62,30 @@ namespace HeatingCameraSystem.Core.Models
     }
 
     /// <summary>
+    /// 대역별 BIAS 목표 레벨(<c>참고/AISEN_CODE/main.py:1206-1210</c>). Master 편집 화면과 Agent
+    /// 폴백이 같은 값을 봐야 하므로 Core에 둔다 — 한쪽만 바뀌면 화면에 보이는 값과 실제 적용값이
+    /// 조용히 갈라진다.
+    /// </summary>
+    public static class CameraBiasDefaults
+    {
+        public const double Low = 8500;
+        public const double Mid = 5000;
+        public const double High = 5000;
+
+        /// <summary>
+        /// 대역이 정해진 op의 기본 목표. <see cref="CameraControlOps.Bias"/>는 실행 시점에야 대역이
+        /// 정해지므로 null이고, 그 경우 Agent가 치환된 대역의 기본값을 쓴다.
+        /// </summary>
+        public static double? For(string op) => op switch
+        {
+            CameraControlOps.BiasLow => Low,
+            CameraControlOps.BiasMid => Mid,
+            CameraControlOps.BiasHigh => High,
+            _ => null
+        };
+    }
+
+    /// <summary>
     /// Agent → Master 카메라 제어 응답(<c>agent.ack.camera.{AgentId}</c>).
     /// 실패 사유는 <see cref="Message"/>에 담기며, 이 값이 운영자 화면에 그대로 노출된다.
     /// </summary>

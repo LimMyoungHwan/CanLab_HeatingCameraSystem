@@ -70,6 +70,38 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// <summary>촬영 대기 스텝의 타임아웃(초). 0이면 전역 설정을 쓴다.</summary>
         [ObservableProperty] private int _captureJoinTimeoutSeconds;
         public string SelectedCameraSummary => string.Join(", ", CameraTargets.Where(target => target.IsSelected).Select(target => target.Label).DefaultIfEmpty("카메라 선택"));
+        /// <summary>
+        /// 입력한 장수·간격·지속 시간이 실제로 몇 회 몇 장이 되는지 운영자 문장 그대로 되읽어 준다.
+        /// 반복 횟수가 두 값의 나눗셈으로 정해지는데 화면에 안 보여서 오해가 잦았다
+        /// (간격을 지속 시간과 같게 넣고 여러 번 찍힐 것으로 기대하는 사고).
+        /// </summary>
+        public string CapturePlanSummary
+        {
+            get
+            {
+                int shots = ShotCount > 0 ? ShotCount : 1;
+                if (CaptureIntervalSeconds <= 0) return $"즉시 {shots}장 1회 · 총 {shots}장";
+
+                int repeats = Services.RecipeEngine.CaptureRepeatCount(CaptureIntervalSeconds, CaptureDurationSeconds);
+                string text = $"{Span(CaptureDurationSeconds)} 동안 {Span(CaptureIntervalSeconds)} 간격으로 {shots}장씩 {repeats}회 · 총 {shots * repeats}장";
+
+                if (CaptureDurationSeconds < CaptureIntervalSeconds * 2)
+                    return text + "   ⚠ 지속 시간이 간격의 2배 미만이라 1회만 찍습니다";
+
+                int remainder = CaptureDurationSeconds % CaptureIntervalSeconds;
+                return remainder > 0
+                    ? text + $"   ⚠ 나누어떨어지지 않아 마지막 {Span(remainder)}는 촬영하지 않습니다"
+                    : text;
+            }
+        }
+
+        private static string Span(int seconds)
+            => seconds >= 60 && seconds % 60 == 0 ? $"{seconds / 60}분" : $"{seconds}초";
+
+        partial void OnShotCountChanged(int value) => OnPropertyChanged(nameof(CapturePlanSummary));
+        partial void OnCaptureIntervalSecondsChanged(int value) => OnPropertyChanged(nameof(CapturePlanSummary));
+        partial void OnCaptureDurationSecondsChanged(int value) => OnPropertyChanged(nameof(CapturePlanSummary));
+
         public bool ShowsLegacyFields => Kind == RecipeStepKind.LegacyCapture;
         public bool ShowsMotorFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.MotorMove;
         public bool ShowsChamberFields => Kind is RecipeStepKind.LegacyCapture or RecipeStepKind.ChamberControl;
@@ -102,6 +134,8 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             OnPropertyChanged(nameof(IsCaptureOperation));
             OnPropertyChanged(nameof(IsBiasOperation));
+
+            if (CameraBiasDefaults.For(value) is double target) BiasTargetLevel = target;
         }
 
         partial void OnMotorMoveTypeChanged(MotorMoveType value)
@@ -609,7 +643,9 @@ namespace HeatingCameraSystem.Master.ViewModels
                     StabilizationToleranceC = s.StabilizationToleranceC,
                     StabilizationToleranceRh = s.StabilizationToleranceRh,
                     SoakMinutes = s.SoakMinutes,
-                    BiasTargetLevel = s.BiasTargetLevel,
+                    BiasTargetLevel = s.BiasTargetLevel > 0
+                        ? s.BiasTargetLevel
+                        : CameraBiasDefaults.For(s.CameraOperation) ?? 0,
                     DisableHumidityControl = s.DisableHumidityControl,
                     WaitForCaptureResult = s.WaitForCaptureResult,
                     CaptureJoinTimeoutSeconds = s.CaptureJoinTimeoutSeconds,

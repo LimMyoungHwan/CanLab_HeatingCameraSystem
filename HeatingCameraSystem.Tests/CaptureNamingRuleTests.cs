@@ -74,15 +74,6 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal(expected, CaptureNamingRule.FilePrefix(range, role));
         }
 
-        [Theory]
-        [InlineData(BlackBodyRole.Room, 10)]
-        [InlineData(BlackBodyRole.Hot, 100)]
-        [InlineData(BlackBodyRole.Cold, 100)]
-        public void ShotCount_RoomIsTen(BlackBodyRole role, int expected)
-        {
-            Assert.Equal(expected, CaptureNamingRule.ShotCount(role));
-        }
-
         [Fact]
         public void WritesBiasJson_OnlyForCold()
         {

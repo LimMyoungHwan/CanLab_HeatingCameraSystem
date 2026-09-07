@@ -10,9 +10,6 @@ namespace HeatingCameraSystem.Core.Models
     /// </summary>
     public static class CaptureNamingRule
     {
-        private const int RoomShotCount = 10;
-        private const int BlackBodyShotCount = 100;
-
         private static readonly Dictionary<ChamberRange, string> RangeCodes = new()
         {
             [ChamberRange.Low] = "LN",
@@ -87,9 +84,6 @@ namespace HeatingCameraSystem.Core.Models
             (_, BlackBodyRole.Hot) => "BB80",
             _ => throw new ArgumentOutOfRangeException(nameof(role), role, null)
         };
-
-        public static int ShotCount(BlackBodyRole role)
-            => role == BlackBodyRole.Room ? RoomShotCount : BlackBodyShotCount;
 
         /// <summary>bias.json은 cold 조건에서만 남긴다(<c>main.py:1035</c>).</summary>
         public static bool WritesBiasJson(BlackBodyRole role) => role == BlackBodyRole.Cold;

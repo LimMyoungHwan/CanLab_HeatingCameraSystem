@@ -37,7 +37,8 @@ namespace HeatingCameraSystem.Master.Views
 
         private void UpdatePreview()
         {
-            string product = string.IsNullOrWhiteSpace(ProductNumber) ? "" : "_" + ProductNumber;
+            string suffix = Services.RecipeEngine.NextRunProductNumber(SaveRootPath, ProductNumber);
+            string product = string.IsNullOrWhiteSpace(suffix) ? "" : "_" + suffix;
             PreviewText.Text = Path.Combine(SaveRootPath, $"544112136{product}", "RPP40", "cold", "BB20_000.raw");
         }
 
@@ -53,12 +54,6 @@ namespace HeatingCameraSystem.Master.Views
             if (string.IsNullOrWhiteSpace(SaveRootPath))
             {
                 ShowError(L("Dialog_ProductionRun_NeedPath"));
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(ProductNumber))
-            {
-                ShowError(L("Dialog_ProductionRun_NeedProduct"));
                 return;
             }
 
