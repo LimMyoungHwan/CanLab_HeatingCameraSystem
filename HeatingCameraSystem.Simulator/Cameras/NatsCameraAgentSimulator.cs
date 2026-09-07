@@ -117,13 +117,25 @@ public sealed class NatsCameraAgentSimulator : ICameraAgentEndpoint
                 AgentId = camera.AgentId,
                 CameraIndex = camera.CameraIndex,
                 CameraStatus = CameraStatus.Connected,
-                Timestamp = DateTime.UtcNow
+                Timestamp = DateTime.UtcNow,
+                CameraTemperature = SyntheticFpaTemperature(camera.AgentId)
             }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[Simulator] status publish dropped: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// 실 검출기 FPA는 상온에서 대략 29~33℃다. 카메라마다 다르되 호출마다 같은 값을 주어야
+    /// 대시보드가 값을 받는지와 값이 흔들리는지를 구분할 수 있다.
+    /// </summary>
+    private static double SyntheticFpaTemperature(string agentId)
+    {
+        int sum = 0;
+        foreach (char c in agentId) sum += c;
+        return 29.0 + (sum % 40) / 10.0;
     }
 
     private async Task PublishLiveFramesAsync(CancellationToken token)

@@ -350,6 +350,11 @@ namespace HeatingCameraSystem.Master.ViewModels
                     if (msg.IsSerialConnected.HasValue)
                         cam.IsSerialConnected = msg.IsSerialConnected.Value;
 
+                    // null은 읽지 못했다는 뜻이므로 직전 값을 유지한다. 0으로 덮으면 시리얼이
+                    // 한 번 끊길 때마다 화면이 0.0℃로 튄다.
+                    if (msg.CameraTemperature.HasValue)
+                        cam.CurrentTemperature = (float)msg.CameraTemperature.Value;
+
                     bool removed = PruneStaleCameras(agent, camId, msg.HostAgentIds);
                     removed |= ReconcileHostInventory(hostName, msg.HostAgentIds);
 
