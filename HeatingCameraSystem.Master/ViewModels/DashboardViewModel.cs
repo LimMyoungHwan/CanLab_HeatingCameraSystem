@@ -967,6 +967,9 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _pendingSyncFiles = new();
 
+        /// <summary>Agent 하트비트 기본 주기(5초)보다 길게 잡아, 마지막 촬영이 반드시 한 번은 보고되게 한다.</summary>
+        private static readonly TimeSpan SyncSettleDelay = TimeSpan.FromSeconds(6);
+
         /// <summary>
         /// Agent가 아직 Master로 못 옮긴 촬영 파일이 0이 될 때까지 기다린다. 진행률은 레시피
         /// 진행바를 그대로 쓰고, 중지 버튼이 그대로 취소 수단이 된다.
@@ -975,6 +978,12 @@ namespace HeatingCameraSystem.Master.ViewModels
         private async Task WaitForCaptureSyncAsync(CancellationToken cancellationToken)
         {
             int Remaining() => _pendingSyncFiles.Values.Sum();
+
+            // 미전송 수는 하트비트(기본 5초)로만 올라온다. 마지막 촬영 직후 곧바로 세면 그 파일들이
+            // 아직 반영되지 않아 거의 항상 0이고, robocopy가 실패해 파일이 카메라 PC에 남아도
+            // "완료"가 떠버린다. 한 주기를 넘겨 기다린 뒤에 판정한다.
+            if (!string.IsNullOrWhiteSpace(SelectedRecipe?.SaveRootPath))
+                await Task.Delay(SyncSettleDelay, cancellationToken);
 
             int total = Remaining();
             if (total == 0) return;

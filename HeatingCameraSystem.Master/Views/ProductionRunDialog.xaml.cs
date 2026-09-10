@@ -22,6 +22,8 @@ namespace HeatingCameraSystem.Master.Views
             OkButton.Content = L("Dialog_ProductionRun_Ok");
             CancelButton.Content = L("Dialog_ProductionRun_Cancel");
 
+            LocalPathWarning.Text = L("Dialog_ProductionRun_LocalPathWarning");
+
             SaveRootBox.Text = initialPath;
             ProductBox.Text = initialProductNumber;
             SaveRootBox.TextChanged += (_, _) => UpdatePreview();
@@ -40,6 +42,12 @@ namespace HeatingCameraSystem.Master.Views
             string suffix = Services.RecipeEngine.NextRunProductNumber(SaveRootPath, ProductNumber);
             string product = string.IsNullOrWhiteSpace(suffix) ? "" : "_" + suffix;
             PreviewText.Text = Path.Combine(SaveRootPath, $"544112136{product}", "RPP40", "cold", "BB20_000.raw");
+
+            // 이 경로로 복사하는 주체는 Master가 아니라 카메라 PC다. 로컬 경로를 고르면 카메라 PC가
+            // "자기" 드라이브의 같은 경로에 쓰고 조용히 성공하므로, Master 쪽 폴더는 끝까지 비어 있다.
+            LocalPathWarning.Visibility = SaveRootPath.Length > 0 && !SaveRootPath.StartsWith(@"\\", StringComparison.Ordinal)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         private void OnBrowse(object sender, RoutedEventArgs e)

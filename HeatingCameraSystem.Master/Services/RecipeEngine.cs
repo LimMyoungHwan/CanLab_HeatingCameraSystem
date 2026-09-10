@@ -41,12 +41,6 @@ namespace HeatingCameraSystem.Master.Services
         private readonly float _tempTolerance;
 
         /// <summary>
-        /// 기록 조건이 마지막으로 남긴 챔버 온도. 캡처 스텝은 챔버 스텝과 분리되어 있어 목표 온도를
-        /// 모르므로, 저장 폴더의 온도 코드를 이 값으로 정한다. NaN이면 아직 한 건도 기록되지 않았다.
-        /// </summary>
-        private double _lastRecordedTemperature = double.NaN;
-
-        /// <summary>
         /// 이번 실행의 제품 폴더명(<c>{제품번호}_{회차}</c>). 파일명이 <c>_000</c>부터 고정이라
         /// 회차를 폴더로 갈라놓지 않으면 재실행이 이전 실행을 덮어쓴다.
         /// </summary>
@@ -178,6 +172,13 @@ namespace HeatingCameraSystem.Master.Services
 
             Console.WriteLine($"[RecipeEngine] Starting recipe: {recipe.Name}");
 
+            if (DescribeMissingProductionTargets(recipe) is string missingTargets)
+            {
+                string message = L("Alarm_Msg_ProductionTargetsMissing", missingTargets);
+                AlarmSink.Raise(AlarmCodes.ProductionNamingFailed, AlarmSeverity.Error, RecipeSource, message);
+                throw new InvalidOperationException(message);
+            }
+
             // 기록 루프는 레시피 전 구간에서 스텝과 무관하게 돌아야 하므로 별도 태스크로 띄우고,
             // 어떤 경로로 끝나든 finally에서 세운 뒤 마지막 기록까지 비워낸다.
             using var recordingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -246,7 +247,6 @@ namespace HeatingCameraSystem.Master.Services
                         lastTemp = temp;
                         lastHumidity = humidity;
                         lastAt = now;
-                        System.Threading.Volatile.Write(ref _lastRecordedTemperature, temp);
 
                         await _measurementRepo.InsertAsync(new RecipeMeasurementRecord
                         {
@@ -839,23 +839,22 @@ namespace HeatingCameraSystem.Master.Services
             bool WriteBiasJson);
 
         /// <summary>
-        /// 챔버 온도는 기록 조건이 마지막으로 남긴 실측값을 쓴다. 캡처 스텝과 챔버 스텝이 분리되어
-        /// 있어 목표 온도를 알 수 없기 때문이다.
+        /// 챔버 온도는 촬영 직전 PLC 실측값을 쓴다. 캡처 스텝과 챔버 스텝이 분리되어 있어 목표
+        /// 온도를 알 수 없기 때문이다. 예전에는 기록 조건(<see cref="Recipe.RecordIntervalSeconds"/> 등)이
+        /// 남긴 값을 재사용했는데, 기록 조건이 모두 0인 레시피에서는 그 값이 영영 채워지지 않아
+        /// 규칙 저장이 통째로 멈췄다 — 무관한 설정에 저장 기능이 묶여 있었다.
         /// </summary>
-        private ProductionNaming? ResolveProductionNaming(Recipe recipe, RecipeStep step, RecipeCameraTarget target)
+        private async Task<ProductionNaming?> ResolveProductionNamingAsync(Recipe recipe, RecipeStep step, RecipeCameraTarget target)
         {
             if (string.IsNullOrWhiteSpace(recipe.SaveRootPath)) return null;
             if (target.TargetChamber is not ChamberRange range || target.TargetBlackBody is not BlackBodyRole role) return null;
 
-            double celsius = System.Threading.Volatile.Read(ref _lastRecordedTemperature);
-
             try
             {
-                if (double.IsNaN(celsius))
-                    throw new InvalidOperationException("기록된 챔버 온도가 없습니다(기록 조건이 모두 0이면 규칙 저장을 할 수 없습니다).");
+                double celsius = await _plcController.GetCurrentTemperatureAsync();
 
                 return new ProductionNaming(
-                    CaptureNamingRule.ConditionFolder(range, celsius, _tempTolerance),
+                    CaptureNamingRule.ConditionFolder(range, celsius),
                     CaptureNamingRule.BlackBodyFolder(role),
                     CaptureNamingRule.FilePrefix(range, role),
                     CaptureNamingRule.WritesBiasJson(role));
@@ -866,6 +865,38 @@ namespace HeatingCameraSystem.Master.Services
                     L("Alarm_Msg_ProductionNamingFailed", step.StepId, target.CameraIndex, ex.Message));
                 return null;
             }
+        }
+
+        /// <summary>
+        /// 저장 루트를 지정한 실행(=규칙 저장을 하겠다는 뜻)인데 대역·흑체가 비어 있는 캡처 대상을
+        /// 찾아 <c>"#3 CAM-01"</c> 형태로 모아 돌려준다. 없으면 null.
+        /// 대역·흑체가 없으면 폴더명을 만들 수 없어 그 캡처는 아무것도 저장하지 않는데, 예전에는
+        /// 그 사실이 어디에도 드러나지 않아 몇 시간짜리 챔버 시퀀스를 다 돌고 나서야 빈 폴더로
+        /// 확인됐다. 그래서 챔버를 켜기 전에 세운다.
+        /// </summary>
+        internal static string? DescribeMissingProductionTargets(Recipe recipe)
+        {
+            if (string.IsNullOrWhiteSpace(recipe.SaveRootPath)) return null;
+
+            var missing = new List<string>();
+            for (int i = 0; i < recipe.Steps.Count; i++)
+            {
+                RecipeStep step = recipe.Steps[i];
+                if (step.Kind != RecipeStepKind.CameraCommand || step.CameraOperation != CameraControlOps.Capture)
+                    continue;
+
+                List<RecipeCameraTarget> targets = step.CameraTargets.Count > 0
+                    ? step.CameraTargets
+                    : new List<RecipeCameraTarget> { new() { CameraIndex = step.CameraIndex } };
+
+                foreach (RecipeCameraTarget target in targets)
+                {
+                    if (target.TargetChamber is null || target.TargetBlackBody is null)
+                        missing.Add($"#{i + 1} CAM-{target.CameraIndex:D2}");
+                }
+            }
+
+            return missing.Count == 0 ? null : string.Join(", ", missing);
         }
 
         /// <summary>
@@ -927,7 +958,7 @@ namespace HeatingCameraSystem.Master.Services
             // 회차마다 다른 키를 써야 이전 회차 결과가 다음 회차 배치로 새지 않는다.
             string requestId = $"{step.StepId}:{agentId}:{target.CameraIndex}:{round}";
 
-            ProductionNaming? production = ResolveProductionNaming(recipe, step, target);
+            ProductionNaming? production = await ResolveProductionNamingAsync(recipe, step, target);
 
             // 장수는 규칙 저장 여부와 무관하게 운영자가 스텝에 입력한 값만 쓴다.
             int shots = step.ShotCount > 0 ? step.ShotCount : 1;

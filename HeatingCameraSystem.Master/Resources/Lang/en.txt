@@ -369,6 +369,8 @@ Alarm_Msg_StepKindUnsupported=Unsupported step kind: {0}
 
 Alarm_Msg_ProductionNamingFailed=Step {0} camera {1}: production folder naming failed — {2}
 
+Alarm_Msg_ProductionTargetsMissing=A save root is set but the band/black body is empty, so nothing can be saved: {0} — pick a band and a black body for every target camera in the recipe editor.
+
 Dash_SyncingCaptures=Copying capture files… {0} / {1}
 
 Dialog_ProductionRun_Title=Capture Data Storage
@@ -388,6 +390,8 @@ Dialog_ProductionRun_Cancel=Cancel
 Dialog_ProductionRun_NeedPath=Choose a save folder.
 
 Dialog_ProductionRun_NeedProduct=Enter a product number.
+
+Dialog_ProductionRun_LocalPathWarning=⚠ This is a local path. The camera PC — not the Master — copies captures here. If the camera PC is a separate machine, the files pile up on that machine's identical path and this folder stays empty. Use a share (\\master-pc\share).
 
 Dialog_AbortNoAck_Title=No response to capture abort
 

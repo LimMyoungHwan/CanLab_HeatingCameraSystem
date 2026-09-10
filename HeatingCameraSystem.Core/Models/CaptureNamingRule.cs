@@ -17,7 +17,7 @@ namespace HeatingCameraSystem.Core.Models
             [ChamberRange.High] = "H1P"
         };
 
-        /// <summary>대역별로 허용된 챔버 목표 온도(℃). 이 9쌍 밖의 조합은 규칙에 없다.</summary>
+        /// <summary>대역별 폴더 코드 온도(℃). 고객 규칙에 정의된 9개 값이며 폴더명 후보일 뿐이다.</summary>
         private static readonly Dictionary<ChamberRange, int[]> AllowedTemperatures = new()
         {
             [ChamberRange.Low] = new[] { -30, -10, 10 },
@@ -28,19 +28,18 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>
         /// 3번째 계층 폴더명을 만든다(예: 상온 +40℃ → <c>RPP40</c>).
         /// <para>
-        /// 입력은 챔버 실측 온도라 39.98℃처럼 딱 떨어지지 않는다. 허용 9개 중 가장 가까운 값으로
-        /// 스냅하되 <paramref name="toleranceCelsius"/>(엔진의 온도 도달 판정 폭)를 넘어서면 예외를
-        /// 던진다 — 안정화 전에 찍힌 데이터가 멀쩡한 폴더명을 달면 후처리가 조용히 오답을 낸다.
+        /// 입력은 챔버 실측 온도라 39.98℃처럼 딱 떨어지지 않으므로 대역의 코드 온도 중 가장 가까운
+        /// 값으로 스냅한다. 얼마나 벗어났든 예외를 던지지 않는다 — 이건 검증이 아니라 저장 규칙이고,
+        /// 온도가 어긋났다고 촬영 데이터를 버리는 쪽이 더 나쁘다.
         /// </para>
         /// </summary>
-        public static string ConditionFolder(ChamberRange range, double celsius, double toleranceCelsius = 0)
+        public static string ConditionFolder(ChamberRange range, double celsius)
         {
-            int[] allowed = AllowedTemperatures[range];
-            double band = Math.Max(0.5, toleranceCelsius);
+            int[] codes = AllowedTemperatures[range];
 
-            int nearest = allowed[0];
+            int nearest = codes[0];
             double nearestDiff = Math.Abs(celsius - nearest);
-            foreach (int candidate in allowed)
+            foreach (int candidate in codes)
             {
                 double diff = Math.Abs(celsius - candidate);
                 if (diff < nearestDiff)
@@ -48,14 +47,6 @@ namespace HeatingCameraSystem.Core.Models
                     nearest = candidate;
                     nearestDiff = diff;
                 }
-            }
-
-            if (nearestDiff > band)
-            {
-                throw new ArgumentOutOfRangeException(
-                    nameof(celsius),
-                    celsius,
-                    $"{range} 대역에서 허용되는 챔버 온도는 {string.Join(", ", allowed)}℃(±{band})뿐입니다.");
             }
 
             string sign = nearest < 0 ? "N" : "P";

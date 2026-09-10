@@ -1284,6 +1284,118 @@ namespace HeatingCameraSystem.Tests
             }
         }
 
+        [Fact]
+        public async Task ExecuteRecipeAsync_WithoutRecordingConditions_StillWritesProductionRaw()
+        {
+            string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "hcsrec_" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(root);
+            var sink = new HeatingCameraSystem.Protocols.Cameras.ProductionCaptureSink(root);
+            var camera = new CameraDescriptor("Agent_1", 0, "CAM-01", CameraSerialNumber: "544112136");
+
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot());
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(24.8f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
+
+            Action<CaptureResultMessage>? resultCb = null;
+            mockNats
+                .Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>()))
+                .Callback<Action<CaptureResultMessage>>(cb => resultCb = cb)
+                .Returns(Task.CompletedTask);
+            mockNats
+                .Setup(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()))
+                .Callback<CaptureCommandMessage>(cmd =>
+                {
+                    if (HeatingCameraSystem.Protocols.Cameras.ProductionCaptureSink.IsEnabled(cmd))
+                        for (int i = 0; i < cmd.ShotCount; i++)
+                            sink.WriteShot(camera, cmd, new ThermalFrame(new ushort[] { 1, 2, 3, 4 }, 2, 2, DateTimeOffset.Now), fpaRaw: 16560, shotIndex: i);
+
+                    resultCb?.Invoke(new CaptureResultMessage
+                    {
+                        AgentId = "Agent_1",
+                        RecipeStepId = cmd.RecipeStepId,
+                        IsSuccess = true,
+                        Timestamp = DateTime.UtcNow
+                    });
+                })
+                .Returns(Task.CompletedTask);
+
+            // 기록 조건(RecordInterval/Delta)을 하나도 켜지 않은 실제 운영 레시피 — 예전에는 이 조합에서
+            // 챔버 온도 출처가 영영 비어 규칙 저장이 통째로 멈췄다.
+            var recipe = new Recipe
+            {
+                Name = "기록 조건 없는 상온 촬영",
+                SaveRootPath = root,
+                ProductNumber = "P900",
+                Steps = new List<RecipeStep>
+                {
+                    new()
+                    {
+                        Kind = RecipeStepKind.CameraCommand,
+                        CameraOperation = CameraControlOps.Capture,
+                        CameraIndex = 1,
+                        ShotCount = 2,
+                        CameraTargets = new List<RecipeCameraTarget>
+                        {
+                            new() { AgentId = "Agent_1", CameraIndex = 1, TargetChamber = ChamberRange.Mid, TargetBlackBody = BlackBodyRole.Room }
+                        }
+                    }
+                }
+            };
+
+            AlarmSink.Entries.Clear();
+            try
+            {
+                await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                    .ExecuteRecipeAsync(recipe)
+                    .WaitAsync(TimeSpan.FromSeconds(20));
+
+                for (int i = 0; i < 2; i++)
+                    Assert.True(System.IO.File.Exists(System.IO.Path.Combine(root, "544112136_P900", "RPP25", "room", $"BBroom_{i:D3}.raw")));
+                Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Error);
+            }
+            finally
+            {
+                System.IO.Directory.Delete(root, true);
+            }
+        }
+
+        [Fact]
+        public void DescribeMissingProductionTargets_NamesCaptureTargetsWithoutBandOrBlackBody()
+        {
+            var recipe = new Recipe
+            {
+                SaveRootPath = @"C:\save",
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.Wait, WaitDurationSeconds = 1 },
+                    new()
+                    {
+                        Kind = RecipeStepKind.CameraCommand,
+                        CameraOperation = CameraControlOps.Capture,
+                        CameraTargets = new List<RecipeCameraTarget>
+                        {
+                            new() { CameraIndex = 1, TargetChamber = ChamberRange.Mid, TargetBlackBody = BlackBodyRole.Cold },
+                            new() { CameraIndex = 2, TargetChamber = ChamberRange.Mid }
+                        }
+                    }
+                }
+            };
+
+            Assert.Equal("#2 CAM-02", RecipeEngine.DescribeMissingProductionTargets(recipe));
+
+            recipe.Steps[1].CameraTargets[1].TargetBlackBody = BlackBodyRole.Hot;
+            Assert.Null(RecipeEngine.DescribeMissingProductionTargets(recipe));
+
+            recipe.SaveRootPath = string.Empty;
+            recipe.Steps[1].CameraTargets[1].TargetBlackBody = null;
+            Assert.Null(RecipeEngine.DescribeMissingProductionTargets(recipe));
+        }
+
         private static void WireCaptureRoundTrip(Mock<INatsCommunicationService> mockNats)
         {
             Action<CaptureResultMessage>? resultCb = null;

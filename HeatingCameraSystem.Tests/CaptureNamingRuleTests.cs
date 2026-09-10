@@ -27,28 +27,15 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal("RPP40", CaptureNamingRule.ConditionFolder(ChamberRange.Mid, 39.98));
         }
 
-        [Fact]
-        public void ConditionFolder_WithinTolerance_SnapsToAllowed()
-        {
-            Assert.Equal("RPP40", CaptureNamingRule.ConditionFolder(ChamberRange.Mid, 39.4, toleranceCelsius: 1.0));
-            Assert.Equal("LNN30", CaptureNamingRule.ConditionFolder(ChamberRange.Low, -29.2, toleranceCelsius: 1.0));
-        }
-
-        [Fact]
-        public void ConditionFolder_OutsideTolerance_Throws()
-        {
-            Assert.Throws<ArgumentOutOfRangeException>(
-                () => CaptureNamingRule.ConditionFolder(ChamberRange.Mid, 37.5, toleranceCelsius: 1.0));
-        }
-
         [Theory]
-        [InlineData(ChamberRange.Low, 25)]
-        [InlineData(ChamberRange.Mid, 70)]
-        [InlineData(ChamberRange.High, 10)]
-        [InlineData(ChamberRange.Mid, 41)]
-        public void ConditionFolder_DisallowedPair_Throws(ChamberRange range, double celsius)
+        [InlineData(ChamberRange.Mid, 26.6, "RPP25")]
+        [InlineData(ChamberRange.Mid, 37.5, "RPP40")]
+        [InlineData(ChamberRange.Low, 25, "LNP10")]
+        [InlineData(ChamberRange.Mid, 70, "RPP40")]
+        [InlineData(ChamberRange.High, 10, "H1PP40")]
+        public void ConditionFolder_FarFromCode_SnapsInsteadOfThrowing(ChamberRange range, double celsius, string expected)
         {
-            Assert.Throws<ArgumentOutOfRangeException>(() => CaptureNamingRule.ConditionFolder(range, celsius));
+            Assert.Equal(expected, CaptureNamingRule.ConditionFolder(range, celsius));
         }
 
         [Theory]
