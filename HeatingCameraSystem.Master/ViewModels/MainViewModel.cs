@@ -48,6 +48,12 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty]
         private object? _currentViewModel;
 
+        /// <summary>시뮬레이션 배너 표시 여부. 구성은 재시작 때만 바뀌므로 세션 내내 고정이다.</summary>
+        public bool IsSimulationMode => AppServices.Settings.SimulationMode;
+
+        /// <summary>어느 장비가 가짜인지까지 보여준다. "시뮬레이션 모드"만으로는 PLC만인지 전부인지 구분이 안 된다.</summary>
+        public string SimulationTargetsText => AppServices.DescribeSimulated(AppServices.Settings);
+
         private readonly DashboardViewModel _dashboardViewModel = new();
         // PlcStatus.Updated 구독자이므로 매 진입마다 새로 만들면 죽은 VM이 계속 이벤트를 받는다.
         private StatusMonitorViewModel? _statusMonitorViewModel;

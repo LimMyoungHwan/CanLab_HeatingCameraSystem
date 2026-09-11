@@ -912,11 +912,12 @@ namespace HeatingCameraSystem.Master.ViewModels
             // 입력값을 레시피에 되저장해 다음 실행의 기본값이 되게 한다.
             if (_dialogService is not null)
             {
-                ProductionRunInput? input = _dialogService.PromptProductionRun(SelectedRecipe.SaveRootPath, SelectedRecipe.ProductNumber);
+                ProductionRunInput? input = _dialogService.PromptProductionRun(SelectedRecipe.SaveRootPath, SelectedRecipe.ProductNumber, SelectedRecipe.SaveFormat);
                 if (input is null) { RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopped"]; return; }
 
                 SelectedRecipe.SaveRootPath = input.SaveRootPath;
                 SelectedRecipe.ProductNumber = input.ProductNumber;
+                SelectedRecipe.SaveFormat = input.SaveFormat;
                 if (AppServices.RecipeRepo is not null) await AppServices.RecipeRepo.SaveAsync(SelectedRecipe);
                 AppServices.RecipeEngine.AbortDecisionRequested = agentId => Task.FromResult(_dialogService.AskCaptureAbortDecision(agentId));
             }

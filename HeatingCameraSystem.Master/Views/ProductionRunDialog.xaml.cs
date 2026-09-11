@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Master.Localization;
 
 namespace HeatingCameraSystem.Master.Views
@@ -10,7 +11,7 @@ namespace HeatingCameraSystem.Master.Views
     /// </summary>
     public partial class ProductionRunDialog : Window
     {
-        public ProductionRunDialog(string initialPath, string initialProductNumber)
+        public ProductionRunDialog(string initialPath, string initialProductNumber, ProductionCaptureFormat initialFormat)
         {
             InitializeComponent();
 
@@ -18,16 +19,24 @@ namespace HeatingCameraSystem.Master.Views
             HintText.Text = L("Dialog_ProductionRun_Hint");
             SaveRootLabel.Text = L("Dialog_ProductionRun_SaveRoot");
             ProductLabel.Text = L("Dialog_ProductionRun_ProductNumber");
+            FormatLabel.Text = L("Dialog_ProductionRun_SaveFormat");
+            RawRadio.Content = L("Dialog_ProductionRun_FormatRaw");
+            JpegRadio.Content = L("Dialog_ProductionRun_FormatJpeg");
             BrowseButton.Content = L("Dialog_ProductionRun_Browse");
             OkButton.Content = L("Dialog_ProductionRun_Ok");
             CancelButton.Content = L("Dialog_ProductionRun_Cancel");
 
             LocalPathWarning.Text = L("Dialog_ProductionRun_LocalPathWarning");
+            JpegWarning.Text = L("Dialog_ProductionRun_JpegWarning");
 
             SaveRootBox.Text = initialPath;
             ProductBox.Text = initialProductNumber;
+            JpegRadio.IsChecked = initialFormat == ProductionCaptureFormat.Jpeg;
+            RawRadio.IsChecked = !JpegRadio.IsChecked;
             SaveRootBox.TextChanged += (_, _) => UpdatePreview();
             ProductBox.TextChanged += (_, _) => UpdatePreview();
+            RawRadio.Checked += (_, _) => UpdatePreview();
+            JpegRadio.Checked += (_, _) => UpdatePreview();
             UpdatePreview();
         }
 
@@ -35,13 +44,19 @@ namespace HeatingCameraSystem.Master.Views
 
         public string ProductNumber => ProductBox.Text.Trim();
 
+        public ProductionCaptureFormat SaveFormat
+            => JpegRadio.IsChecked == true ? ProductionCaptureFormat.Jpeg : ProductionCaptureFormat.Raw;
+
         private static string L(string key) => LocalizationManager.Instance[key];
 
         private void UpdatePreview()
         {
             string suffix = Services.RecipeEngine.NextRunProductNumber(SaveRootPath, ProductNumber);
             string product = string.IsNullOrWhiteSpace(suffix) ? "" : "_" + suffix;
-            PreviewText.Text = Path.Combine(SaveRootPath, $"544112136{product}", "RPP40", "cold", "BB20_000.raw");
+            string file = "BB20_000" + CaptureNamingRule.Extension(SaveFormat);
+            PreviewText.Text = Path.Combine(SaveRootPath, $"544112136{product}", "RPP40", "cold", file);
+
+            JpegWarning.Visibility = SaveFormat == ProductionCaptureFormat.Jpeg ? Visibility.Visible : Visibility.Collapsed;
 
             // 이 경로로 복사하는 주체는 Master가 아니라 카메라 PC다. 로컬 경로를 고르면 카메라 PC가
             // "자기" 드라이브의 같은 경로에 쓰고 조용히 성공하므로, Master 쪽 폴더는 끝까지 비어 있다.

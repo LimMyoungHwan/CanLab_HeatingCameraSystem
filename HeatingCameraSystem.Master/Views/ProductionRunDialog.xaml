@@ -14,6 +14,8 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
@@ -34,16 +36,26 @@
                    VerticalAlignment="Center" Margin="0,0,8,8"/>
         <TextBox x:Name="ProductBox" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,0,0,8"/>
 
-        <TextBlock x:Name="PreviewText" Grid.Row="3" Grid.ColumnSpan="3"
+        <TextBlock x:Name="FormatLabel" Grid.Row="3" Grid.Column="0"
+                   VerticalAlignment="Center" Margin="0,0,8,8"/>
+        <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,0,0,8">
+            <RadioButton x:Name="RawRadio" GroupName="SaveFormat" VerticalAlignment="Center" Margin="0,0,16,0" IsChecked="True"/>
+            <RadioButton x:Name="JpegRadio" GroupName="SaveFormat" VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <TextBlock x:Name="PreviewText" Grid.Row="4" Grid.ColumnSpan="3"
                    TextWrapping="Wrap" Margin="0,4,0,12" FontFamily="Consolas" Opacity="0.7"/>
 
-        <TextBlock x:Name="LocalPathWarning" Grid.Row="4" Grid.ColumnSpan="3"
+        <TextBlock x:Name="JpegWarning" Grid.Row="5" Grid.ColumnSpan="3"
                    TextWrapping="Wrap" Margin="0,0,0,8" Foreground="#E65100" Visibility="Collapsed"/>
 
-        <TextBlock x:Name="ErrorText" Grid.Row="5" Grid.ColumnSpan="3"
+        <TextBlock x:Name="LocalPathWarning" Grid.Row="6" Grid.ColumnSpan="3"
+                   TextWrapping="Wrap" Margin="0,0,0,8" Foreground="#E65100" Visibility="Collapsed"/>
+
+        <TextBlock x:Name="ErrorText" Grid.Row="7" Grid.ColumnSpan="3"
                    TextWrapping="Wrap" Margin="0,0,0,8" Foreground="#C62828" Visibility="Collapsed"/>
 
-        <StackPanel Grid.Row="6" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="8" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="OkButton" Padding="20,6" Margin="0,0,8,0" IsDefault="True" Click="OnOk"/>
             <Button x:Name="CancelButton" Padding="20,6" IsCancel="True"/>
         </StackPanel>

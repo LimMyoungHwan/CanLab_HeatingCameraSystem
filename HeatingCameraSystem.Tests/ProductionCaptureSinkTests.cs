@@ -71,6 +71,34 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal(2, sink.PendingFiles);
         }
 
+        [Fact]
+        public void WriteShot_JpegFormat_KeepsFolderRuleAndOnlyChangesExtension()
+        {
+            var sink = new ProductionCaptureSink(_buffer);
+            CaptureCommandMessage cmd = Command("RPP40", "cold", "BB20");
+            cmd.SaveFormat = ProductionCaptureFormat.Jpeg;
+
+            string path = sink.WriteShot(Camera, cmd, Frame(), fpaRaw: 16560, shotIndex: 7);
+
+            Assert.Equal(
+                Path.Combine(_buffer, "544112136_ABC", "RPP40", "cold", "BB20_007.jpg"),
+                path);
+            Assert.True(new FileInfo(path).Length > 0);
+        }
+
+        [Fact]
+        public void PendingFiles_CountsJpegRuns_SoFailedTransfersAreNotReportedComplete()
+        {
+            var sink = new ProductionCaptureSink(_buffer);
+            CaptureCommandMessage cmd = Command("RPP40", "hot", "BB80");
+            cmd.SaveFormat = ProductionCaptureFormat.Jpeg;
+
+            sink.WriteShot(Camera, cmd, Frame(), null, 0);
+            sink.WriteShot(Camera, cmd, Frame(), null, 1);
+
+            Assert.Equal(2, sink.PendingFiles);
+        }
+
         [Theory]
         [InlineData("", "RPP40", "cold", "BB20")]
         [InlineData(@"\\M\D", "", "cold", "BB20")]

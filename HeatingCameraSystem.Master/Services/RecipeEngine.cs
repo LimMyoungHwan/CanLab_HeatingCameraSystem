@@ -45,6 +45,13 @@ namespace HeatingCameraSystem.Master.Services
         /// 회차를 폴더로 갈라놓지 않으면 재실행이 이전 실행을 덮어쓴다.
         /// </summary>
         private string _runProductNumber = string.Empty;
+
+        /// <summary>
+        /// 직전 ChamberControl 스텝이 지시한 목표 온도(℃). 저장 규칙의 조건 폴더가 이 값을 쓴다.
+        /// 캡처 스텝과 챔버 스텝이 분리돼 있어 캡처 시점만 봐서는 목표 온도를 알 수 없기 때문이다.
+        /// 챔버 스텝 없이 촬영만 하는 실행에서는 null이다.
+        /// </summary>
+        private double? _lastChamberTargetC;
         private readonly int _rampStepIntervalSeconds;
         private readonly TimeSpan _captureTimeout;
         private readonly TimeSpan _motorMoveTimeout;
@@ -55,8 +62,12 @@ namespace HeatingCameraSystem.Master.Services
         private readonly IRecipeMeasurementRepository? _measurementRepo;
         private readonly object _emergencyStopSync = new();
         private CancellationTokenSource _emergencyStopCts = new();
+        private volatile bool _isRunning;
 
         public event EventHandler? EmergencyStopChanged;
+
+        /// <summary>레시피가 실행 중인지. 하드웨어 구성을 바꾸는 화면이 실행 중 조작을 막는 데 쓴다.</summary>
+        public bool IsRunning => _isRunning;
 
         public bool IsEmergencyStopRequested
         {
@@ -184,14 +195,17 @@ namespace HeatingCameraSystem.Master.Services
             using var recordingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             string runId = Guid.NewGuid().ToString();
             _runProductNumber = NextRunProductNumber(recipe.SaveRootPath, recipe.ProductNumber);
+            _lastChamberTargetC = null;
             Task recording = RecordMeasurementsAsync(recipe, runId, recordingCts.Token);
 
+            _isRunning = true;
             try
             {
                 await ExecuteSegmentedRecipeAsync(recipe, runId, cancellationToken, progress, waitForResumeAsync);
             }
             finally
             {
+                _isRunning = false;
                 recordingCts.Cancel();
                 try { await recording; } catch (OperationCanceledException) { }
             }
@@ -343,7 +357,10 @@ namespace HeatingCameraSystem.Master.Services
                                 await StartChamberForRecipeAsync();
                                 chamberStarted = true;
                             }
-                            await ApplyChamberTemperatureAsync((float)step.TargetChamberTemperature, recipe.TemperatureRampMinutes, i, totalSteps, progress, cancellationToken);
+                            // 램프 0 = 목표 온도를 한 번에 쓴다. 중간 제어(선형 스텝)는 설비에서 쓰지 않기로
+                            // 했으므로 Recipe.TemperatureRampMinutes에 남아 있는 예전 값도 무시한다.
+                            await ApplyChamberTemperatureAsync((float)step.TargetChamberTemperature, 0, i, totalSteps, progress, cancellationToken);
+                            _lastChamberTargetC = step.TargetChamberTemperature;
                             if (step.WaitForChamberStabilization)
                             {
                                 await WaitForTemperatureAsync((float)step.TargetChamberTemperature, ToleranceC(step), cancellationToken);
@@ -839,10 +856,14 @@ namespace HeatingCameraSystem.Master.Services
             bool WriteBiasJson);
 
         /// <summary>
-        /// 챔버 온도는 촬영 직전 PLC 실측값을 쓴다. 캡처 스텝과 챔버 스텝이 분리되어 있어 목표
-        /// 온도를 알 수 없기 때문이다. 예전에는 기록 조건(<see cref="Recipe.RecordIntervalSeconds"/> 등)이
-        /// 남긴 값을 재사용했는데, 기록 조건이 모두 0인 레시피에서는 그 값이 영영 채워지지 않아
-        /// 규칙 저장이 통째로 멈췄다 — 무관한 설정에 저장 기능이 묶여 있었다.
+        /// 조건 폴더에 쓸 챔버 온도를 정한다. 기준은 실측(PV)이 아니라 <b>목표 온도</b>다 — 폴더명은
+        /// "이 조건으로 찍었다"는 선언이지 측정 기록이 아니고, 승온이 덜 끝난 시점에 찍으면 실측은
+        /// 엉뚱한 코드로 스냅된다.
+        /// <para>
+        /// 레시피가 지시한 목표를 1순위로 쓴다. 그래야 PLC 없이(시뮬레이션) 돌려도 폴더명이 실제와
+        /// 같다. 챔버 스텝 없이 수동 운전 중이면 PLC의 목표 워드를, 그것도 못 읽으면 마지막 수단으로
+        /// 실측을 쓴다 — 이름이 틀리는 것보다 저장이 통째로 꺼지는 쪽이 나쁘다.
+        /// </para>
         /// </summary>
         private async Task<ProductionNaming?> ResolveProductionNamingAsync(Recipe recipe, RecipeStep step, RecipeCameraTarget target)
         {
@@ -851,7 +872,7 @@ namespace HeatingCameraSystem.Master.Services
 
             try
             {
-                double celsius = await _plcController.GetCurrentTemperatureAsync();
+                double celsius = _lastChamberTargetC ?? await ReadChamberTargetFromPlcAsync();
 
                 return new ProductionNaming(
                     CaptureNamingRule.ConditionFolder(range, celsius),
@@ -864,6 +885,22 @@ namespace HeatingCameraSystem.Master.Services
                 AlarmSink.Raise(AlarmCodes.ProductionNamingFailed, AlarmSeverity.Error, RecipeSource,
                     L("Alarm_Msg_ProductionNamingFailed", step.StepId, target.CameraIndex, ex.Message));
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// PLC가 들고 있는 챔버 목표 온도. 상태 스냅샷을 못 읽으면 실측값으로 내려간다.
+        /// </summary>
+        private async Task<double> ReadChamberTargetFromPlcAsync()
+        {
+            try
+            {
+                return (await _plcController.ReadStatusAsync()).TargetTemperature;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RecipeEngine] chamber target read failed, falling back to PV: {ex.Message}");
+                return await _plcController.GetCurrentTemperatureAsync();
             }
         }
 
@@ -983,7 +1020,8 @@ namespace HeatingCameraSystem.Master.Services
                     ConditionFolder = production?.ConditionFolder ?? string.Empty,
                     BlackBodyFolder = production?.BlackBodyFolder ?? string.Empty,
                     FilePrefix = production?.FilePrefix ?? string.Empty,
-                    WriteBiasJson = production?.WriteBiasJson ?? false
+                    WriteBiasJson = production?.WriteBiasJson ?? false,
+                    SaveFormat = recipe.SaveFormat
                 });
             }
             catch (Exception ex)

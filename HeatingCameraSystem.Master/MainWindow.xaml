@@ -72,13 +72,47 @@
     </Window.Resources>
 
     <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="250" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
+        <Border
+            Grid.Row="0"
+            Grid.ColumnSpan="2"
+            Padding="16,7"
+            Background="#8a5a00"
+            Visibility="{Binding IsSimulationMode, Converter={StaticResource BoolToVis}}">
+            <StackPanel HorizontalAlignment="Center" Orientation="Horizontal">
+                <materialIcons:MaterialIcon
+                    Width="18"
+                    Height="18"
+                    Margin="0,0,10,0"
+                    VerticalAlignment="Center"
+                    Foreground="#ffe9b8"
+                    Kind="FlaskOutline" />
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="14"
+                    FontWeight="Bold"
+                    Foreground="#ffe9b8"
+                    Text="{loc:Loc Sim_Banner}" />
+                <TextBlock
+                    Margin="10,0,0,0"
+                    VerticalAlignment="Center"
+                    FontSize="14"
+                    Foreground="#ffd98a"
+                    Text="{Binding SimulationTargetsText}" />
+            </StackPanel>
+        </Border>
+
         <!--  Left Navigation Panel  -->
         <Border
+            Grid.Row="1"
             Grid.Column="0"
             Padding="20"
             Background="#2F3542">
@@ -319,7 +353,10 @@
         </Border>
 
         <!--  Main Content Area  -->
-        <Grid Grid.Column="1" Margin="20">
+        <Grid
+            Grid.Row="1"
+            Grid.Column="1"
+            Margin="20">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />

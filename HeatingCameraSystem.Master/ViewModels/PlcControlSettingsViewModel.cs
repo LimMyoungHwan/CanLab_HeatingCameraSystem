@@ -44,6 +44,11 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private float _mfcMaxOutput;
         [ObservableProperty] private float _pairGlassBoundary;
 
+        [ObservableProperty] private bool _simulationEnabled;
+        [ObservableProperty] private bool _simulateFakePlc;
+        [ObservableProperty] private bool _simulateFakeBlackBody;
+        [ObservableProperty] private bool _simulateFakeCamera;
+
         [ObservableProperty] private string _statusMessage = LocalizationManager.Instance["Common_Idle"];
 
         public ObservableCollection<PointCoordRow> Points { get; } = new();
@@ -66,6 +71,41 @@ namespace HeatingCameraSystem.Master.ViewModels
             _blackBodyEnabled = blackBody.Enabled;
             BlackBody1 = blackBody.Units[0];
             BlackBody2 = blackBody.Units[1];
+
+            _simulationEnabled = AppServices.Settings.SimulationMode;
+            _simulateFakePlc = AppServices.Settings.Simulate.Plc;
+            _simulateFakeBlackBody = AppServices.Settings.Simulate.BlackBody;
+            _simulateFakeCamera = AppServices.Settings.Simulate.Camera;
+        }
+
+        /// <summary>
+        /// 시뮬레이션 선택을 hardware.json에 저장하고, 동의를 받으면 프로그램을 재시작한다.
+        /// 컨트롤러는 <see cref="AppServices.Initialize"/>에서만 결정되므로 재시작 없이는 적용되지 않는다.
+        /// 레시피 실행 중에는 거부한다 — 히터가 켜진 채 Master만 죽는 상황을 만들 수 없다.
+        /// </summary>
+        [RelayCommand]
+        private void ApplySimulation()
+        {
+            if (AppServices.RecipeEngine?.IsRunning == true)
+            {
+                StatusMessage = LocalizationManager.Instance["Sim_BlockedWhileRunning"];
+                return;
+            }
+
+            AppServices.Settings.SimulationMode = SimulationEnabled;
+            AppServices.Settings.Simulate.Plc = SimulateFakePlc;
+            AppServices.Settings.Simulate.BlackBody = SimulateFakeBlackBody;
+            AppServices.Settings.Simulate.Camera = SimulateFakeCamera;
+            AppServices.SaveHardwareSettings();
+
+            string summary = AppServices.DescribeSimulated(AppServices.Settings);
+            StatusMessage = SimulationEnabled ? L("Sim_SavedOn", summary) : LocalizationManager.Instance["Sim_SavedOff"];
+
+            if (!AppServices.DialogService.ConfirmRestart(StatusMessage + "\n\n" + LocalizationManager.Instance["Sim_RestartPrompt"]))
+                return;
+
+            App.RestartRequested = true;
+            System.Windows.Application.Current?.Shutdown();
         }
 
         /// <summary>PLC 연결 정보(IP/포트/국번)를 hardware.json에 저장한다. 적용에는 재시작이 필요하다.</summary>

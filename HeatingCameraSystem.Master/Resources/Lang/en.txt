@@ -622,3 +622,41 @@ PlcOut_14=Pair Glass
 PlcOut_15=Door Lock Output
 PlcOut_24=Exhaust Valve
 PlcOut_25=Chiller (Servo Cooling) Magnet ON
+
+Sim_Title=Simulation Mode
+
+Sim_Enabled=Use simulation mode
+
+Sim_FakePlc=Fake PLC (chamber temp/humidity and servo included)
+
+Sim_FakeBlackBody=Fake black body
+
+Sim_FakeCamera=Fake camera (Master-attached, shutter, COM pairing)
+
+Sim_Note=Replaces the selected devices with fake implementations. Agent PC cameras are switched separately in Agent settings. A restart is required to apply.
+
+Sim_Banner=SIMULATION MODE
+
+Sim_TargetPlc=PLC
+
+Sim_TargetBlackBody=Black body
+
+Sim_TargetCamera=Camera
+
+Sim_RestartTitle=Simulation Mode
+
+Sim_RestartPrompt=The program will restart. Continue?
+
+Sim_SavedOn=Simulation mode ON — {0}
+
+Sim_SavedOff=Simulation mode OFF — running on real hardware.
+
+Sim_BlockedWhileRunning=Simulation settings cannot be changed while a recipe is running.
+
+Dialog_ProductionRun_SaveFormat=Save format
+
+Dialog_ProductionRun_FormatRaw=RAW (16-bit original, for calibration)
+
+Dialog_ProductionRun_FormatJpeg=JPEG (8-bit, for visual check / report)
+
+Dialog_ProductionRun_JpegWarning=JPEG is saved as 8-bit and keeps no thermal data. It cannot be used for calibration.

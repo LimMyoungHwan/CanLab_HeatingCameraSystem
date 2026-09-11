@@ -128,6 +128,9 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>파일명 접두사(예: <c>BB80</c>). 최종 파일은 <c>{접두사}_{000}.raw</c>다.</summary>
         public string FilePrefix { get; set; } = string.Empty;
 
+        /// <summary>생산 저장 파일 포맷. 폴더·파일명·장수는 그대로고 확장자만 바뀐다.</summary>
+        public ProductionCaptureFormat SaveFormat { get; set; } = ProductionCaptureFormat.Raw;
+
         /// <summary>true면 <see cref="ConditionFolder"/> 계층에 bias.json을 남긴다(cold 조건).</summary>
         public bool WriteBiasJson { get; set; }
     }

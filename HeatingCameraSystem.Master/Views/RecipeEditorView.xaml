@@ -402,14 +402,15 @@
                         
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
+                                <!-- 온도 램프 열: 설비에서 중간 제어를 쓰지 않기로 해 숨긴다(RecipeEngine이 램프 0으로 고정). -->
+                                <ColumnDefinition Width="0"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="1.5*"/>
                             </Grid.ColumnDefinitions>
 
-                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <StackPanel Grid.Column="0" Margin="0,0,16,0" Visibility="Collapsed">
                                 <TextBlock Text="{loc:Loc Recipe_TempRampTime}" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
                                 <Border Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="8">
                                     <StackPanel Orientation="Horizontal">

@@ -38,6 +38,9 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>레시피 시작 시 운영자가 입력하는 제품 번호. 배치 전체에 공통으로 쓰인다.</summary>
         public string ProductNumber { get; set; } = string.Empty;
 
+        /// <summary>생산 저장 규칙의 파일 포맷. 레시피 시작 시 운영자가 고른다.</summary>
+        public ProductionCaptureFormat SaveFormat { get; set; } = ProductionCaptureFormat.Raw;
+
         /// <summary>순차적으로 실행될 스텝 목록.</summary>
         public List<RecipeStep> Steps { get; set; } = new();
     }

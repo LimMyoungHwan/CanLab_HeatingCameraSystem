@@ -8,11 +8,17 @@ namespace HeatingCameraSystem.Core.Config
     public class HardwareSettings
     {
         /// <summary>
-        /// true이면 PLC / Serial Shutter를 가짜(Fake) 구현으로 대체한다.
-        /// 실제 하드웨어가 없는 개발/시연/CI 환경에서 사용.
-        /// 카메라(Agent 측)와 NATS는 별도. 카메라 시뮬은 agent.json 의 SimulationMode 로 켠다.
+        /// 시뮬레이션 마스터 스위치. false이면 <see cref="Simulate"/> 내용과 무관하게 전부 실장비다.
+        /// 어느 장비를 가짜로 돌릴지는 <see cref="Simulate"/>에서 따로 고른다.
+        /// 카메라(Agent 측)와 NATS는 별도. Agent 카메라 시뮬은 agent.json 의 SimulationMode 로 켠다.
         /// </summary>
         public bool SimulationMode { get; set; } = false;
+
+        /// <summary>
+        /// 장비별 시뮬레이션 대상. <see cref="SimulationMode"/>가 true일 때만 의미가 있다.
+        /// 기본값이 전부 true라, 이 절이 없는 예전 hardware.json도 예전과 똑같이 "전부 가짜"로 동작한다.
+        /// </summary>
+        public SimulationTargets Simulate { get; set; } = new();
 
         /// <summary>
         /// BackgroundDataCleanupService 가 캡처 이미지/DB 이력을 보관할 일수.
@@ -28,6 +34,22 @@ namespace HeatingCameraSystem.Core.Config
         public SerialSettings Serial { get; set; } = new();
         public BlackBodySettings BlackBody { get; set; } = new();
         public RecipeEngineSettings RecipeEngine { get; set; } = new();
+    }
+
+    /// <summary>
+    /// 가짜 구현으로 대체할 장비 목록. 챔버 온습도·서보는 <see cref="Plc"/>에 포함된다 —
+    /// 전용 컨트롤러가 없고 <c>IPlcController</c>의 메서드이기 때문이다.
+    /// Agent PC의 카메라는 NATS 너머라 여기서 못 바꾼다(agent.json 소관).
+    /// </summary>
+    public class SimulationTargets
+    {
+        /// <summary>PLC 전체. 챔버 온습도·서보·포인트 좌표·관리자 파라미터가 모두 여기 딸려 있다.</summary>
+        public bool Plc { get; set; } = true;
+
+        public bool BlackBody { get; set; } = true;
+
+        /// <summary>Master 직결 카메라 + 셔터 시리얼 + COM 페어링. 셋 다 실제 USB/WMI를 잡으므로 함께 움직인다.</summary>
+        public bool Camera { get; set; } = true;
     }
 
     /// <summary>

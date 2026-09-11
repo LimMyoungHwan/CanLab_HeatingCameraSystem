@@ -14,6 +14,12 @@ public partial class App : Application
 {
     private BackgroundDataCleanupService? _cleanupService;
 
+    /// <summary>
+    /// true이면 종료가 끝난 뒤 자기 자신을 다시 띄운다. 하드웨어 구성(시뮬레이션 선택)이
+    /// <see cref="AppServices.Initialize"/> 시점에만 결정되므로 재시작 외에 적용 방법이 없다.
+    /// </summary>
+    public static bool RestartRequested { get; set; }
+
     /// <summary>예외 안전망 설치 → AppServices 초기화·연결 시도 → 이력 정리 서비스 시작 순으로 부팅한다.</summary>
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -74,6 +80,14 @@ public partial class App : Application
             System.Diagnostics.Debug.WriteLine($"[App] AppServices.DisposeAsync threw: {ex.GetType().Name}: {ex.Message}");
         }
         base.OnExit(e);
+
+        // 재실행은 반드시 여기 — AppServices.DisposeAsync가 끝난 뒤다. 그 전에 새 프로세스를 띄우면
+        // 두 프로세스가 동시에 data.db(LiteDB)를 열어 파일 잠금 예외로 새 인스턴스가 죽는다.
+        if (RestartRequested && Environment.ProcessPath is string exePath)
+        {
+            try { System.Diagnostics.Process.Start(exePath); }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[App] Restart failed: {ex.Message}"); }
+        }
     }
 }
 

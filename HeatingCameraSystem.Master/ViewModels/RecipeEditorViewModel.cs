@@ -232,7 +232,6 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private float _recordOnTemperatureDelta;
         [ObservableProperty] private float _recordOnHumidityDelta;
         [ObservableProperty] private int _recordIntervalSeconds;
-        [ObservableProperty] private bool _isSequentialMode = true;
 
         public ObservableCollection<RecipeStepModel> Steps { get; } = new();
     }
@@ -464,14 +463,6 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 System.Diagnostics.Debug.WriteLine($"[RecipeEditor] Import failed: {ex.Message}");
             }
-        }
-
-        /// <summary>촬영 방식 토글. "Sequential"이면 순차 모드, 그 외는 동시 모드다.</summary>
-        [RelayCommand]
-        private void SetCaptureMode(string mode)
-        {
-            if (SelectedRecipe != null)
-                SelectedRecipe.IsSequentialMode = mode == "Sequential";
         }
 
         /// <summary>레시피 깊은 복사본을 새 Id와 "(복사)" 이름으로 만든다. 스텝 목록까지 복제한다.</summary>

@@ -110,17 +110,23 @@ namespace HeatingCameraSystem.Master.Services
 
             NatsService = new NatsCommunicationService();
 
-            if (Settings.SimulationMode)
+            if (IsSimulated(Settings, s => s.Plc))
             {
-                PlcController     = new FakePlcController();
-                CameraSerialClientFactory = portName => new FakeCameraSerialClient(portName);
-                LiveThermalCamera         = new FakeLiveThermalCamera();
-                CameraPairingService      = new FakeCameraComPairingService();
-                System.Diagnostics.Debug.WriteLine("[AppServices] SimulationMode=true -> using Fake PLC + Fake Camera/Pairing");
+                PlcController = new FakePlcController();
             }
             else
             {
-                PlcController     = new PlcXgtClient(Settings.Plc);
+                PlcController = new PlcXgtClient(Settings.Plc);
+            }
+
+            if (IsSimulated(Settings, s => s.Camera))
+            {
+                CameraSerialClientFactory = portName => new FakeCameraSerialClient(portName);
+                LiveThermalCamera         = new FakeLiveThermalCamera();
+                CameraPairingService      = new FakeCameraComPairingService();
+            }
+            else
+            {
                 CameraSerialClientFactory = portName => new ClSerialCameraClient(portName);
                 LiveThermalCamera         = new CltcLiveThermalCamera();
                 var cameraEnumerator      = new WmiCameraEnumerator();
@@ -129,12 +135,14 @@ namespace HeatingCameraSystem.Master.Services
                     cameraEnumerator, usbSerialEnumerator, CameraSerialClientFactory, Settings);
             }
 
+            System.Diagnostics.Debug.WriteLine($"[AppServices] Simulated: {DescribeSimulated(Settings)}");
+
             BlackBodyController = CreateBlackBodyController(Settings, PlcController);
 
             AgentDirectory = new AgentDirectory();
             RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController, AgentDirectory, RecipeMeasurementRepo);
             ConnectionMonitor = new ConnectionMonitorService(PlcController, Settings);
-            if (!Settings.SimulationMode) ConnectionMonitor.Start();
+            if (!IsSimulated(Settings, s => s.Plc)) ConnectionMonitor.Start();
 
             PlcStatus = new PlcStatusService(PlcController, Settings.BlackBody.Enabled ? BlackBodyController : null);
             PlcStatus.ErrorRaised += (_, _) => RecipeEngine?.RequestEmergencyStop();
@@ -144,10 +152,28 @@ namespace HeatingCameraSystem.Master.Services
             _captureRecorder = new CaptureResultHistoryRecorder(HistoryRepo, ImageCacheDir, () => PlcStatus?.Snapshot);
         }
 
-        /// <summary>흑체 컨트롤러를 만든다. SimulationMode면 Fake, 아니면 PLC 경유 SR 실물 구현이다.</summary>
+        /// <summary>
+        /// 장비 하나가 가짜로 돌아야 하는지 판정한다. 마스터 스위치가 꺼져 있으면 개별 선택은 무시된다.
+        /// </summary>
+        public static bool IsSimulated(HardwareSettings settings, Func<SimulationTargets, bool> target)
+            => settings.SimulationMode && target(settings.Simulate);
+
+        /// <summary>배너·로그에 쓸 시뮬레이션 장비 목록. 시뮬레이션이 꺼져 있으면 빈 문자열이다.</summary>
+        public static string DescribeSimulated(HardwareSettings settings)
+        {
+            if (!settings.SimulationMode) return string.Empty;
+
+            var names = new List<string>();
+            if (settings.Simulate.Plc) names.Add(LocalizationManager.Instance["Sim_TargetPlc"]);
+            if (settings.Simulate.BlackBody) names.Add(LocalizationManager.Instance["Sim_TargetBlackBody"]);
+            if (settings.Simulate.Camera) names.Add(LocalizationManager.Instance["Sim_TargetCamera"]);
+            return string.Join(", ", names);
+        }
+
+        /// <summary>흑체 컨트롤러를 만든다. 흑체가 시뮬 대상이면 Fake, 아니면 PLC 경유 SR 실물 구현이다.</summary>
         public static IBlackBodyController CreateBlackBodyController(HardwareSettings settings, IPlcController plc)
         {
-            if (settings.SimulationMode) return new FakeBlackBodyController();
+            if (IsSimulated(settings, s => s.BlackBody)) return new FakeBlackBodyController();
             return new SrBlackBodyController(settings.BlackBody, plc: plc);
         }
 

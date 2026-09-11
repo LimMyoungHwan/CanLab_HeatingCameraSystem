@@ -622,3 +622,41 @@ PlcOut_14=페어글라스
 PlcOut_15=도어락 출력
 PlcOut_24=배기밸브
 PlcOut_25=칠러(서보냉각) 마그네트 ON
+
+Sim_Title=시뮬레이션 모드
+
+Sim_Enabled=시뮬레이션 모드 사용
+
+Sim_FakePlc=Fake PLC (챔버 온습도 · 서보 포함)
+
+Sim_FakeBlackBody=Fake 흑체
+
+Sim_FakeCamera=Fake 카메라 (Master 직결 · 셔터 · COM 페어링)
+
+Sim_Note=선택한 장비를 가짜 구현으로 대체합니다. Agent PC의 카메라는 Agent 설정에서 따로 켭니다. 적용하려면 프로그램 재시작이 필요합니다.
+
+Sim_Banner=시뮬레이션 모드 동작 중
+
+Sim_TargetPlc=PLC
+
+Sim_TargetBlackBody=흑체
+
+Sim_TargetCamera=카메라
+
+Sim_RestartTitle=시뮬레이션 모드
+
+Sim_RestartPrompt=프로그램을 재시작합니다. 계속할까요?
+
+Sim_SavedOn=시뮬레이션 모드 켜짐 — {0}
+
+Sim_SavedOff=시뮬레이션 모드 꺼짐 — 실장비로 동작합니다.
+
+Sim_BlockedWhileRunning=레시피 실행 중에는 시뮬레이션 설정을 바꿀 수 없습니다.
+
+Dialog_ProductionRun_SaveFormat=저장 포맷
+
+Dialog_ProductionRun_FormatRaw=RAW (16비트 원본 · 캘리브레이션용)
+
+Dialog_ProductionRun_FormatJpeg=JPEG (8비트 · 육안검사/보고서용)
+
+Dialog_ProductionRun_JpegWarning=JPEG는 8비트로 저장되어 열 데이터가 남지 않습니다. 캘리브레이션에는 쓸 수 없습니다.

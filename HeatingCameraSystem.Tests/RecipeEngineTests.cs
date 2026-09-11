@@ -1204,7 +1204,7 @@ namespace HeatingCameraSystem.Tests
             var mockHistory = new Mock<ICaptureHistoryRepository>();
             var mockMeasure = new Mock<IRecipeMeasurementRepository>();
 
-            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, TargetTemperature = 25.0f });
             mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
             mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
             mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
@@ -1296,7 +1296,8 @@ namespace HeatingCameraSystem.Tests
             var mockNats = new Mock<INatsCommunicationService>();
             var mockHistory = new Mock<ICaptureHistoryRepository>();
 
-            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot());
+            // 챔버 스텝이 없는 레시피라 조건 폴더는 PLC가 들고 있는 목표 온도를 쓴다(실측 24.8이 아니다).
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { TargetTemperature = 25.0f });
             mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(24.8f);
             mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
             mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
@@ -1362,6 +1363,114 @@ namespace HeatingCameraSystem.Tests
             {
                 System.IO.Directory.Delete(root, true);
             }
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_ConditionFolder_FollowsChamberStepTarget_NotMeasuredTemperature()
+        {
+            string root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "hcssv_" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(root);
+            var sink = new HeatingCameraSystem.Protocols.Cameras.ProductionCaptureSink(root);
+            var camera = new CameraDescriptor("Agent_1", 0, "CAM-01", CameraSerialNumber: "544112136");
+
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            // 승온이 아직 안 끝난 상황: 목표는 40이지만 실측은 26.6이다. 예전 규칙(실측 기준)이면
+            // RPP25로 저장되고, 목표 기준이면 RPP40으로 저장된다.
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { TargetTemperature = 10.0f });
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(26.6f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
+
+            Action<CaptureResultMessage>? resultCb = null;
+            mockNats
+                .Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>()))
+                .Callback<Action<CaptureResultMessage>>(cb => resultCb = cb)
+                .Returns(Task.CompletedTask);
+            mockNats
+                .Setup(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()))
+                .Callback<CaptureCommandMessage>(cmd =>
+                {
+                    if (HeatingCameraSystem.Protocols.Cameras.ProductionCaptureSink.IsEnabled(cmd))
+                        sink.WriteShot(camera, cmd, new ThermalFrame(new ushort[] { 1, 2, 3, 4 }, 2, 2, DateTimeOffset.Now), fpaRaw: 16560, shotIndex: 0);
+
+                    resultCb?.Invoke(new CaptureResultMessage
+                    {
+                        AgentId = "Agent_1",
+                        RecipeStepId = cmd.RecipeStepId,
+                        IsSuccess = true,
+                        Timestamp = DateTime.UtcNow
+                    });
+                })
+                .Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Name = "승온 중 촬영",
+                SaveRootPath = root,
+                ProductNumber = "P40",
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.ChamberControl, TargetChamberTemperature = 40, WaitForChamberStabilization = false },
+                    new()
+                    {
+                        Kind = RecipeStepKind.CameraCommand,
+                        CameraOperation = CameraControlOps.Capture,
+                        CameraIndex = 1,
+                        ShotCount = 1,
+                        CameraTargets = new List<RecipeCameraTarget>
+                        {
+                            new() { AgentId = "Agent_1", CameraIndex = 1, TargetChamber = ChamberRange.Mid, TargetBlackBody = BlackBodyRole.Room }
+                        }
+                    }
+                }
+            };
+
+            try
+            {
+                await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                    .ExecuteRecipeAsync(recipe)
+                    .WaitAsync(TimeSpan.FromSeconds(20));
+
+                Assert.True(System.IO.File.Exists(
+                    System.IO.Path.Combine(root, "544112136_P40", "RPP40", "room", "BBroom_000.raw")));
+            }
+            finally
+            {
+                System.IO.Directory.Delete(root, true);
+            }
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_ChamberStep_WritesTargetOnceWithoutRamping()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot());
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(20.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+
+            var recipe = new Recipe
+            {
+                Name = "램프 값이 남아 있는 예전 레시피",
+                TemperatureRampMinutes = 15,
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.ChamberControl, TargetChamberTemperature = 70, WaitForChamberStabilization = false }
+                }
+            };
+
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(20));
+
+            mockPlc.Verify(p => p.SetTargetTemperatureAsync(70f), Times.Once);
+            mockPlc.Verify(p => p.SetControlTemperatureAsync(70f), Times.Once);
+            mockPlc.Verify(p => p.SetControlTemperatureAsync(It.Is<float>(v => v != 70f)), Times.Never);
         }
 
         [Fact]

@@ -79,6 +79,14 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>bias.json은 cold 조건에서만 남긴다(<c>main.py:1035</c>).</summary>
         public static bool WritesBiasJson(BlackBodyRole role) => role == BlackBodyRole.Cold;
 
-        public static string FileName(string filePrefix, int index) => $"{filePrefix}_{index:D3}.raw";
+        public static string FileName(string filePrefix, int index, ProductionCaptureFormat format = ProductionCaptureFormat.Raw)
+            => $"{filePrefix}_{index:D3}{Extension(format)}";
+
+        public static string Extension(ProductionCaptureFormat format) => format switch
+        {
+            ProductionCaptureFormat.Raw => ".raw",
+            ProductionCaptureFormat.Jpeg => ".jpg",
+            _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
+        };
     }
 }

@@ -76,6 +76,45 @@
             <WrapPanel Orientation="Horizontal">
                 <Border Width="360" Style="{StaticResource Card}">
                     <StackPanel>
+                        <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Sim_Title}" />
+                        <CheckBox
+                            Margin="0,0,0,10"
+                            Content="{loc:Loc Sim_Enabled}"
+                            Foreground="#dee2f7"
+                            IsChecked="{Binding SimulationEnabled}" />
+                        <StackPanel Margin="18,0,0,0" IsEnabled="{Binding SimulationEnabled}">
+                            <CheckBox
+                                Margin="0,0,0,6"
+                                Content="{loc:Loc Sim_FakePlc}"
+                                Foreground="#dee2f7"
+                                IsChecked="{Binding SimulateFakePlc}" />
+                            <CheckBox
+                                Margin="0,0,0,6"
+                                Content="{loc:Loc Sim_FakeBlackBody}"
+                                Foreground="#dee2f7"
+                                IsChecked="{Binding SimulateFakeBlackBody}" />
+                            <CheckBox
+                                Margin="0,0,0,6"
+                                Content="{loc:Loc Sim_FakeCamera}"
+                                Foreground="#dee2f7"
+                                IsChecked="{Binding SimulateFakeCamera}" />
+                        </StackPanel>
+                        <TextBlock
+                            Margin="0,6,0,8"
+                            Foreground="#8fa0b0"
+                            FontSize="11"
+                            Text="{loc:Loc Sim_Note}"
+                            TextWrapping="Wrap" />
+                        <Button
+                            HorizontalAlignment="Left"
+                            Command="{Binding ApplySimulationCommand}"
+                            Content="{loc:Loc Common_Apply}"
+                            Style="{StaticResource Apply}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Width="360" Style="{StaticResource Card}">
+                    <StackPanel>
                         <TextBlock Style="{StaticResource Head}" Text="{loc:Loc Plc_Connection}" />
                         <StackPanel Style="{StaticResource FieldRow}">
                             <TextBlock

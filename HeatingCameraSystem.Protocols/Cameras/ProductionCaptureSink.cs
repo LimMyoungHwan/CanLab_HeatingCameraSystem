@@ -32,6 +32,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _bufferRoot = bufferRoot ?? throw new ArgumentNullException(nameof(bufferRoot));
         }
 
+        private static bool IsCaptureFile(string path)
+            => path.EndsWith(".raw", StringComparison.OrdinalIgnoreCase)
+               || path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase);
+
         public static bool IsEnabled(CaptureCommandMessage cmd)
             => !string.IsNullOrWhiteSpace(cmd.StorageRootUnc)
                && !string.IsNullOrWhiteSpace(cmd.ConditionFolder)
@@ -54,13 +58,30 @@ namespace HeatingCameraSystem.Protocols.Cameras
         public static string RelativeDirectory(CameraDescriptor cam, CaptureCommandMessage cmd)
             => Path.Combine(ConditionRelativeDirectory(cam, cmd), cmd.BlackBodyFolder);
 
+        /// <summary>
+        /// 한 장을 로컬 버퍼에 쓴다. JPEG는 8비트 정규화라 열 데이터가 남지 않으므로 FPA 원시값도
+        /// 싣지 않는다 — 육안 검사·보고서용 재촬영 전용이다.
+        /// </summary>
         public string WriteShot(CameraDescriptor cam, CaptureCommandMessage cmd, ThermalFrame rawFrame, short? fpaRaw, int shotIndex)
         {
             string directory = Path.Combine(_bufferRoot, RelativeDirectory(cam, cmd));
-            return RawCaptureWriter.Write(directory, CaptureNamingRule.FileName(cmd.FilePrefix, shotIndex), rawFrame, fpaRaw);
+            string fileName = CaptureNamingRule.FileName(cmd.FilePrefix, shotIndex, cmd.SaveFormat);
+
+            if (cmd.SaveFormat == ProductionCaptureFormat.Jpeg)
+            {
+                Directory.CreateDirectory(directory);
+                string jpegPath = Path.Combine(directory, fileName);
+                File.WriteAllBytes(jpegPath, ThermalPreviewEncoder.EncodeJpeg(rawFrame));
+                return jpegPath;
+            }
+
+            return RawCaptureWriter.Write(directory, fileName, rawFrame, fpaRaw);
         }
 
-        /// <summary>아직 Master로 옮기지 못한 로컬 <c>.raw</c> 파일 수.</summary>
+        /// <summary>
+        /// 아직 Master로 옮기지 못한 로컬 촬영 파일 수. JPEG 런도 세야 한다 — 확장자를 놓치면
+        /// 전송이 실패해도 0으로 읽혀 "완료"로 보고된다.
+        /// </summary>
         public int PendingFiles
         {
             get
@@ -68,7 +89,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 try
                 {
                     return Directory.Exists(_bufferRoot)
-                        ? Directory.EnumerateFiles(_bufferRoot, "*.raw", SearchOption.AllDirectories).Count()
+                        ? Directory.EnumerateFiles(_bufferRoot, "*.*", SearchOption.AllDirectories)
+                                   .Count(IsCaptureFile)
                         : 0;
                 }
                 catch (IOException)
@@ -94,7 +116,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             await SyncAsync(
                 Path.Combine(_bufferRoot, relative),
                 Path.Combine(cmd.StorageRootUnc, relative),
-                "*.raw *.json",
+                "*.raw *.jpg *.json",
                 ct).ConfigureAwait(false);
 
             // 조건 폴더는 형제 흑체 폴더가 아직 촬영 중일 수 있으므로 bias.json만 따로 올린다.

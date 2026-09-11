@@ -38,6 +38,37 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
+        public void Simulate_DefaultsToEveryDevice_SoLegacyJsonKeepsBehaving()
+        {
+            var legacy = JsonSerializer.Deserialize<HardwareSettings>("""{"SimulationMode":true}""", Opts)!;
+
+            Assert.True(AppServices.IsSimulated(legacy, s => s.Plc));
+            Assert.True(AppServices.IsSimulated(legacy, s => s.BlackBody));
+            Assert.True(AppServices.IsSimulated(legacy, s => s.Camera));
+        }
+
+        [Fact]
+        public void IsSimulated_MasterSwitchOff_IgnoresPerDeviceSelection()
+        {
+            var settings = new HardwareSettings { SimulationMode = false };
+            settings.Simulate.Plc = true;
+
+            Assert.False(AppServices.IsSimulated(settings, s => s.Plc));
+            Assert.Empty(AppServices.DescribeSimulated(settings));
+        }
+
+        [Fact]
+        public void IsSimulated_PerDeviceSelection_LeavesOtherDevicesReal()
+        {
+            var settings = new HardwareSettings { SimulationMode = true };
+            settings.Simulate.Camera = false;
+
+            Assert.True(AppServices.IsSimulated(settings, s => s.Plc));
+            Assert.True(AppServices.IsSimulated(settings, s => s.BlackBody));
+            Assert.False(AppServices.IsSimulated(settings, s => s.Camera));
+        }
+
+        [Fact]
         public void HardwareSettings_RoundTripPreservesCustomValues()
         {
             var original = new HardwareSettings
