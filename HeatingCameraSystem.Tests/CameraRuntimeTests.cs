@@ -119,6 +119,50 @@ namespace HeatingCameraSystem.Tests
             await runtime.StopAsync();
         }
 
+        [Fact]
+        public void FakeSource_LoadsRawReplayFrame()
+        {
+            string path = Path.Combine(Path.GetTempPath(), "hcs_replay_" + Guid.NewGuid().ToString("N") + ".raw");
+            var bytes = new byte[640 * 480 * sizeof(ushort)];
+            bytes[0] = 0x34;
+            bytes[1] = 0x12;
+            bytes[^2] = 0xCD;
+            bytes[^1] = 0xAB;
+            File.WriteAllBytes(path, bytes);
+
+            try
+            {
+                using var source = new FakeThermalFrameSource(path);
+
+                ThermalFrame frame = Assert.IsType<ThermalFrame>(source.Read());
+
+                Assert.Equal(640, frame.Width);
+                Assert.Equal(480, frame.Height);
+                Assert.Equal((ushort)0x1234, frame.Pixels[0]);
+                Assert.Equal((ushort)0xABCD, frame.Pixels[^1]);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [Fact]
+        public void FakeSource_RejectsWrongRawSize()
+        {
+            string path = Path.Combine(Path.GetTempPath(), "hcs_replay_bad_" + Guid.NewGuid().ToString("N") + ".raw");
+            File.WriteAllBytes(path, new byte[2]);
+
+            try
+            {
+                Assert.Throws<InvalidDataException>(() => new FakeThermalFrameSource(path));
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
         private static async Task WaitForStatusAsync(CameraRuntime runtime, CameraRuntimeStatus expected)
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));

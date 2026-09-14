@@ -75,6 +75,14 @@ namespace HeatingCameraSystem.AgentUI
             }
 
             AgentUiConfig config = AgentUiConfig.LoadOrCreate();
+            string? simulationRawPath = Environment.GetEnvironmentVariable("HCS_SIM_RAW_PATH");
+            simulationRawPath = @"E:\Source\Canlab\HeatingCameraSystem\참고\BB70_000.raw";
+            if (!string.IsNullOrWhiteSpace(simulationRawPath))
+            {
+                simulationRawPath = Path.GetFullPath(simulationRawPath);
+                config.SimulationMode = true;
+                AgentUiLog.Logger.Information("Simulation RAW replay enabled: {RawPath}", simulationRawPath);
+            }
 
             if (!config.SimulationMode)
             {
@@ -91,7 +99,7 @@ namespace HeatingCameraSystem.AgentUI
             }
 
             Func<CameraDescriptor, ICameraRuntime> sourceFactory = config.SimulationMode
-                ? (d => new CameraRuntime(d.OpenCvIndex, new FakeThermalFrameSource()))
+                ? (d => new CameraRuntime(d.OpenCvIndex, new FakeThermalFrameSource(simulationRawPath)))
                 : (d => new CameraRuntime(d.OpenCvIndex, new CltcThermalFrameSource(d.OpenCvIndex)));
 
             Func<CameraDescriptor, ICameraSerialClient?> serialFactory = config.SimulationMode

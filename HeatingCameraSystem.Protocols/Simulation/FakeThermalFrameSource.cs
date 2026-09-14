@@ -1,4 +1,6 @@
 using System;
+using System.Buffers.Binary;
+using System.IO;
 using System.Threading;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
@@ -14,15 +16,37 @@ namespace HeatingCameraSystem.Protocols.Simulation
     {
         private const int Width = 640;
         private const int Height = 480;
+        private const int RawByteCount = Width * Height * sizeof(ushort);
+        private readonly ushort[]? _replayPixels;
         private int _tick;
+
+        public FakeThermalFrameSource(string? rawPath = null)
+        {
+            if (string.IsNullOrWhiteSpace(rawPath)) return;
+
+            byte[] bytes = File.ReadAllBytes(rawPath);
+            if (bytes.Length != RawByteCount)
+            {
+                throw new InvalidDataException(
+                    $"RAW replay file must be exactly {RawByteCount} bytes (640x480 Y16), but was {bytes.Length}: {rawPath}");
+            }
+
+            _replayPixels = new ushort[Width * Height];
+            for (int i = 0; i < _replayPixels.Length; i++)
+            {
+                _replayPixels[i] = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(i * sizeof(ushort), sizeof(ushort)));
+            }
+        }
 
         /// <summary>열 물리 핸들이 없으므로 아무 동작도 하지 않는다.</summary>
         public void Open()
         {
         }
 
-        /// <summary>호출마다 tick을 올려 새 합성 프레임을 만든다. 실제 하드웨어와 달리 null을 반환하거나 블록되는 일이 없다.</summary>
-        public ThermalFrame? Read() => CreateFrame(Interlocked.Increment(ref _tick));
+        /// <summary>RAW가 지정되면 같은 프레임을 반복하고, 아니면 호출마다 새 합성 프레임을 만든다.</summary>
+        public ThermalFrame? Read() => _replayPixels is null
+            ? CreateFrame(Interlocked.Increment(ref _tick))
+            : new ThermalFrame(_replayPixels, Width, Height, DateTimeOffset.Now);
 
         /// <summary>해제할 물리 핸들이 없으므로 아무 동작도 하지 않는다.</summary>
         public void Close()
