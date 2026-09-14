@@ -283,7 +283,13 @@ namespace HeatingCameraSystem.Protocols.Cameras
                             if (production)
                             {
                                 // 후처리 툴이 캘리브레이션을 직접 하므로 .raw는 NUC 미보정 원본(snap)이어야 한다.
-                                _productionSink!.WriteShot(descriptor, cmd, snap, fpaRaw, i);
+                                // .jpg는 육안 검사용이라 반대로 NUC 보정 프레임을 쓴다.
+                                _productionSink!.WriteShot(
+                                    descriptor,
+                                    cmd,
+                                    cmd.SaveFormat == ProductionCaptureFormat.Jpeg ? frame : snap,
+                                    fpaRaw,
+                                    i);
                                 representative = frame;
                             }
                             else

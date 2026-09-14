@@ -237,6 +237,150 @@ namespace HeatingCameraSystem.Tests
             }
         }
 
+        [Fact]
+        public async Task HandleCapture_ProductionRaw_StaysNucUncorrected()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "hcs_prodraw_" + Guid.NewGuid().ToString("N"));
+            string buffer = Path.Combine(dir, "buffer");
+            string storage = Path.Combine(dir, "storage");
+            Directory.CreateDirectory(dir);
+            try
+            {
+                var natsMock = new Mock<INatsCommunicationService>();
+                natsMock.Setup(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()))
+                        .Returns(Task.CompletedTask);
+
+                ThermalFrame source = GradientFrame();
+                using var manager = new CameraRuntimeManager(
+                    d => new CameraRuntime(d.OpenCvIndex, new FixedFrameSource(source), framePeriodMs: 10));
+                var descriptor = new CameraDescriptor("cam0", 0, "Camera 0", CameraSerialNumber: "S1");
+                manager.Add(descriptor);
+                await manager.StartAllAsync();
+
+                // 소스 프레임 자체를 flat-field 기준으로 잡으면 보정 결과가 균일해져 원본과 확실히 달라진다.
+                var nuc = new ThermalNucCorrector();
+                nuc.CaptureFromFlat(source);
+
+                using var index = new LiteDbCaptureIndex(Path.Combine(dir, "idx.db"));
+                using var store = new CaptureStore(dir, index);
+                await using var connector = new CameraNatsConnector(
+                    natsMock.Object, manager, store, new[] { descriptor },
+                    nucs: new Dictionary<string, ThermalNucCorrector> { ["cam0"] = nuc },
+                    productionSink: new ProductionCaptureSink(buffer));
+
+                await connector.HandleCaptureAsync(descriptor, new CaptureCommandMessage
+                {
+                    TargetAgentId = "cam0",
+                    StorageRootUnc = storage,
+                    ProductNumber = "P1",
+                    ConditionFolder = "RPP40",
+                    BlackBodyFolder = "cold",
+                    FilePrefix = "BB20",
+                    ShotCount = 1
+                });
+
+                string raw = Path.Combine(storage, "S1_P1", "RPP40", "cold", "BB20_000.raw");
+                Assert.True(File.Exists(raw));
+
+                var expected = new byte[source.Pixels.Length * sizeof(ushort)];
+                Buffer.BlockCopy(source.Pixels, 0, expected, 0, expected.Length);
+                Assert.Equal(expected, File.ReadAllBytes(raw));
+
+                await manager.StopAllAsync();
+            }
+            finally
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+            }
+        }
+
+        [Fact]
+        public async Task HandleCapture_ProductionJpeg_IsEncodedFromNucCorrectedFrame()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "hcs_prodjpg_" + Guid.NewGuid().ToString("N"));
+            string buffer = Path.Combine(dir, "buffer");
+            string storage = Path.Combine(dir, "storage");
+            Directory.CreateDirectory(dir);
+            try
+            {
+                var natsMock = new Mock<INatsCommunicationService>();
+                natsMock.Setup(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()))
+                        .Returns(Task.CompletedTask);
+
+                ThermalFrame source = GradientFrame();
+                using var manager = new CameraRuntimeManager(
+                    d => new CameraRuntime(d.OpenCvIndex, new FixedFrameSource(source), framePeriodMs: 10));
+                var descriptor = new CameraDescriptor("cam0", 0, "Camera 0", CameraSerialNumber: "S1");
+                manager.Add(descriptor);
+                await manager.StartAllAsync();
+
+                // 소스와 무관한 저진폭 flat(±10, dead 픽셀 임계 50 미만)이라 보정 프레임이 균일해지지
+                // 않는다 — 균일하면 전부 검정이 되어 비교가 무의미해진다.
+                var flat = new ushort[64 * 64];
+                for (int i = 0; i < flat.Length; i++) flat[i] = (ushort)(i % 2 == 0 ? 2000 : 2020);
+                var nuc = new ThermalNucCorrector();
+                nuc.CaptureFromFlat(new ThermalFrame(flat, 64, 64, DateTimeOffset.Now));
+
+                using var index = new LiteDbCaptureIndex(Path.Combine(dir, "idx.db"));
+                using var store = new CaptureStore(dir, index);
+                await using var connector = new CameraNatsConnector(
+                    natsMock.Object, manager, store, new[] { descriptor },
+                    nucs: new Dictionary<string, ThermalNucCorrector> { ["cam0"] = nuc },
+                    productionSink: new ProductionCaptureSink(buffer));
+
+                await connector.HandleCaptureAsync(descriptor, new CaptureCommandMessage
+                {
+                    TargetAgentId = "cam0",
+                    StorageRootUnc = storage,
+                    ProductNumber = "P1",
+                    ConditionFolder = "RPP40",
+                    BlackBodyFolder = "cold",
+                    FilePrefix = "BB20",
+                    ShotCount = 1,
+                    SaveFormat = ProductionCaptureFormat.Jpeg
+                });
+
+                string jpeg = Path.Combine(storage, "S1_P1", "RPP40", "cold", "BB20_000.jpg");
+                Assert.True(File.Exists(jpeg));
+
+                ThermalFrame corrected = nuc.Apply(source);
+                Assert.True(corrected.Pixels.Distinct().Count() > 1);
+
+                byte[] written = File.ReadAllBytes(jpeg);
+                Assert.Equal(ThermalPreviewEncoder.EncodeJpeg(corrected), written);
+                Assert.NotEqual(ThermalPreviewEncoder.EncodeJpeg(source), written);
+
+                await manager.StopAllAsync();
+            }
+            finally
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+            }
+        }
+
+        private static ThermalFrame GradientFrame()
+        {
+            var px = new ushort[64 * 64];
+            for (int i = 0; i < px.Length; i++) px[i] = (ushort)(1000 + i % 64);
+            return new ThermalFrame(px, 64, 64, DateTimeOffset.Now);
+        }
+
+        // 항상 같은 픽셀을 내되 타임스탬프만 새로 찍는다 — 캡처의 maxAge 검사에 걸리지 않게.
+        private sealed class FixedFrameSource : IThermalFrameSource
+        {
+            private readonly ThermalFrame _frame;
+
+            public FixedFrameSource(ThermalFrame frame) => _frame = frame;
+
+            public void Open() { }
+
+            public ThermalFrame? Read() => new(_frame.Pixels, _frame.Width, _frame.Height, DateTimeOffset.Now);
+
+            public void Close() { }
+
+            public void Dispose() { }
+        }
+
         private static async Task WaitUntilAsync(Func<bool> condition)
         {
             for (int i = 0; i < 100 && !condition(); i++)

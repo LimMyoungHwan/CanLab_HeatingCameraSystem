@@ -115,7 +115,7 @@ Modbus → **XGT 전용 프로토콜**(TCP 2004)로 변경됨. 구현: `PlcXgtCl
 - 조건 폴더 온도는 **실측(PV)이 아니라 목표 온도**다. 순서는 ① 직전 `ChamberControl` 스텝의 목표 ② `ReadStatusAsync().TargetTemperature`(PLC 목표 워드) ③ 실측(PV). ①을 1순위로 두는 덕분에 PLC 없이 시뮬레이션으로 돌려도 폴더명이 실제와 같다.
 - 폴더 코드 온도는 대역별 3개(총 9개)뿐이고, 위에서 정한 온도는 **가장 가까운 코드로 스냅**된다. 얼마나 벗어났든 예외를 던지지 않는다 — 이건 검증이 아니라 저장 규칙이다. 온도 불일치로 저장을 막는 게이트를 다시 넣지 말 것.
 - `.raw`는 **NUC 미보정 원본**이고 픽셀(0,0)에 FPA 온도 **raw 값**(℃ 아님)이 들어간다. 후처리 툴 계약이다.
-- 저장 포맷은 런 단위 선택이다(`Recipe.SaveFormat` → `CaptureCommandMessage.SaveFormat`). `Raw`(기본)와 `Jpeg` 둘뿐이고 **폴더·파일명·장수는 동일, 확장자만 바뀐다**. JPEG는 8비트라 열 데이터가 없어 캘리브레이션에 못 쓴다 — `.raw`로 캘리브레이션한 뒤 육안검사·보고서용으로 다시 찍는 용도다. 확장자를 추가하면 `ProductionCaptureSink`의 robocopy 패턴과 `PendingFiles` 판정을 **둘 다** 고쳐야 한다(하나만 고치면 전송 실패가 "완료"로 보고된다).
+- 저장 포맷은 런 단위 선택이다(`Recipe.SaveFormat` → `CaptureCommandMessage.SaveFormat`). `Raw`(기본)와 `Jpeg` 둘뿐이고 **폴더·파일명·장수는 동일, 확장자만 바뀐다**. JPEG는 8비트라 열 데이터가 없어 캘리브레이션에 못 쓴다 — `.raw`로 캘리브레이션한 뒤 육안검사·보고서용으로 다시 찍는 용도다. **두 포맷은 원본 프레임도 다르다**: `.raw`는 NUC **미보정** 스냅샷 그대로고, `.jpg`는 NUC **보정** 프레임을 프레임별 min/max 선형 정규화(`ThermalPreviewEncoder.EncodeJpeg`)로 인코딩한다 — 레퍼런스 C++/Qt Viewer의 `normalize16To8`와 같은 매핑이다. plateau AGC는 라이브 컬러 미리보기(`EncodeColorJpeg`)에만 쓴다. 확장자를 추가하면 `ProductionCaptureSink`의 robocopy 패턴과 `PendingFiles` 판정을 **둘 다** 고쳐야 한다(하나만 고치면 전송 실패가 "완료"로 보고된다).
 - 저장 파일은 Agent 로컬 버퍼 → 폴더 완성 후 `robocopy /MOVE` → Master UNC. 기존 `.y16` 경로는 별개이며 건드리지 않는다.
 - 규칙 저장 중에는 `.y16`을 **배치당 1장**(결과 화면 대표)만 쓰고 캡처 결과도 **배치당 1건**만 발행한다. 장마다 쓰면 디스크가 두 배, 장마다 발행하면 미리보기 JPEG이 Master 메모리에 쌓인다. `RecipeEngine`의 `PendingCapture.ExpectedResults`가 이 규약을 따라간다 — **찍을 장수가 아니다.**
 - 레퍼런스 구현: `참고/AISEN_CODE/main.py:950-1066`(저장), `:1531-1599`(bias).

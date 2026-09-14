@@ -59,8 +59,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
             => Path.Combine(ConditionRelativeDirectory(cam, cmd), cmd.BlackBodyFolder);
 
         /// <summary>
-        /// 한 장을 로컬 버퍼에 쓴다. JPEG는 8비트 정규화라 열 데이터가 남지 않으므로 FPA 원시값도
-        /// 싣지 않는다 — 육안 검사·보고서용 재촬영 전용이다.
+        /// 한 장을 로컬 버퍼에 쓴다. JPEG는 프레임별 min/max 정규화 8비트 그레이스케일이라 열 데이터가 남지 않으므로
+        /// FPA 원시값도 싣지 않는다 — 육안 검사·보고서용 재촬영 전용이다.
         /// </summary>
         public string WriteShot(CameraDescriptor cam, CaptureCommandMessage cmd, ThermalFrame rawFrame, short? fpaRaw, int shotIndex)
         {
