@@ -664,7 +664,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
                     try
                     {
-                        byte[] jpeg = ThermalPreviewEncoder.EncodeColorJpeg(frame);
+                        byte[] jpeg = ThermalPreviewEncoder.EncodeJpeg(frame);
                         await _nats.PublishLiveFrameAsync(new LiveFrameMessage
                         {
                             AgentId = cam.AgentId,

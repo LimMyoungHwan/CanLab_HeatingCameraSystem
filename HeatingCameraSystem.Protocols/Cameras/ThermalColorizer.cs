@@ -19,6 +19,23 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
         private static readonly uint[] IronLut = BuildIronLut();
 
+        /// <summary>
+        /// gray8 버퍼(256 레벨)에 iron LUT를 적용해 BGR24 버퍼를 반환한다.
+        /// 라이브 컬러 모드에서 Master가 수신한 min/max 그레이 JPEG를 iron으로 재착색할 때 쓴다.
+        /// </summary>
+        public static byte[] Gray8ToBgr24(byte[] gray8)
+        {
+            var bgr = new byte[gray8.Length * 3];
+            for (int i = 0, j = 0; i < gray8.Length; i++, j += 3)
+            {
+                uint c = IronLut[gray8[i]];
+                bgr[j]     = (byte)(c & 0xFF);
+                bgr[j + 1] = (byte)((c >> 8) & 0xFF);
+                bgr[j + 2] = (byte)((c >> 16) & 0xFF);
+            }
+            return bgr;
+        }
+
         /// <summary>프레임을 BGR24 버퍼(stride = <c>Width * 3</c>)로 변환해 반환한다.</summary>
         public static byte[] ToBgr24(ThermalFrame f)
         {

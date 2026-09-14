@@ -11,28 +11,30 @@ namespace HeatingCameraSystem.Tests;
 public class LivePreviewColorModeTests
 {
     [Fact]
-    public void Apply_ColorMode_ReturnsSourceUnchanged()
+    public void Apply_ColorMode_AppliesIronLut()
     {
         LivePreviewColorMode.SetGrayscale(false);
-        BitmapSource src = DecodeColorFrame();
+        BitmapSource src = DecodeGrayFrame();
 
-        Assert.Same(src, LivePreviewColorMode.Apply(src));
+        BitmapSource result = LivePreviewColorMode.Apply(src);
+
+        Assert.NotSame(src, result);
+        Assert.Equal(PixelFormats.Bgr24, result.Format);
+        Assert.True(result.IsFrozen);
+        Assert.Equal(src.PixelWidth, result.PixelWidth);
+        Assert.Equal(src.PixelHeight, result.PixelHeight);
     }
 
     [Fact]
-    public void Apply_GrayscaleMode_ConvertsToFrozenGray8()
+    public void Apply_GrayscaleMode_ReturnsSameInstance()
     {
-        BitmapSource src = DecodeColorFrame();
+        BitmapSource src = DecodeGrayFrame();
         try
         {
             LivePreviewColorMode.SetGrayscale(true);
             BitmapSource result = LivePreviewColorMode.Apply(src);
 
-            Assert.NotSame(src, result);
-            Assert.Equal(PixelFormats.Gray8, result.Format);
-            Assert.True(result.IsFrozen);
-            Assert.Equal(src.PixelWidth, result.PixelWidth);
-            Assert.Equal(src.PixelHeight, result.PixelHeight);
+            Assert.Same(src, result);
         }
         finally
         {
@@ -40,10 +42,10 @@ public class LivePreviewColorModeTests
         }
     }
 
-    private static BitmapSource DecodeColorFrame()
+    private static BitmapSource DecodeGrayFrame()
     {
         var scene = new SyntheticThermalScene(new FrameSettings(64, 48), () => 1);
-        byte[] jpeg = ThermalPreviewEncoder.EncodeColorJpeg(scene.NextFrame(0));
+        byte[] jpeg = ThermalPreviewEncoder.EncodeJpeg(scene.NextFrame(0));
         var bmp = new BitmapImage();
         using var ms = new MemoryStream(jpeg);
         bmp.BeginInit();
