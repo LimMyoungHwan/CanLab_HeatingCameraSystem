@@ -654,13 +654,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 {
                     if (!_manager.TryGet(cam.AgentId, out ICameraRuntime runtime)) continue;
 
+                    // 라이브는 무조건 원본(LatestFrame)을 본다 — NUC·AGC 같은 표시 처리는
+                    // Master 측에서 한다. 여기서 보정 프레임을 본면 Master는 원본을 볼 수 없다.
                     ThermalFrame? frame = runtime.LatestFrame;
                     if (frame is null) continue;
-
-                    if (_nucs is not null && _nucs.TryGetValue(cam.AgentId, out ThermalNucCorrector? nuc) && nuc is not null)
-                    {
-                        frame = nuc.Apply(frame);
-                    }
 
                     try
                     {

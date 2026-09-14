@@ -79,7 +79,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             BitmapSource bmp;
             try
             {
-                bmp = ThermalFrameBitmapSourceConverter.ToBitmapSource(_nuc.Apply(frame));
+                bmp = ThermalFrameBitmapSourceConverter.ToBitmapSource(frame);
             }
             catch
             {
