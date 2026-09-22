@@ -128,6 +128,11 @@ namespace HeatingCameraSystem.Core.Config
         // 다음 쓰기를 막는다(읽기에는 적용하지 않는다 — 상태 일괄 판독이 수십 배 느려진다).
         public int WriteGapMs { get; set; } = 100;
 
+        // FEnet 개별읽기 요청 하나에 담을 블록 수. 프로토콜 상한이 16이며 ReadStatusAsync의
+        // 왕복 횟수를 결정한다(변수 1개씩 126회 → 16개씩 8회). 모듈이 블록 수에 NAK를 내면
+        // 낮춘다. 장비 실측 조정값.
+        public int ReadBatchSize { get; set; } = 16;
+
         // 포인트 이동 원터치 비트: P601~P620 (번호 = base + (idx-1))
         public string ServoPointMoveBase { get; set; } = "P601";
         // 포인트 목표좌표: X=base+(idx-1)*stride, Y=X+2  (1P: D3010/D3012, 2P: D3020/D3022 ...)

@@ -23,6 +23,11 @@ namespace HeatingCameraSystem.Protocols.Cameras
         public static string Write(string directory, string fileName, ThermalFrame frame, short? fpaRaw)
         {
             if (frame is null) throw new ArgumentNullException(nameof(frame));
+            if (!frame.IsRadiometric)
+            {
+                throw new ArgumentException(
+                    "UYVY 모드 프레임에는 방사 측정 데이터가 없어 .raw로 저장할 수 없다.", nameof(frame));
+            }
 
             Directory.CreateDirectory(directory);
 

@@ -24,8 +24,17 @@ public class ExternalFEnetContractTests
     private sealed class WordMemory
     {
         private readonly ConcurrentDictionary<uint, short> _words = new();
+        private int _readIndividualRequests;
 
         public ConcurrentQueue<(DeviceType Device, uint Index, bool Value)> BitWrites { get; } = new();
+
+        /// <summary>순수 비트 디바이스를 전부 ON으로 응답한다 — 인덱스 인코딩을 몰라도 검증할 수 있다.</summary>
+        public bool AllBitsOn { get; set; }
+
+        /// <summary>개별읽기 요청 수. 배칭이 실제로 왕복을 줄였는지 재는 값이다.</summary>
+        public int ReadIndividualRequests => Volatile.Read(ref _readIndividualRequests);
+
+        public void SetWord(uint index, short value) => _words[index] = value;
 
         public void OnWriteIndividual(object? sender, FEnetRequestedWriteIndividualEventArgs e)
         {
@@ -40,9 +49,15 @@ public class ExternalFEnetContractTests
 
         public void OnReadIndividual(object? sender, FEnetRequestedReadIndividualEventArgs e)
         {
+            Interlocked.Increment(ref _readIndividualRequests);
+
             foreach (var item in e.ResponseValues)
+            {
                 if (item.DeviceVariable.DeviceType == DeviceType.D && item.DeviceVariable.DataType == DataType.Word)
                     item.DeviceValue = new DeviceValue(_words.TryGetValue(item.DeviceVariable.Index, out var v) ? v : (short)0);
+                else if (AllBitsOn && item.DeviceVariable.DataType == DataType.Bit)
+                    item.DeviceValue = new DeviceValue(true);
+            }
         }
 
         public short ReadWord(uint index) => _words.TryGetValue(index, out var v) ? v : (short)0;
@@ -147,6 +162,50 @@ public class ExternalFEnetContractTests
                 Assert.False(writes[1].Value);
                 Assert.Equal(writes[0].Index, writes[1].Index);
             }
+        }
+        finally
+        {
+            client.Dispose();
+            service.Dispose();
+            provider.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task PlcXgtClient_ReadStatusAsync_BatchesIndividualReads_AndMasksBitOfWord()
+    {
+        int port = GetFreeTcpPort();
+        var memory = new WordMemory();
+
+        var provider = new TcpChannelProvider(IPAddress.Loopback, port) { Logger = new NullChannelLogger() };
+        var service = new FEnetSimulationService(provider) { UseHexBitIndex = true };
+        var client = new PlcXgtClient();
+        try
+        {
+            service.RequestedWriteIndividual += memory.OnWriteIndividual;
+            service.RequestedReadIndividual += memory.OnReadIndividual;
+            provider.Start();
+
+            await client.ConnectAsync("127.0.0.1", port);
+
+            memory.SetWord(100, 255);    // TempPv D100 → 25.5℃
+            memory.SetWord(60, 1 << 1);  // StatusHeater(D60.1)만 ON, StatusCooler1st(D60.2)는 OFF
+            memory.AllBitsOn = true;
+
+            PlcStatusSnapshot s = await client.ReadStatusAsync();
+
+            Assert.Equal(25.5f, s.CurrentTemperature, precision: 2);
+            Assert.True(s.Heater);
+            Assert.False(s.Cooler1st);
+            Assert.True(s.Chiller);
+            Assert.Equal(20, s.ErrorBits.Length);
+            Assert.Equal(32, s.InputBits.Length);
+            Assert.Equal(32, s.OutputBits.Length);
+            Assert.All(s.OutputBits, bit => Assert.True(bit));
+
+            // 변수 하나당 한 요청이면 126왕복이 되고, XGB 스캔 시간에서 1초 폴링 주기를 넘겨
+            // PlcStatusService의 재진입 가드가 틱을 버려 화면이 2초마다 갱신된다.
+            Assert.InRange(memory.ReadIndividualRequests, 1, 16);
         }
         finally
         {

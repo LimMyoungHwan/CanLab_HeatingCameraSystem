@@ -65,9 +65,13 @@ namespace HeatingCameraSystem.Protocols.Cameras
         public string WriteShot(CameraDescriptor cam, CaptureCommandMessage cmd, ThermalFrame rawFrame, short? fpaRaw, int shotIndex)
         {
             string directory = Path.Combine(_bufferRoot, RelativeDirectory(cam, cmd));
-            string fileName = CaptureNamingRule.FileName(cmd.FilePrefix, shotIndex, cmd.SaveFormat);
 
-            if (cmd.SaveFormat == ProductionCaptureFormat.Jpeg)
+            // UYVY 모드 프레임에는 방사 측정 데이터가 없다. .raw로 내리면 고객 후처리 툴이 8비트
+            // 휘도를 14비트 열 데이터로 읽으므로, 런 설정과 무관하게 JPEG으로 내려 확장자와 내용을 맞춘다.
+            ProductionCaptureFormat format = rawFrame.IsRadiometric ? cmd.SaveFormat : ProductionCaptureFormat.Jpeg;
+            string fileName = CaptureNamingRule.FileName(cmd.FilePrefix, shotIndex, format);
+
+            if (format == ProductionCaptureFormat.Jpeg)
             {
                 Directory.CreateDirectory(directory);
                 string jpegPath = Path.Combine(directory, fileName);

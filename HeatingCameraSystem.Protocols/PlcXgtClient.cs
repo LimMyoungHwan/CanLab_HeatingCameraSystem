@@ -184,60 +184,104 @@ namespace HeatingCameraSystem.Protocols
         /// 상태 화면이 1초 주기로 호출하는 일괄 판독. 항목마다 개별 FEnet 요청을 순차 수행하므로
         /// 항목을 늘리면 그만큼 폴링 한 사이클이 길어진다.
         /// </summary>
+        /// <summary>
+        /// 전체 상태를 두 번의 일괄 판독(워드 배치 / 비트 배치)으로 채운다. 변수 하나당 한 요청을
+        /// 보내면 126왕복이 되어 XGB 스캔 시간에서 1초를 넘고, 그러면 1초 주기인
+        /// <c>PlcStatusService</c>의 재진입 가드가 틱을 건너뛰어 화면이 2초마다 갱신된다.
+        /// <para>
+        /// 비트-오브-워드('D60.1')는 워드 배치에 실어 마스킹하므로 같은 워드를 공유하는 비트가
+        /// 왕복 하나로 합쳐진다(D60.1~D60.9 → D60 한 번). 개별읽기 헤더의 데이터 타입은 요청당
+        /// 하나뿐이라 워드와 순수 비트는 섞지 않는다.
+        /// </para>
+        /// </summary>
         public async Task<PlcStatusSnapshot> ReadStatusAsync()
         {
-            var s = new PlcStatusSnapshot
+            var s = new PlcStatusSnapshot();
+
+            string[] errorBitTokens = BitBlockTokens(_s.ErrorBitBase, s.ErrorBits.Length, hex: false);
+            string[] inputBitTokens = BitBlockTokens(_s.InputBitBase, s.InputBits.Length, hex: true);
+            string[] outputBitTokens = BitBlockTokens(_s.OutputBitBase, s.OutputBits.Length, hex: true);
+
+            string[] scalarWordTokens =
             {
-                CurrentTemperature = FromScaled(await ReadWordAsync(_s.TempPv), 10),
-                TargetTemperature = FromScaled(await ReadWordAsync(_s.TempTarget), 10),
-                CurrentHumidity = FromScaled(await ReadWordAsync(_s.HumPv), 10),
-                TargetHumidity = FromScaled(await ReadWordAsync(_s.HumSv), 10),
-                BlackBody1Pv = FromScaled(await ReadWordAsync(_s.Bb1Pv), 100),
-                BlackBody1Sv = FromScaled(await ReadWordAsync(_s.Bb1Sv), 100),
-                BlackBody2Pv = FromScaled(await ReadWordAsync(_s.Bb2Pv), 100),
-                BlackBody2Sv = FromScaled(await ReadWordAsync(_s.Bb2Sv), 100),
-                ServoXPosition = FromScaled(await ReadWordAsync(_s.ServoXPos), 10),
-                ServoYPosition = FromScaled(await ReadWordAsync(_s.ServoYPos), 10),
-                ServoXBusy = await ReadBitAsync(_s.ServoXBusyBit),
-                ServoYBusy = await ReadBitAsync(_s.ServoYBusyBit),
-                ServoXHomeComplete = await ReadBitAsync(_s.ServoXHomeBit),
-                ServoYHomeComplete = await ReadBitAsync(_s.ServoYHomeBit),
-                ServoXErrorCode = await ReadWordAsync(_s.ServoXErrorCode),
-                ServoYErrorCode = await ReadWordAsync(_s.ServoYErrorCode),
-                CurrentPoint = await ReadWordAsync(_s.ServoCurrentPoint),
-                CurrentStep = await ReadWordAsync(_s.StepCurrent),
-                TotalSteps = await ReadWordAsync(_s.StepTotal),
-                FanSpeedHz = FromScaled(await ReadWordAsync(_s.FanSpeed), 100),
-                GasFlow = FromScaled(await ReadWordAsync(_s.GasFlow), 10),
-                Heater = await ReadBitAsync(_s.StatusHeater),
-                Cooler1st = await ReadBitAsync(_s.StatusCooler1st),
-                Cooler2nd = await ReadBitAsync(_s.StatusCooler2nd),
-                CoolerRoom = await ReadBitAsync(_s.StatusCoolerRoom),
-                CoolerRoomBypass = await ReadBitAsync(_s.StatusCoolerRoomBypass),
-                DoorLamp = await ReadBitAsync(_s.StatusDoorLamp),
-                PairGlass = await ReadBitAsync(_s.StatusPairGlass),
-                Mcf = await ReadBitAsync(_s.StatusMcf),
-                Blower1 = await ReadBitAsync(_s.StatusBlower1),
-                Blower2 = await ReadBitAsync(_s.StatusBlower2),
-                Chiller = await ReadBitAsync(_s.StatusChiller),
-                DoorLock = await ReadBitAsync(_s.StatusDoorLock),
-                Lighting = await ReadBitAsync(_s.StatusLighting)
+                _s.TempPv, _s.TempTarget, _s.HumPv, _s.HumSv,
+                _s.Bb1Pv, _s.Bb1Sv, _s.Bb2Pv, _s.Bb2Sv,
+                _s.ServoXPos, _s.ServoYPos, _s.ServoXErrorCode, _s.ServoYErrorCode,
+                _s.ServoCurrentPoint, _s.StepCurrent, _s.StepTotal, _s.FanSpeed, _s.GasFlow,
+                _s.AdminOverheatLimit, _s.AdminCoolerRoomBoundary, _s.AdminCooler2ndBoundary,
+                _s.AdminCoolerDelay, _s.AdminBypassBoundary, _s.AdminMfcMinOutput,
+                _s.AdminMfcMaxOutput, _s.AdminPairGlassBoundary
             };
 
-            s.ErrorBits = await ReadBitBlockAsync(_s.ErrorBitBase, s.ErrorBits.Length, hex: false);
-            s.InputBits = await ReadBitBlockAsync(_s.InputBitBase, s.InputBits.Length, hex: true);
-            s.OutputBits = await ReadBitBlockAsync(_s.OutputBitBase, s.OutputBits.Length, hex: true);
+            string[] bitTokens = new[]
+            {
+                _s.ServoXBusyBit, _s.ServoYBusyBit, _s.ServoXHomeBit, _s.ServoYHomeBit,
+                _s.StatusHeater, _s.StatusCooler1st, _s.StatusCooler2nd, _s.StatusCoolerRoom,
+                _s.StatusCoolerRoomBypass, _s.StatusDoorLamp, _s.StatusPairGlass, _s.StatusMcf,
+                _s.StatusBlower1, _s.StatusBlower2, _s.StatusChiller, _s.StatusDoorLock,
+                _s.StatusLighting
+            }
+            .Concat(errorBitTokens).Concat(inputBitTokens).Concat(outputBitTokens).ToArray();
+
+            var words = await ReadBatchAsync(scalarWordTokens.Concat(DottedWordTokens(bitTokens)).Select(ParseWord));
+            var bits = await ReadBatchAsync(PureBitTokens(bitTokens).Select(ParseBit));
+
+            short Raw(string token) => Lookup(words, ParseWord(token), token).WordValue;
+            float Word(string token, int scale) => FromScaled(Raw(token), scale);
+            bool Bit(string token) => TrySplitDotted(token, out string wordToken, out int bit)
+                ? (Raw(wordToken) & (1 << bit)) != 0
+                : Lookup(bits, ParseBit(token), token).BitValue;
+            bool[] Block(string[] tokens) => Array.ConvertAll(tokens, Bit);
+
+            s.CurrentTemperature = Word(_s.TempPv, 10);
+            s.TargetTemperature = Word(_s.TempTarget, 10);
+            s.CurrentHumidity = Word(_s.HumPv, 10);
+            s.TargetHumidity = Word(_s.HumSv, 10);
+            s.BlackBody1Pv = Word(_s.Bb1Pv, 100);
+            s.BlackBody1Sv = Word(_s.Bb1Sv, 100);
+            s.BlackBody2Pv = Word(_s.Bb2Pv, 100);
+            s.BlackBody2Sv = Word(_s.Bb2Sv, 100);
+            s.ServoXPosition = Word(_s.ServoXPos, 10);
+            s.ServoYPosition = Word(_s.ServoYPos, 10);
+            s.ServoXBusy = Bit(_s.ServoXBusyBit);
+            s.ServoYBusy = Bit(_s.ServoYBusyBit);
+            s.ServoXHomeComplete = Bit(_s.ServoXHomeBit);
+            s.ServoYHomeComplete = Bit(_s.ServoYHomeBit);
+            s.ServoXErrorCode = Raw(_s.ServoXErrorCode);
+            s.ServoYErrorCode = Raw(_s.ServoYErrorCode);
+            s.CurrentPoint = Raw(_s.ServoCurrentPoint);
+            s.CurrentStep = Raw(_s.StepCurrent);
+            s.TotalSteps = Raw(_s.StepTotal);
+            s.FanSpeedHz = Word(_s.FanSpeed, 100);
+            s.GasFlow = Word(_s.GasFlow, 10);
+            s.Heater = Bit(_s.StatusHeater);
+            s.Cooler1st = Bit(_s.StatusCooler1st);
+            s.Cooler2nd = Bit(_s.StatusCooler2nd);
+            s.CoolerRoom = Bit(_s.StatusCoolerRoom);
+            s.CoolerRoomBypass = Bit(_s.StatusCoolerRoomBypass);
+            s.DoorLamp = Bit(_s.StatusDoorLamp);
+            s.PairGlass = Bit(_s.StatusPairGlass);
+            s.Mcf = Bit(_s.StatusMcf);
+            s.Blower1 = Bit(_s.StatusBlower1);
+            s.Blower2 = Bit(_s.StatusBlower2);
+            s.Chiller = Bit(_s.StatusChiller);
+            s.DoorLock = Bit(_s.StatusDoorLock);
+            s.Lighting = Bit(_s.StatusLighting);
+
+            s.ErrorBits = Block(errorBitTokens);
+            s.InputBits = Block(inputBitTokens);
+            s.OutputBits = Block(outputBitTokens);
 
             s.Admin = new PlcAdminSettings
             {
-                OverheatLimit = FromScaled(await ReadWordAsync(_s.AdminOverheatLimit), 10),
-                CoolerRoomBoundary = FromScaled(await ReadWordAsync(_s.AdminCoolerRoomBoundary), 10),
-                Cooler2ndBoundary = FromScaled(await ReadWordAsync(_s.AdminCooler2ndBoundary), 10),
-                CoolerDelayMinutes = await ReadWordAsync(_s.AdminCoolerDelay),
-                BypassBoundary = FromScaled(await ReadWordAsync(_s.AdminBypassBoundary), 10),
-                MfcMinOutput = FromScaled(await ReadWordAsync(_s.AdminMfcMinOutput), 10),
-                MfcMaxOutput = FromScaled(await ReadWordAsync(_s.AdminMfcMaxOutput), 10),
-                PairGlassBoundary = FromScaled(await ReadWordAsync(_s.AdminPairGlassBoundary), 10)
+                OverheatLimit = Word(_s.AdminOverheatLimit, 10),
+                CoolerRoomBoundary = Word(_s.AdminCoolerRoomBoundary, 10),
+                Cooler2ndBoundary = Word(_s.AdminCooler2ndBoundary, 10),
+                CoolerDelayMinutes = Raw(_s.AdminCoolerDelay),
+                BypassBoundary = Word(_s.AdminBypassBoundary, 10),
+                MfcMinOutput = Word(_s.AdminMfcMinOutput, 10),
+                MfcMaxOutput = Word(_s.AdminMfcMaxOutput, 10),
+                PairGlassBoundary = Word(_s.AdminPairGlassBoundary, 10)
             };
 
             return s;
@@ -292,14 +336,52 @@ namespace HeatingCameraSystem.Protocols
             _ => throw new ArgumentOutOfRangeException(nameof(equipment))
         };
 
-        /// <summary>base 토큰부터 연속 count개 비트를 읽는다. hex=true면 주소 증가를 16진수로 계산한다.</summary>
-        private async Task<bool[]> ReadBitBlockAsync(string baseToken, int count, bool hex)
+        /// <summary>base 토큰부터 연속 count개 비트 토큰을 만든다. hex=true면 주소 증가를 16진수로 계산한다.</summary>
+        private static string[] BitBlockTokens(string baseToken, int count, bool hex)
         {
-            var arr = new bool[count];
+            var tokens = new string[count];
             for (int i = 0; i < count; i++)
-                arr[i] = await ReadBitAsync(IncDevice(baseToken, i, hex));
-            return arr;
+                tokens[i] = IncDevice(baseToken, i, hex);
+            return tokens;
         }
+
+        private static IEnumerable<string> DottedWordTokens(IEnumerable<string> bitTokens)
+        {
+            foreach (string token in bitTokens)
+                if (TrySplitDotted(token, out string wordToken, out _))
+                    yield return wordToken;
+        }
+
+        private static IEnumerable<string> PureBitTokens(IEnumerable<string> bitTokens)
+        {
+            foreach (string token in bitTokens)
+                if (!TrySplitDotted(token, out _, out _))
+                    yield return token;
+        }
+
+        /// <summary>
+        /// 중복을 제거한 변수들을 <see cref="PlcSettings.ReadBatchSize"/>개씩 묶어 판독한다.
+        /// 모든 변수는 같은 데이터 타입이어야 한다 — 개별읽기 요청 헤더가 타입 하나만 싣는다.
+        /// </summary>
+        private async Task<Dictionary<DeviceVariable, DeviceValue>> ReadBatchAsync(IEnumerable<DeviceVariable> variables)
+        {
+            var merged = new Dictionary<DeviceVariable, DeviceValue>();
+            int batchSize = Math.Max(1, _s.ReadBatchSize);
+
+            foreach (DeviceVariable[] chunk in variables.Distinct().Chunk(batchSize))
+            {
+                IReadOnlyDictionary<DeviceVariable, DeviceValue> values = await Query(client => client.Read(chunk));
+                foreach (var pair in values)
+                    merged[pair.Key] = pair.Value;
+            }
+
+            return merged;
+        }
+
+        private static DeviceValue Lookup(Dictionary<DeviceVariable, DeviceValue> values, DeviceVariable variable, string token)
+            => values.TryGetValue(variable, out DeviceValue value)
+                ? value
+                : throw new InvalidOperationException($"PLC status read returned no value for '{token}' ({variable}).");
 
         private static (string Prefix, int Number) SplitDecimal(string token)
         {

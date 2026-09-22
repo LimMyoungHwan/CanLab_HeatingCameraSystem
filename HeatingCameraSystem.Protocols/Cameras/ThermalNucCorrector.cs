@@ -38,6 +38,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
         {
             if (flat is null) throw new ArgumentNullException(nameof(flat));
 
+            // UYVY 모드 프레임은 카메라가 이미 보정한 8비트 영상이라 14비트 오프셋 맵의 기준이 못 된다.
+            if (!flat.IsRadiometric) { Clear(); return; }
+
             ushort[] px = flat.Pixels;
             if (px.Length == 0) { Clear(); return; }
 
@@ -55,6 +58,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
         /// <summary>보정된 프레임을 반환한다. 기준이 없으면 입력을 그대로 반환한다.</summary>
         public ThermalFrame Apply(ThermalFrame frame)
         {
+            if (!frame.IsRadiometric) return frame;
+
             int[]? offset = _offset;
             if (offset is null || frame.Pixels.Length != offset.Length) return frame;
 

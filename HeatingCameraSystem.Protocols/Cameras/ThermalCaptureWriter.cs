@@ -60,7 +60,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 CameraIndex = cameraIndex,
                 Width = frame.Width,
                 Height = frame.Height,
-                PixelFormat = "Y16_14bit_LE",
+                PixelFormat = frame.IsRadiometric ? "Y16_14bit_LE" : "Y8_LUMA_16bit_LE",
                 TimestampUtc = frame.Timestamp.ToUniversalTime(),
                 Min = min,
                 Max = max,

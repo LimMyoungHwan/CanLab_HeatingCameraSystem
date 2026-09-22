@@ -7,8 +7,8 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
 {
     /// <summary>
     /// 실제 CLTC 열화상 프레임 소스: UVC 카메라를 raw Y16 모드(FourCC "Y16 ", ConvertRgb=0)로
-    /// 열어 14비트로 마스킹된 열화상 프레임을 읽는다. <see cref="CltcLiveThermalCamera"/>에서
-    /// 검증된 획득 로직을 그대로 따른다.
+    /// 열고 <see cref="ClThermalMatDecoder"/>로 프레임을 변환한다. 제품이 UYVY 모드면 Y16 요청과
+    /// 무관하게 8비트 프레임이 오므로 변환은 디코더가 판별한다.
     /// </summary>
     public sealed class CltcThermalFrameSource : IThermalFrameSource
     {
@@ -44,8 +44,9 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
         }
 
         /// <summary>
-        /// 프레임 하나를 읽어 14비트로 마스킹해 반환한다. 미오픈·읽기 실패·형식 불일치는 예외 없이
-        /// null을 반환하므로, 지속되면 CameraRuntime의 프레임 기아 감시가 Faulted로 떨어뜨린다.
+        /// 프레임 하나를 읽어 <see cref="ClThermalMatDecoder"/>로 변환해 반환한다. 미오픈·읽기 실패·
+        /// 형식 불일치는 예외 없이 null을 반환하므로, 지속되면 CameraRuntime의 프레임 기아 감시가
+        /// Faulted로 떨어뜨린다.
         /// </summary>
         public ThermalFrame? Read()
         {
@@ -61,28 +62,7 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
                 return null;
             }
 
-            if (mat.Type() != MatType.CV_16UC1)
-            {
-                return null;
-            }
-
-            int width = mat.Width;
-            int height = mat.Height;
-            var pixels = new ushort[width * height];
-
-            Span<ushort> source = mat.AsSpan<ushort>();
-            if (source.Length < pixels.Length)
-            {
-                return null;
-            }
-
-            source[..pixels.Length].CopyTo(pixels);
-            for (int i = 0; i < pixels.Length; i++)
-            {
-                pixels[i] &= 0x3FFF;
-            }
-
-            return new ThermalFrame(pixels, width, height, DateTimeOffset.Now);
+            return ClThermalMatDecoder.Decode(mat, DateTimeOffset.Now);
         }
 
         public void Close()

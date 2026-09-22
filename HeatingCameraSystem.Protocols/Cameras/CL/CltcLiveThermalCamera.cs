@@ -9,8 +9,8 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
 {
     /// <summary>
     /// CLTC 카메라의 라이브 스트림 구현: raw Y16 모드로 열고 자체 캡처 루프에서 프레임마다
-    /// 33ms 지연을 두고 <see cref="FrameReady"/>를 발행한다. 여기서 검증된 획득 로직을
-    /// <see cref="CltcThermalFrameSource"/>가 그대로 따른다.
+    /// 33ms 지연을 두고 <see cref="FrameReady"/>를 발행한다. 프레임 변환은
+    /// <see cref="CltcThermalFrameSource"/>와 같은 <see cref="ClThermalMatDecoder"/>를 쓴다.
     /// </summary>
     public class CltcLiveThermalCamera : ILiveThermalCamera
     {
@@ -123,21 +123,13 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
                         continue;
                     }
 
-                    if (frame.Type() != MatType.CV_16UC1)
+                    ThermalFrame? decoded = ClThermalMatDecoder.Decode(frame, DateTimeOffset.Now);
+                    if (decoded is null)
                     {
                         continue;
                     }
 
-                    int width = frame.Width;
-                    int height = frame.Height;
-                    var pixels = new ushort[width * height];
-
-                    if (!TryCopyMaskedPixels(frame, pixels))
-                    {
-                        continue;
-                    }
-
-                    FrameReady?.Invoke(this, new ThermalFrame(pixels, width, height, DateTimeOffset.Now));
+                    FrameReady?.Invoke(this, decoded);
                     await Task.Delay(33, token).ConfigureAwait(false);
                 }
             }
@@ -156,21 +148,5 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
             }
         }
 
-        private static bool TryCopyMaskedPixels(Mat frame, ushort[] pixels)
-        {
-            Span<ushort> source = frame.AsSpan<ushort>();
-            if (source.Length < pixels.Length)
-            {
-                return false;
-            }
-
-            source[..pixels.Length].CopyTo(pixels);
-            for (int i = 0; i < pixels.Length; i++)
-            {
-                pixels[i] &= 0x3FFF;
-            }
-
-            return true;
-        }
     }
 }
