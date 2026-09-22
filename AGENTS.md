@@ -99,7 +99,11 @@ Modbus → **XGT 전용 프로토콜**(TCP 2004)로 변경됨. 구현: `PlcXgtCl
 - 비트-오브-워드(`D2520.0`)는 워드 읽기+마스크(쓰기는 read-modify-write). 순수 비트(`M10`/`P000`)는 직접.
 - CPU=**XGB**(XBC-DN64H) 확인 → `UseHexBitIndex=true` 기본. 비트 오독 시 반전. 위치결정: XBF-PD02A(X/Y 2축).
 - 전체 상태 일괄: `IPlcController.ReadStatusAsync()` → `PlcStatusSnapshot` (Master 상태 화면 1초 폴링).
-- `ReadStatusAsync`는 **개별읽기 배칭 필수**. 변수 1개씩 읽으면 126왕복이 되어 XGB 스캔 시간에서 1초를 넘고, 그러면 `PlcStatusService`의 `_polling` 재진입 가드가 1초 틱을 버려 **화면이 2초마다 갱신**된다. 워드 토큰과 순수 비트 토큰을 각각 모아 `PlcSettings.ReadBatchSize`(기본 16, FEnet 상한)씩 청크로 읽는다 → 8왕복. 개별읽기 헤더는 데이터 타입을 하나만 싣기 때문에 **워드 배치와 비트 배치를 합치면 NAK**다. 비트-오브-워드는 워드 배치에 실어 마스킹하므로 같은 워드를 공유하는 비트가 왕복 하나로 합쳐진다(`D60.1`~`D60.9` → `D60` 한 번).
+- 상태 폴링이 느려지는 함정이 **세 개 맞물려 있다**. 운영자가 "모터 이동 시 25초마다 갱신"으로 보고한 증상이며, 하나만 고치면 재발한다.
+  1. **쓰기 간격 대기를 IO 락 안에서 하지 말 것.** `Exec`이 `_io`를 잡은 채 `WriteGapMs`(100ms)를 자면 그동안 상태 판독이 통째로 줄 선다. 쓰기는 모터 이동 때만 나는 게 아니다 — `PlcStatusService.PollBlackBodyAsync`가 **1초마다** 흑체 유닛별로 워드를 2개씩 미러링해 쓰기가 상시 발생한다. 판독이 느려질수록 더 많은 쓰기 주기를 걸쳐 더 느려지는 **양성 피드백**이 25초를 만든다. 쓰기끼리의 간격은 `_writeGate`가, 실제 전송 직렬화는 `_io`가 맡는다 — **두 세마포어를 합치지 말 것**.
+  2. **`PlcXgtClient`의 await는 `ConfigureAwait(false)`여야 한다.** 폴링이 `DispatcherTimer`에서 시작해 WPF UI 컨텍스트를 캡처하므로, 빼면 판독 왕복마다 continuation이 디스패처 큐에 실려 라이브 영상 렌더링 뒤에 줄 선다. 결과를 UI 스레드에서 받는 것은 `PollAsync`의 최상위 await가 보장한다.
+  3. **`ReadStatusAsync`는 개별읽기 배칭 필수.** 변수 1개씩 읽으면 126왕복이다. 워드 토큰과 순수 비트 토큰을 각각 모아 `PlcSettings.ReadBatchSize`(기본 16, FEnet 상한)씩 청크로 읽는다 → 8왕복. 개별읽기 헤더는 데이터 타입을 하나만 싣기 때문에 **워드 배치와 비트 배치를 합치면 NAK**다. 비트-오브-워드는 워드 배치에 실어 마스킹하므로 같은 워드를 공유하는 비트가 왕복 하나로 합쳐진다(`D60.1`~`D60.9` → `D60` 한 번).
+- 판독 소요는 상태 화면의 갱신 메시지에 `(NNNms)`로 노출된다. 1초를 넘으면 `_polling` 재진입 가드가 틱을 버려 갱신 간격이 배수로 튀므로, 느려졌을 때 이 숫자부터 본다.
 - 온도 램프: **사용 안 함.** `RecipeEngine`이 램프 0을 넘겨 목표 온도를 한 번에 쓴다. `Recipe.TemperatureRampMinutes`와 `TemperatureRampController`는 남아 있지만 호출되지 않고, 에디터 UI도 숨겨져 있다. 예전 레시피에 남은 값도 무시된다.
 
 ### 생산 저장 규칙 (`.raw` 트리)

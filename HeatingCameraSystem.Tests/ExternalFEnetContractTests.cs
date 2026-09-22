@@ -216,6 +216,45 @@ public class ExternalFEnetContractTests
     }
 
     [Fact]
+    public async Task PlcXgtClient_WriteGap_DoesNotBlockConcurrentRead()
+    {
+        int port = GetFreeTcpPort();
+        var memory = new WordMemory();
+
+        var provider = new TcpChannelProvider(IPAddress.Loopback, port) { Logger = new NullChannelLogger() };
+        var service = new FEnetSimulationService(provider) { UseHexBitIndex = true };
+        // 간격을 크게 잡아 "쓰기 간격 대기가 판독을 막는가"만 남긴다. 기본 100ms로는 잡음에 묻힌다.
+        var client = new PlcXgtClient(new PlcSettings { WriteGapMs = 500 });
+        try
+        {
+            service.RequestedWriteIndividual += memory.OnWriteIndividual;
+            service.RequestedReadIndividual += memory.OnReadIndividual;
+            provider.Start();
+
+            await client.ConnectAsync("127.0.0.1", port);
+
+            Task write = client.SetTargetTemperatureAsync(25.0f);
+            await Task.Delay(150);
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            await client.GetCurrentTemperatureAsync();
+            sw.Stop();
+
+            await write;
+
+            // 간격 대기를 IO 락 안에서 하면 판독이 남은 350ms를 통째로 기다린다.
+            // 그 구조가 흑체 미러링(1초마다 쓰기)과 겹쳐 상태 폴링을 25초까지 밀어냈다.
+            Assert.True(sw.ElapsedMilliseconds < 200, $"read waited {sw.ElapsedMilliseconds}ms behind the write gap");
+        }
+        finally
+        {
+            client.Dispose();
+            service.Dispose();
+            provider.Dispose();
+        }
+    }
+
+    [Fact]
     public void TcpChannelProvider_Start_OnPortAlreadyInUse_ThrowsAddressInUse()
     {
         int port = GetFreeTcpPort();

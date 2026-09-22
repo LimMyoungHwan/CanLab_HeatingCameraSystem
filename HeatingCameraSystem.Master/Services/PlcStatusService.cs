@@ -89,7 +89,10 @@ namespace HeatingCameraSystem.Master.Services
             _polling = true;
             try
             {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 var s = await _plc.ReadStatusAsync();
+                sw.Stop();
+
                 MergeCachedBlackBody(s);
                 Snapshot = s;
                 IsEmergencyStop = s.ErrorBits.Length > 0 && s.ErrorBits[0];
@@ -98,7 +101,10 @@ namespace HeatingCameraSystem.Master.Services
                 if (!_wasConnected) AlarmSink.Raise(AlarmSeverity.Info, "PLC", LocalizationManager.Instance["Plc_ConnRestored"]);
                 _wasConnected = true;
                 IsConnected = true;
-                StatusMessage = string.Format(LocalizationManager.Instance["Dash_Refreshed"], DateTime.Now.ToString("HH:mm:ss"));
+                // 판독 소요를 화면에 그대로 띄운다. 1초 주기를 넘기면 재진입 가드가 틱을 버려
+                // 갱신 간격이 배수로 튀므로, 느려졌을 때 원인이 PLC 왕복인지 즉시 구분하려면 이 숫자가 필요하다.
+                StatusMessage = string.Format(LocalizationManager.Instance["Dash_Refreshed"], DateTime.Now.ToString("HH:mm:ss"))
+                                + $" ({sw.ElapsedMilliseconds}ms)";
             }
             catch (Exception ex)
             {

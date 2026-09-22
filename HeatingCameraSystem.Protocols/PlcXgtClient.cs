@@ -21,6 +21,7 @@ namespace HeatingCameraSystem.Protocols
     {
         private readonly PlcSettings _s;
         private readonly SemaphoreSlim _io = new(1, 1);
+        private readonly SemaphoreSlim _writeGate = new(1, 1);
         private TcpChannel? _channel;
         private FEnetClient? _client;
         private volatile bool _isConnected;
@@ -223,8 +224,8 @@ namespace HeatingCameraSystem.Protocols
             }
             .Concat(errorBitTokens).Concat(inputBitTokens).Concat(outputBitTokens).ToArray();
 
-            var words = await ReadBatchAsync(scalarWordTokens.Concat(DottedWordTokens(bitTokens)).Select(ParseWord));
-            var bits = await ReadBatchAsync(PureBitTokens(bitTokens).Select(ParseBit));
+            var words = await ReadBatchAsync(scalarWordTokens.Concat(DottedWordTokens(bitTokens)).Select(ParseWord)).ConfigureAwait(false);
+            var bits = await ReadBatchAsync(PureBitTokens(bitTokens).Select(ParseBit)).ConfigureAwait(false);
 
             short Raw(string token) => Lookup(words, ParseWord(token), token).WordValue;
             float Word(string token, int scale) => FromScaled(Raw(token), scale);
@@ -370,7 +371,7 @@ namespace HeatingCameraSystem.Protocols
 
             foreach (DeviceVariable[] chunk in variables.Distinct().Chunk(batchSize))
             {
-                IReadOnlyDictionary<DeviceVariable, DeviceValue> values = await Query(client => client.Read(chunk));
+                IReadOnlyDictionary<DeviceVariable, DeviceValue> values = await Query(client => client.Read(chunk)).ConfigureAwait(false);
                 foreach (var pair in values)
                     merged[pair.Key] = pair.Value;
             }
@@ -486,14 +487,20 @@ namespace HeatingCameraSystem.Protocols
         /// <summary>
         /// _io 세마포어로 직렬화해 실행한다. 실패하면 연결 끊김으로 표시하고 예외를 그대로 던진다
         /// — 재연결은 ConnectionMonitorService 몫이다.
+        /// <para>
+        /// 여기의 await는 전부 <c>ConfigureAwait(false)</c>다. 상태 폴링이 <c>DispatcherTimer</c>에서
+        /// 시작해 WPF UI 컨텍스트를 캡처하므로, 이걸 빼면 판독 왕복마다 continuation이 디스패처 큐에
+        /// 실려 라이브 영상 렌더링 뒤에 줄을 선다. 폴링 결과를 UI 스레드에서 받는 것은
+        /// <c>PlcStatusService.PollAsync</c>의 최상위 await가 보장하므로 여기서 캡처할 이유가 없다.
+        /// </para>
         /// </summary>
         private async Task<T> Query<T>(Func<FEnetClient, T> action)
         {
-            await _io.WaitAsync();
+            await _io.WaitAsync().ConfigureAwait(false);
             try
             {
                 var client = _client ?? throw new InvalidOperationException("Not connected to PLC.");
-                return await Task.Run(() => action(client));
+                return await Task.Run(() => action(client)).ConfigureAwait(false);
             }
             catch
             {
@@ -503,22 +510,36 @@ namespace HeatingCameraSystem.Protocols
             finally { _io.Release(); }
         }
 
-        /// <summary>쓰기용 실행 경로. 직렬화와 실패 처리는 <see cref="Query{T}"/>와 동일하다.</summary>
+        /// <summary>
+        /// 쓰기용 실행 경로. 쓰기 간격은 <see cref="_writeGate"/>가 보장하고 <see cref="_io"/>는
+        /// 실제 전송 동안만 잡는다.
+        /// <para>
+        /// 간격 대기를 IO 락 안에서 하면 상태 판독이 그 sleep 뒤에 줄 선다. 흑체 미러링이 1초마다
+        /// 유닛별로 워드를 두 개씩 쓰기 때문에 쓰기는 상시 발생하고, 판독이 느려질수록 더 많은 쓰기
+        /// 주기를 걸쳐 더 느려지는 양성 피드백이 생긴다. 두 세마포어를 합치지 말 것.
+        /// </para>
+        /// </summary>
         private async Task Exec(Action<FEnetClient> action)
         {
-            await _io.WaitAsync();
+            await _writeGate.WaitAsync().ConfigureAwait(false);
             try
             {
-                var client = _client ?? throw new InvalidOperationException("Not connected to PLC.");
-                await Task.Run(() => action(client));
-                if (_s.WriteGapMs > 0) await Task.Delay(_s.WriteGapMs);
+                await _io.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    var client = _client ?? throw new InvalidOperationException("Not connected to PLC.");
+                    await Task.Run(() => action(client)).ConfigureAwait(false);
+                }
+                catch
+                {
+                    _isConnected = false;
+                    throw;
+                }
+                finally { _io.Release(); }
+
+                if (_s.WriteGapMs > 0) await Task.Delay(_s.WriteGapMs).ConfigureAwait(false);
             }
-            catch
-            {
-                _isConnected = false;
-                throw;
-            }
-            finally { _io.Release(); }
+            finally { _writeGate.Release(); }
         }
     }
 }
