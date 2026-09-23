@@ -41,4 +41,14 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
         Shutter    = 0x01,
         SaveConfig = 0x02,
     }
+
+    /// <summary>
+    /// <see cref="ClMainId.UserConfig"/>의 하위 ID. <see cref="Camera"/>는 다섯 필드가
+    /// 한 바이트에 패킹된 레지스터라 부분 수정은 반드시 read-modify-write여야 한다
+    /// (<see cref="ClPacket.ReplaceOutputFormat"/>).
+    /// </summary>
+    public enum ClUserConfigSubId : byte
+    {
+        Camera = 0x00,
+    }
 }

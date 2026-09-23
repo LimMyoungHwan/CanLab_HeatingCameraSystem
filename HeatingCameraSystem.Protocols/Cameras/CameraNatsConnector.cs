@@ -282,6 +282,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
                             if (production)
                             {
+                                // WriteShot보다 먼저 잡는다. Raw 런이 방사 측정 없는 프레임으로 실패해도
+                                // 아래에서 .y16과 .json이 남아 pixelFormat으로 원인을 볼 수 있어야 한다.
+                                representative = frame;
+
                                 // 후처리 툴이 캘리브레이션을 직접 하므로 .raw는 NUC 미보정 원본(snap)이어야 한다.
                                 // .jpg는 육안 검사용이라 반대로 NUC 보정 프레임을 쓴다.
                                 _productionSink!.WriteShot(
@@ -290,7 +294,6 @@ namespace HeatingCameraSystem.Protocols.Cameras
                                     cmd.SaveFormat == ProductionCaptureFormat.Jpeg ? frame : snap,
                                     fpaRaw,
                                     i);
-                                representative = frame;
                             }
                             else
                             {

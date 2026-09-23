@@ -99,6 +99,19 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        /// <summary>가짜 프레임 소스가 16비트 합성 프레임을 내므로 기본값은 <see cref="CameraOutputFormat.Y16"/>이다.</summary>
+        public CameraOutputFormat OutputFormat { get; private set; } = CameraOutputFormat.Y16;
+
+        public Task<CameraOutputFormat> ReadOutputFormatAsync(CancellationToken ct = default)
+            => Task.FromResult(OutputFormat);
+
+        /// <summary>링크 끊김 없이 <see cref="OutputFormat"/> 플래그만 기록한다.</summary>
+        public Task SetOutputFormatAsync(CameraOutputFormat format, CancellationToken ct = default)
+        {
+            OutputFormat = format;
+            return Task.CompletedTask;
+        }
+
         public void Dispose() => IsOpen = false;
     }
 }

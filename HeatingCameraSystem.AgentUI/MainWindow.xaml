@@ -262,12 +262,34 @@
                                                     <Grid.RowDefinitions>
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
                                                     </Grid.RowDefinitions>
                                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="S/N: " Foreground="#909090"/>
                                                     <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SerialNumber}"/>
                                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="FPA: " Foreground="#909090"/>
                                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FpaTemperature}"/>
+                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{loc:Loc Cam_OutputFormat}" Foreground="#909090"/>
+                                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding OutputFormatText}" TextWrapping="Wrap">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="#7CD97C"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding SelectedOutputFormat}" Value="Uyvy">
+                                                                        <Setter Property="Foreground" Value="#FFB000"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
                                                 </Grid>
+                                                <WrapPanel Margin="2,2,0,4">
+                                                    <ComboBox ItemsSource="{Binding OutputFormats}"
+                                                              SelectedItem="{Binding SelectedOutputFormat}"
+                                                              Width="90" Margin="0,0,4,0" Padding="6,2"/>
+                                                    <Button Command="{Binding ApplyOutputFormatCommand}" Padding="8,3">
+                                                        <materialIcons:MaterialIconText Kind="SwapHorizontal" Text="{loc:Loc Cam_ApplyOutputFormat}" Spacing="6"/>
+                                                    </Button>
+                                                </WrapPanel>
                                                 <WrapPanel Margin="2,2,0,0">
                                                     <Button Command="{Binding OpenShutterCommand}" Margin="0,0,4,4" Padding="8,3">
                                                         <materialIcons:MaterialIconText Kind="Eye" Text="{loc:Loc Cam_ShutterOpen}" Spacing="6"/>

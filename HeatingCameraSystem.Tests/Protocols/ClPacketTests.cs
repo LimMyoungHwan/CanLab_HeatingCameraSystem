@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Protocols.Cameras.CL;
 using Xunit;
 
@@ -88,6 +89,51 @@ namespace HeatingCameraSystem.Tests.Protocols
         public void DecodeFpaTemperatureRaw_HighBitSet_ReturnsNegativeWord()
         {
             Assert.Equal((short)-16384, ClPacket.DecodeFpaTemperatureRaw(0xC0, 0x00));
+        }
+
+        // 0xB7 = 1011 0111 : autoStart=1, dispMode=3, outFormat=1(Y16), captureType=1, opMode=1
+        [Theory]
+        [InlineData(0xB7, 0x01)]
+        [InlineData(0xB3, 0x00)]
+        [InlineData(0x00, 0x00)]
+        [InlineData(0xFF, 0x03)]
+        public void ExtractOutputFormat_ReadsBits3And2(int cameraConfig, int expected)
+        {
+            Assert.Equal((byte)expected, ClPacket.ExtractOutputFormat((byte)cameraConfig));
+        }
+
+        [Fact]
+        public void ReplaceOutputFormat_UyvyToY16_KeepsEveryOtherField()
+        {
+            const byte uyvy = 0xB3; // autoStart=1, dispMode=3, outFormat=0, captureType=1, opMode=1
+
+            byte updated = ClPacket.ReplaceOutputFormat(uyvy, (byte)CameraOutputFormat.Y16);
+
+            Assert.Equal((byte)0xB7, updated);
+            Assert.Equal(uyvy & 0xF3, updated & 0xF3);
+        }
+
+        [Fact]
+        public void ReplaceOutputFormat_AllOtherBitsSet_OnlyClearsOutputFormat()
+        {
+            byte updated = ClPacket.ReplaceOutputFormat(0xFF, (byte)CameraOutputFormat.Uyvy);
+
+            Assert.Equal((byte)0xF3, updated);
+        }
+
+        [Theory]
+        [InlineData(0x00)]
+        [InlineData(0x5A)]
+        [InlineData(0xB3)]
+        [InlineData(0xFF)]
+        public void ReplaceOutputFormat_RoundTripsThroughExtract(int cameraConfig)
+        {
+            foreach (CameraOutputFormat format in new[] { CameraOutputFormat.Uyvy, CameraOutputFormat.Y16 })
+            {
+                byte updated = ClPacket.ReplaceOutputFormat((byte)cameraConfig, (byte)format);
+
+                Assert.Equal((byte)format, ClPacket.ExtractOutputFormat(updated));
+            }
         }
     }
 }

@@ -66,9 +66,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
         {
             string directory = Path.Combine(_bufferRoot, RelativeDirectory(cam, cmd));
 
-            // UYVY 모드 프레임에는 방사 측정 데이터가 없다. .raw로 내리면 고객 후처리 툴이 8비트
-            // 휘도를 14비트 열 데이터로 읽으므로, 런 설정과 무관하게 JPEG으로 내려 확장자와 내용을 맞춘다.
-            ProductionCaptureFormat format = rawFrame.IsRadiometric ? cmd.SaveFormat : ProductionCaptureFormat.Jpeg;
+            // 방사 측정 데이터가 없어도 JPEG으로 되돌리지 않는다 — Raw 런은 RawCaptureWriter가
+            // 거부해 실패로 보고돼야 한다. 조용한 대체는 못 쓰는 8비트를 성공으로 보이게 한다.
+            ProductionCaptureFormat format = cmd.SaveFormat;
             string fileName = CaptureNamingRule.FileName(cmd.FilePrefix, shotIndex, format);
 
             if (format == ProductionCaptureFormat.Jpeg)

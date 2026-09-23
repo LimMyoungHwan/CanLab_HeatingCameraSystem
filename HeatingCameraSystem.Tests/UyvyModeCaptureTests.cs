@@ -90,11 +90,24 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
-        public void WriteShot_RawRunWithUyvyFrame_WritesJpegInstead()
+        public void WriteShot_RawRunWithUyvyFrame_ThrowsInsteadOfDowngradingToJpeg()
         {
             var sink = new ProductionCaptureSink(_buffer);
 
-            string path = sink.WriteShot(Camera, RawRun(), UyvyFrame(), fpaRaw: 16560, shotIndex: 3);
+            Assert.Throws<ArgumentException>(
+                () => sink.WriteShot(Camera, RawRun(), UyvyFrame(), fpaRaw: 16560, shotIndex: 3));
+
+            Assert.False(Directory.Exists(Path.Combine(_buffer, "544112136_ABC", "RPP40", "cold")));
+        }
+
+        [Fact]
+        public void WriteShot_JpegRunWithUyvyFrame_StillWritesJpeg()
+        {
+            var sink = new ProductionCaptureSink(_buffer);
+            CaptureCommandMessage cmd = RawRun();
+            cmd.SaveFormat = ProductionCaptureFormat.Jpeg;
+
+            string path = sink.WriteShot(Camera, cmd, UyvyFrame(), fpaRaw: 16560, shotIndex: 3);
 
             Assert.Equal(
                 Path.Combine(_buffer, "544112136_ABC", "RPP40", "cold", "BB20_003.jpg"),

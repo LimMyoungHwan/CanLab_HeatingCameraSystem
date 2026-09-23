@@ -41,8 +41,7 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
             }
 
             var capture = new VideoCapture(cameraIndex, VideoCaptureAPIs.DSHOW);
-            capture.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC('Y', '1', '6', ' '));
-            capture.Set(VideoCaptureProperties.ConvertRgb, 0);
+            ClCaptureSetup.OpenRawY16(capture);
 
             if (!capture.IsOpened())
             {

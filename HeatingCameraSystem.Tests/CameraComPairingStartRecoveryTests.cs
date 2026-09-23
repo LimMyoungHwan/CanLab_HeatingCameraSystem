@@ -48,6 +48,8 @@ namespace HeatingCameraSystem.Tests
             }
 
             public Task SaveConfigAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task<CameraOutputFormat> ReadOutputFormatAsync(CancellationToken ct = default) => Task.FromResult(CameraOutputFormat.Y16);
+        public Task SetOutputFormatAsync(CameraOutputFormat format, CancellationToken ct = default) => Task.CompletedTask;
             public void Dispose() => IsOpen = false;
         }
 

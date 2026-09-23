@@ -91,6 +91,24 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
         public Task SaveConfigAsync(CancellationToken ct = default)
             => QueryAsync((byte)ClMainId.OperateCtrl, (byte)ClOperateCtrlSubId.SaveConfig, ClRw.Write, 1, ct);
 
+        public async Task<CameraOutputFormat> ReadOutputFormatAsync(CancellationToken ct = default)
+            => (CameraOutputFormat)ClPacket.ExtractOutputFormat(await ReadCameraConfigAsync(ct).ConfigureAwait(false));
+
+        public async Task SetOutputFormatAsync(CameraOutputFormat format, CancellationToken ct = default)
+        {
+            // 레지스터 하나에 autoStart·dispMode·outFormat·captureType·opMode가 같이 들어 있다.
+            // 읽어서 2비트만 갈아끼우지 않으면 나머지 네 필드가 0으로 밀린다.
+            byte current = await ReadCameraConfigAsync(ct).ConfigureAwait(false);
+            byte updated = ClPacket.ReplaceOutputFormat(current, (byte)format);
+            if (updated == current) return;
+
+            await QueryAsync((byte)ClMainId.UserConfig, (byte)ClUserConfigSubId.Camera, ClRw.Write, updated, ct)
+                .ConfigureAwait(false);
+        }
+
+        private Task<byte> ReadCameraConfigAsync(CancellationToken ct)
+            => QueryAsync((byte)ClMainId.UserConfig, (byte)ClUserConfigSubId.Camera, ClRw.Read, 0, ct);
+
         private async Task<byte> QueryAsync(byte mainId, byte subId, ClRw rw, byte data, CancellationToken ct)
         {
             EnsureOpen();

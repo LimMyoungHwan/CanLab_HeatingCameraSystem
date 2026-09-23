@@ -210,12 +210,64 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 SerialNumber = await _serial.ReadSerialNumberAsync();
                 double fpa = await _serial.ReadFpaTemperatureAsync();
                 FpaTemperature = $"{fpa:F1} ℃";
+                await ReadOutputFormatAsync();
                 SerialStatus = $"정보 갱신 {DateTime.Now:HH:mm:ss}";
             }
             catch (Exception ex)
             {
                 SerialStatus = $"읽기 실패: {ex.Message}";
             }
+        }
+
+        public CameraOutputFormat[] OutputFormats { get; } = Enum.GetValues<CameraOutputFormat>();
+
+        [ObservableProperty]
+        private CameraOutputFormat _selectedOutputFormat = CameraOutputFormat.Y16;
+
+        [ObservableProperty]
+        private string _outputFormatText = "—";
+
+        /// <summary>콤보박스 선택값도 실제 값으로 맞춰, 아무것도 안 바꾸고 누른 '적용'이 포맷을 뒤집지 않게 한다.</summary>
+        public async Task ReadOutputFormatAsync()
+        {
+            if (_serial is null) return;
+
+            CameraOutputFormat format = await _serial.ReadOutputFormatAsync();
+            SelectedOutputFormat = format;
+            OutputFormatText = DescribeOutputFormat(format);
+        }
+
+        internal static string DescribeOutputFormat(CameraOutputFormat format) => format switch
+        {
+            CameraOutputFormat.Y16 => "Y16 (16비트 원본 · .raw 저장 가능)",
+            CameraOutputFormat.Uyvy => "UYVY (8비트 · .raw 저장 불가)",
+            _ => $"알 수 없음 (0x{(byte)format:X2})"
+        };
+
+        /// <summary>
+        /// 선택한 출력 포맷을 카메라에 쓴다. 쓰는 즉시 카메라가 USB 링크를 끊으므로
+        /// (<c>참고/util/Viewer.cpp:414-425</c>) 이어지는 명령은 실패하는 게 정상이다 —
+        /// 여기서 예외를 실패로 보고하지 않고 재시작 안내로 바꾸는 이유다.
+        /// </summary>
+        [RelayCommand(CanExecute = nameof(HasSerialControl))]
+        private async Task ApplyOutputFormatAsync()
+        {
+            if (_serial is null) return;
+
+            CameraOutputFormat target = SelectedOutputFormat;
+            try
+            {
+                await _serial.SetOutputFormatAsync(target);
+            }
+            catch (Exception ex)
+            {
+                SerialStatus = $"출력 포맷 변경 실패: {ex.Message}";
+                return;
+            }
+
+            OutputFormatText = $"{DescribeOutputFormat(target)} — 적용 대기";
+            SerialStatus = $"출력 포맷을 {target}로 변경했습니다. 카메라가 링크를 끊었으니 "
+                           + "AgentUI를 재시작한 뒤 '정보 읽기'로 확인하고, '설정 저장'으로 카메라에 영구 저장하세요.";
         }
 
         /// <summary>
@@ -512,6 +564,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         {
             await s.SetCameraRunningAsync(true);
             await s.SetShutterAsync(true);
+            await ReadOutputFormatAsync();
         }, "영상 시작 (RUN+셔터 열림)");
 
         /// <summary>영상 종료: 셔터 닫기 후 카메라 STOP. 앱 종료 시 자동 호출.</summary>
