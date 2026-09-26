@@ -406,6 +406,17 @@ namespace HeatingCameraSystem.Master.Services
                                 throw new OperationCanceledException(cancellationToken);
                             break;
 
+                        case RecipeStepKind.FanControl:
+                            progress?.Report(new RecipeProgress { CurrentStep = i, TotalSteps = totalSteps, CurrentPhase = L("Recipe_Phase_FanSpeed", i + 1, totalSteps, step.TargetFanSpeedHz) });
+                            if (step.TargetFanSpeedHz < 10.0f || step.TargetFanSpeedHz > 60.0f)
+                            {
+                                AlarmSink.Raise(AlarmCodes.FanSpeedOutOfRange, AlarmSeverity.Warning, RecipeSource,
+                                    L("Alarm_Msg_FanSpeedOutOfRange", i + 1, totalSteps, step.TargetFanSpeedHz));
+                                break;
+                            }
+                            await _plcController.SetFanSpeedAsync(step.TargetFanSpeedHz);
+                            break;
+
                         default:
                             AlarmSink.Raise(AlarmCodes.StepKindUnsupported, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_StepKindUnsupported", step.Kind));
                             break;

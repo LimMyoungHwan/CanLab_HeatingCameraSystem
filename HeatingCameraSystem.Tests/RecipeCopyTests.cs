@@ -122,4 +122,28 @@ public class RecipeCopyTests
         Assert.Equal(25.5f, back.Steps[0].SafetyHumidityMin);
         Assert.Equal(77.5f, back.Steps[0].SafetyHumidityMax);
     }
+
+    [Fact]
+    public void FanSpeed_SurvivesDomainRoundTripAndClone()
+    {
+        var fromDomain = typeof(RecipeEditorViewModel).GetMethod("FromDomain", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var toDomain   = typeof(RecipeEditorViewModel).GetMethod("ToDomain", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        var recipe = new Recipe
+        {
+            Steps =
+            {
+                new RecipeStep { Kind = RecipeStepKind.FanControl, TargetFanSpeedHz = 42.5f }
+            }
+        };
+
+        var vm = fromDomain.Invoke(null, new object[] { recipe })!;
+        var back = (Recipe)toDomain.Invoke(null, new object[] { vm })!;
+
+        Assert.Equal(RecipeStepKind.FanControl, back.Steps[0].Kind);
+        Assert.Equal(42.5f, back.Steps[0].TargetFanSpeedHz);
+
+        Recipe clone = RecipeEditorViewModel.CloneRecipe(back);
+        Assert.Equal(42.5f, clone.Steps[0].TargetFanSpeedHz);
+    }
 }

@@ -41,6 +41,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private float _positionY;
         [ObservableProperty] private double _targetChamberTemperature;
         [ObservableProperty] private double _targetChamberHumidity;
+        [ObservableProperty] private float _targetFanSpeedHz;
         [ObservableProperty] private bool _disableHumidityControl;
         [ObservableProperty] private double _biasTargetLevel;
         [ObservableProperty] private double _stabilizationToleranceC;
@@ -297,6 +298,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty]
         private RecipeModel? _selectedRecipe;
 
+        [ObservableProperty]
+        private string _ioStatusMessage = string.Empty;
+
         public RecipeEditorViewModel()
         {
             SubscribeCameraServices();
@@ -389,6 +393,10 @@ namespace HeatingCameraSystem.Master.ViewModels
                 step.BlackBodyIndex = 0;
                 step.WaitForStabilization = true;
             }
+            if (kind == RecipeStepKind.FanControl)
+            {
+                step.TargetFanSpeedHz = 30.0f;
+            }
             SyncCameraTargets(step);
             SelectedRecipe.Steps.Add(step);
         }
@@ -418,39 +426,71 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
-        /// <summary>선택 레시피를 JSON 파일로 내보낸다.</summary>
+        /// <summary>선택 레시피를 CSV 파일로 내보낸다. 결과는 IoStatusMessage로 표시한다.</summary>
         [RelayCommand]
         private void ExportRecipe()
         {
-            if (SelectedRecipe == null) return;
+            if (SelectedRecipe == null)
+            {
+                IoStatusMessage = "레시피를 먼저 선택하세요.";
+                return;
+            }
 
             var dlg = new SaveFileDialog
             {
-                Filter = "JSON files (*.json)|*.json",
-                FileName = $"{SelectedRecipe.Name}.json"
+                Filter = "CSV files (*.csv)|*.csv",
+                FileName = $"{SelectedRecipe.Name}.csv"
             };
-            if (dlg.ShowDialog() != true) return;
+            if (dlg.ShowDialog() != true)
+            {
+                IoStatusMessage = string.Empty;
+                return;
+            }
 
-            var recipe = ToDomain(SelectedRecipe);
-            var json = JsonSerializer.Serialize(recipe, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(dlg.FileName, json);
+            try
+            {
+                var recipe = ToDomain(SelectedRecipe);
+                RecipeCsvSerializer.WriteFile(dlg.FileName, recipe);
+                IoStatusMessage = $"내보냈습니다: {Path.GetFileName(dlg.FileName)}";
+            }
+            catch (Exception ex)
+            {
+                IoStatusMessage = $"내보내기 실패: {ex.Message}";
+            }
         }
 
-        /// <summary>JSON 파일에서 레시피를 가져온다. Id는 새로 발급해 기존 레시피를 덮어쓰지 않는다.</summary>
+        /// <summary>CSV 또는 JSON 파일에서 레시피를 가져온다. Id는 새로 발급해 기존 레시피를 덮어쓰지 않는다. 결과는 IoStatusMessage로 표시한다.</summary>
         [RelayCommand]
         private void ImportRecipe()
         {
             var dlg = new OpenFileDialog
             {
-                Filter = "JSON files (*.json)|*.json"
+                Filter = "레시피 파일 (*.csv;*.json)|*.csv;*.json|CSV (*.csv)|*.csv|JSON (*.json)|*.json"
             };
-            if (dlg.ShowDialog() != true) return;
+            if (dlg.ShowDialog() != true)
+            {
+                IoStatusMessage = string.Empty;
+                return;
+            }
 
             try
             {
-                var json = File.ReadAllText(dlg.FileName);
-                var recipe = JsonSerializer.Deserialize<Recipe>(json);
-                if (recipe == null) return;
+                Recipe? recipe;
+                if (string.Equals(Path.GetExtension(dlg.FileName), ".csv", StringComparison.OrdinalIgnoreCase))
+                {
+                    recipe = RecipeCsvSerializer.ReadFile(dlg.FileName);
+                }
+                else
+                {
+                    var json = File.ReadAllText(dlg.FileName);
+                    recipe = JsonSerializer.Deserialize<Recipe>(json);
+                }
+
+                if (recipe == null)
+                {
+                    IoStatusMessage = "파일을 레시피로 읽을 수 없습니다.";
+                    return;
+                }
 
                 recipe.Id = Guid.NewGuid().ToString();
                 AppServices.RecipeRepo.SaveAsync(recipe).GetAwaiter().GetResult();
@@ -458,10 +498,11 @@ namespace HeatingCameraSystem.Master.ViewModels
                 var vm = FromDomain(recipe);
                 Recipes.Add(vm);
                 SelectRecipe(vm);
+                IoStatusMessage = $"가져왔습니다: {recipe.Name}";
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RecipeEditor] Import failed: {ex.Message}");
+                IoStatusMessage = $"가져오기 실패: {ex.Message}";
             }
         }
 
@@ -512,6 +553,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
                     TargetChamberHumidity = s.TargetChamberHumidity,
+                    TargetFanSpeedHz = s.TargetFanSpeedHz,
                     StabilizationToleranceC = s.StabilizationToleranceC,
                     StabilizationToleranceRh = s.StabilizationToleranceRh,
                     SoakMinutes = s.SoakMinutes,
@@ -575,6 +617,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
                     TargetChamberHumidity = s.TargetChamberHumidity,
+                    TargetFanSpeedHz = s.TargetFanSpeedHz,
                     StabilizationToleranceC = s.StabilizationToleranceC,
                     StabilizationToleranceRh = s.StabilizationToleranceRh,
                     SoakMinutes = s.SoakMinutes,
@@ -631,6 +674,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     PositionY = s.PositionY,
                     TargetChamberTemperature = s.TargetChamberTemperature,
                     TargetChamberHumidity = s.TargetChamberHumidity,
+                    TargetFanSpeedHz = s.TargetFanSpeedHz,
                     StabilizationToleranceC = s.StabilizationToleranceC,
                     StabilizationToleranceRh = s.StabilizationToleranceRh,
                     SoakMinutes = s.SoakMinutes,

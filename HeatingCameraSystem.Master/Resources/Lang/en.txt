@@ -361,6 +361,10 @@ Alarm_RCP_005_Cause=The production folder name could not be built, so this camer
 
 Alarm_RCP_005_Action=Check the camera target's chamber range and black body settings, and whether the chamber temperature at capture time is one of that range's allowed values.
 
+Alarm_RCP_006_Cause=The fan speed step target is outside the allowed range (10~60Hz). The step was skipped to avoid writing a bad value to the PLC.
+
+Alarm_RCP_006_Action=Edit the fan speed step in the recipe editor to a value between 10 and 60 Hz, then restart the recipe.
+
 # Alarm source / message text
 
 Alarm_Src_Recipe=Recipe
@@ -368,6 +372,8 @@ Alarm_Src_Recipe=Recipe
 Alarm_Msg_StepKindUnsupported=Unsupported step kind: {0}
 
 Alarm_Msg_ProductionNamingFailed=Step {0} camera {1}: production folder naming failed — {2}
+
+Alarm_Msg_FanSpeedOutOfRange=Step {0}/{1} fan speed {2:F1}Hz is outside the allowed range (10~60Hz); skipping.
 
 Alarm_Msg_ProductionTargetsMissing=A save root is set but the band/black body is empty, so nothing can be saved: {0} — pick a band and a black body for every target camera in the recipe editor.
 
@@ -464,6 +470,8 @@ Recipe_Phase_Wait=Wait {2} ({0}/{1})
 Recipe_Phase_TempSet=Temperature set ({0}/{1})
 
 Recipe_Phase_HumiditySet=Humidity set ({0}/{1})
+
+Recipe_Phase_FanSpeed=Fan speed set to {2:F1}Hz ({0}/{1})
 
 Recipe_Phase_BlackBodySet=BB 0, 1 temperature set ({0}/{1})
 

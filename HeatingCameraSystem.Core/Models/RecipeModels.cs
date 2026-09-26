@@ -85,7 +85,13 @@ namespace HeatingCameraSystem.Core.Models
         /// 결과를 기다리지 않고 넘어간(<see cref="RecipeStep.WaitForCaptureResult"/>=false) 캡처들이
         /// 모두 끝날 때까지 대기하는 스텝.
         /// </summary>
-        CaptureJoin
+        CaptureJoin,
+
+        /// <summary>
+        /// 챔버 순환 팬(블로워) 속도를 <see cref="RecipeStep.TargetFanSpeedHz"/>(Hz) 값으로 지정하는 스텝.
+        /// 챔버 온습도와 독립적으로 조정하기 위해 별도 스텝으로 둔다.
+        /// </summary>
+        FanControl
     }
 
     public enum MotorMoveType
@@ -177,6 +183,12 @@ namespace HeatingCameraSystem.Core.Models
 
         /// <summary>스텝별 챔버 목표 온도(℃).</summary>
         public double TargetChamberTemperature { get; set; }
+
+        /// <summary>
+        /// <see cref="RecipeStepKind.FanControl"/> 스텝에서만 사용하는 챔버 순환 팬 목표 속도(Hz).
+        /// 허용 범위 10.00~60.00. PLC 워드 <c>D350</c>에 x100 스케일로 기록된다.
+        /// </summary>
+        public float TargetFanSpeedHz { get; set; }
 
         /// <summary>스텝별 챔버 목표 습도(%RH).</summary>
         public double TargetChamberHumidity { get; set; }

@@ -24,6 +24,7 @@ namespace HeatingCameraSystem.Master.Services
         public const string SafetyBandViolation = "RCP-003";
         public const string StepKindUnsupported = "RCP-004";
         public const string ProductionNamingFailed = "RCP-005";
+        public const string FanSpeedOutOfRange = "RCP-006";
 
         public static string CauseKey(string code) => "Alarm_" + code.Replace("-", "_") + "_Cause";
 

@@ -743,6 +743,63 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
+        public async Task ExecuteRecipeAsync_FanControl_WritesFanSpeedOnce()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new RecipeStep { Kind = RecipeStepKind.FanControl, TargetFanSpeedHz = 42.5f }
+                }
+            };
+
+            AlarmSink.Entries.Clear();
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            mockPlc.Verify(p => p.SetFanSpeedAsync(42.5f), Times.Once);
+            mockPlc.Verify(p => p.StartChamberAsync(), Times.Never);
+            Assert.DoesNotContain(AlarmSink.Entries, e => e.Code == AlarmCodes.FanSpeedOutOfRange);
+        }
+
+        [Theory]
+        [InlineData(9.9f)]
+        [InlineData(60.1f)]
+        public async Task ExecuteRecipeAsync_FanControl_OutOfRange_SkipsPlcAndRaisesWarning(float hz)
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new RecipeStep { Kind = RecipeStepKind.FanControl, TargetFanSpeedHz = hz }
+                }
+            };
+
+            AlarmSink.Entries.Clear();
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            mockPlc.Verify(p => p.SetFanSpeedAsync(It.IsAny<float>()), Times.Never);
+            Assert.Contains(AlarmSink.Entries, e => e.Code == AlarmCodes.FanSpeedOutOfRange && e.Severity == AlarmSeverity.Warning);
+        }
+
+        [Fact]
         public async Task ExecuteRecipeAsync_HumidityControl_WritesHumidityOnly()
         {
             var mockPlc = new Mock<IPlcController>();
