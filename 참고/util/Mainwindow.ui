@@ -1,0 +1,463 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>960</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>960</width>
+    <height>600</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>CANLAB Thermal Studio</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">* { outline: none; }
+QMainWindow, #appRoot, #contentArea { background: #f4f7fb; color: #172033; }
+QMenuBar { background: #101827; color: #cbd5e1; border: 0; padding: 2px 8px; }
+QMenuBar::item:selected, QMenu::item:selected { background: #26334a; }
+QMenu { background: #ffffff; color: #172033; border: 1px solid #dbe2ec; padding: 6px; }
+#sidebar { background: #101827; }
+#brandMark { background: #2dd4bf; color: #0f172a; border-radius: 10px; font-size: 20px; font-weight: 800; }
+#brandText { color: #f8fafc; font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+#sidebarSection, #deviceTitle { color: #71809a; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+#navCameraButton, #navFirmwareButton, #navPwmButton { min-height: 44px; padding: 6px 10px; color: #91a0b8; background: transparent; border: 0; border-radius: 8px; text-align: left; font-size: 12px; }
+#navCameraButton:hover, #navFirmwareButton:hover, #navPwmButton:hover { color: #e2e8f0; background: #172238; }
+#navCameraButton:checked, #navFirmwareButton:checked, #navPwmButton:checked { color: #ffffff; background: #22304a; border-left: 3px solid #2dd4bf; font-weight: 600; }
+#deviceCard { background: #172238; border: 1px solid #26354f; border-radius: 10px; }
+#connectionBadge { color: #94a3b8; font-size: 11px; }
+#connectionBadge[connected=&quot;true&quot;] { color: #5eead4; }
+#versionLabel { color: #52617a; font-size: 10px; padding-top: 8px; }
+#pageTitle { color: #162033; font-size: 24px; font-weight: 700; }
+#pageSubtitle { color: #68758b; font-size: 12px; }
+#helpButton { color: #526178; background: #ffffff; border: 1px solid #dbe2ec; border-radius: 18px; font-weight: 700; }
+#helpButton:hover { color: #0f766e; border-color: #5eead4; }
+QGroupBox { background: #ffffff; border: 1px solid #dfe6ef; border-radius: 9px; margin-top: 13px; padding-top: 8px; font-weight: 600; color: #243047; }
+QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 12px; padding: 0 6px; background: #ffffff; color: #344157; }
+QLabel { color: #445066; background: transparent; }
+QPushButton { min-height: 30px; padding: 2px 12px; color: #344157; background: #ffffff; border: 1px solid #cfd8e5; border-radius: 6px; }
+QPushButton:hover { color: #0f766e; background: #f0fdfa; border-color: #5eead4; }
+QPushButton:pressed { background: #ccfbf1; }
+QPushButton:disabled { color: #a7b0bf; background: #f3f5f8; border-color: #e1e6ed; }
+QPushButton[role=&quot;primary&quot;] { color: #ffffff; background: #0f766e; border-color: #0f766e; font-weight: 600; }
+QPushButton[role=&quot;primary&quot;]:hover { background: #0d9488; border-color: #0d9488; }
+QPushButton[role=&quot;danger&quot;] { color: #b42318; background: #fff5f4; border-color: #fecaca; }
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { min-height: 30px; padding: 1px 8px; color: #243047; background: #f9fbfd; border: 1px solid #cfd8e5; border-radius: 6px; selection-background-color: #99f6e4; }
+QLineEdit:focus, QComboBox:focus { background: #ffffff; border-color: #14b8a6; }
+QLineEdit:read-only { color: #657188; background: #f2f5f8; }
+QComboBox::drop-down { width: 24px; border: 0; }
+QTabWidget::pane { background: #ffffff; border: 1px solid #dfe6ef; border-radius: 9px; top: -1px; }
+QTabBar::tab { min-width: 88px; min-height: 34px; padding: 2px 10px; color: #6b778c; background: #e9eef5; border: 1px solid #d9e1eb; border-bottom: 0; border-top-left-radius: 7px; border-top-right-radius: 7px; margin-right: 3px; }
+QTabBar::tab:selected { color: #0f766e; background: #ffffff; font-weight: 700; border-top: 2px solid #14b8a6; }
+QScrollArea, QAbstractScrollArea::viewport { background: #ffffff; border: 0; }
+QScrollBar:vertical { width: 10px; background: #f1f4f8; margin: 2px; }
+QScrollBar::handle:vertical { min-height: 36px; background: #c4cfdd; border-radius: 4px; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical, QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { height: 0; background: transparent; }
+QSlider::groove:horizontal { height: 4px; background: #dce3ec; border-radius: 2px; }
+QSlider::sub-page:horizontal { background: #14b8a6; border-radius: 2px; }
+QSlider::handle:horizontal { width: 15px; margin: -6px 0; background: #ffffff; border: 2px solid #0f766e; border-radius: 8px; }
+QProgressBar { min-height: 16px; color: #243047; background: #e8edf3; border: 0; border-radius: 8px; text-align: center; }
+QProgressBar::chunk { background: #14b8a6; border-radius: 8px; }</string>
+  </property>
+  <widget class="QWidget" name="appRoot">
+   <layout class="QHBoxLayout" name="rootLayout">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QWidget" name="sidebar" native="true">
+      <property name="minimumSize">
+       <size>
+        <width>200</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>200</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="sidebarLayout">
+       <property name="spacing">
+        <number>8</number>
+       </property>
+       <property name="leftMargin">
+        <number>18</number>
+       </property>
+       <property name="topMargin">
+        <number>24</number>
+       </property>
+       <property name="rightMargin">
+        <number>18</number>
+       </property>
+       <property name="bottomMargin">
+        <number>20</number>
+       </property>
+       <item>
+        <layout class="QHBoxLayout" name="brandLayout">
+         <item>
+          <widget class="QLabel" name="brandMark">
+           <property name="minimumSize">
+            <size>
+             <width>40</width>
+             <height>40</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>40</width>
+             <height>40</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>C</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="brandSpacing">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Fixed</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>10</width>
+             <height>1</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QLabel" name="brandText">
+           <property name="text">
+            <string>CANLAB
+THERMAL</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <spacer name="brandBottomSpacing">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeType">
+          <enum>QSizePolicy::Fixed</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>1</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="sidebarSection">
+         <property name="text">
+          <string>WORKSPACE</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="navCameraButton">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>56</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Camera
+Viewer controls</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="navFirmwareButton">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>56</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Firmware
+Device update</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="navPwmButton">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>56</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>PWM
+Output control</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="sidebarStretch">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>1</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QFrame" name="deviceCard">
+         <property name="frameShape">
+          <enum>QFrame::StyledPanel</enum>
+         </property>
+         <layout class="QVBoxLayout" name="deviceCardLayout">
+          <property name="spacing">
+           <number>4</number>
+          </property>
+          <property name="leftMargin">
+           <number>14</number>
+          </property>
+          <property name="topMargin">
+           <number>13</number>
+          </property>
+          <property name="rightMargin">
+           <number>14</number>
+          </property>
+          <property name="bottomMargin">
+           <number>13</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="deviceTitle">
+            <property name="text">
+             <string>DEVICE STATUS</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="connectionBadge">
+            <property name="text">
+             <string>OFFLINE</string>
+            </property>
+            <property name="connected" stdset="0">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="versionLabel">
+         <property name="text">
+          <string>Thermal Studio 1.0</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QWidget" name="contentArea" native="true">
+      <layout class="QVBoxLayout" name="contentLayout">
+       <property name="spacing">
+        <number>16</number>
+       </property>
+       <property name="leftMargin">
+        <number>20</number>
+       </property>
+       <property name="topMargin">
+        <number>16</number>
+       </property>
+       <property name="rightMargin">
+        <number>20</number>
+       </property>
+       <property name="bottomMargin">
+        <number>20</number>
+       </property>
+       <item>
+        <widget class="QWidget" name="pageHeader" native="true">
+         <layout class="QHBoxLayout" name="headerLayout">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <layout class="QVBoxLayout" name="headerTextLayout">
+            <property name="spacing">
+             <number>3</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="pageTitle">
+              <property name="text">
+               <string>Thermal Camera</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="pageSubtitle">
+              <property name="text">
+               <string>Connect the device and tune camera, detector, and image-processing settings.</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QPushButton" name="helpButton">
+            <property name="minimumSize">
+             <size>
+              <width>36</width>
+              <height>36</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>36</width>
+              <height>36</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>About this application</string>
+            </property>
+            <property name="text">
+             <string>?</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QStackedWidget" name="mainPages">
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <widget class="QWidget" name="pageCamera">
+          <layout class="QVBoxLayout" name="pageCameraLayout">
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="pageFirmware">
+          <layout class="QVBoxLayout" name="pageFirmwareLayout">
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="pagePwm">
+          <layout class="QVBoxLayout" name="pagePwmLayout">
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+          </layout>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>960</width>
+     <height>25</height>
+    </rect>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

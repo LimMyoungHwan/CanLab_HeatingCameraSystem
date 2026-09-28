@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="canlab.png">resources/canlab.png</file>
+    </qresource>
+    <qresource prefix="/fonts">
+        <file alias="UbuntuSans-Bold.ttf">resources/UbuntuSans-Bold.ttf</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,51 @@
+# ======================
+# Qt / Qt Creator
+# ======================
+
+# Qt Creator user-specific files
+*.pro.user*
+*.autosave
+
+# Qt generated files
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+
+# ======================
+# Build outputs
+# ======================
+
+# Object & library files
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Build directories (Qt Creator default)
+build-*/
+
+# ======================
+# Other common ignores
+# ======================
+
+# Backup / swap files
+*~
+*.swp
+*.bak
+
+# macOS system files
+.DS_Store
+
+# Windows system files
+Thumbs.db
