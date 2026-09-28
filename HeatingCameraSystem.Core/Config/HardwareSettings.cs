@@ -103,7 +103,7 @@ namespace HeatingCameraSystem.Core.Config
         public string BitChamberRun { get; set; } = "M1910";  // PC RUN 표시등
         public string BitHumidityControl { get; set; } = "D281"; // 습도제어 ON/OFF 공통 트리거(값 1)
         public string BitEmergencyStop { get; set; } = "M901";
-        public string BitErrorReset { get; set; } = "P525";   // 에러 리셋(챔버 모터) — 모멘터리
+        public string BitErrorReset { get; set; } = "P252";   // 에러 리셋(챔버 모터) — 모멘터리
         public string BitBuzzerOff { get; set; } = "P250";    // 부저 OFF — 모멘터리
 
         // ── 서보/모션 ──
