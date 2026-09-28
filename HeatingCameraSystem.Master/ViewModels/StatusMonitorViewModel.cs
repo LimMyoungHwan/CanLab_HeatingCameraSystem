@@ -36,6 +36,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private float _blackBody1Sv;
         [ObservableProperty] private float _blackBody2Pv;
         [ObservableProperty] private float _blackBody2Sv;
+        // 판독 실패 시 PV/SV는 마지막 정상값(또는 0)이 남는다. 0.0을 실측으로 오독하지 않도록 경고를 띄운다.
+        [ObservableProperty] private bool _isBlackBodyFaulted;
+        [ObservableProperty] private string _blackBodyStatusMessage = string.Empty;
+
 
         [ObservableProperty] private float _servoXPosition;
         [ObservableProperty] private float _servoYPosition;
@@ -131,6 +135,8 @@ namespace HeatingCameraSystem.Master.ViewModels
             BlackBody1Sv = st.BlackBody1Sv;
             BlackBody2Pv = st.BlackBody2Pv;
             BlackBody2Sv = st.BlackBody2Sv;
+            IsBlackBodyFaulted = st.BlackBody1Faulted || st.BlackBody2Faulted;
+            BlackBodyStatusMessage = st.BlackBodyStatusMessage;
         }
 
         /// <summary>스냅샷 전체를 바인딩 속성과 비트 목록에 반영한다.</summary>

@@ -19,8 +19,8 @@ public class BlackBodyRoutingTests
     {
         using var plc = new FakePlcController();
 
-        using var fake = AppServices.CreateBlackBodyController(new HardwareSettings { SimulationMode = true }, plc);
-        using var real = AppServices.CreateBlackBodyController(new HardwareSettings { SimulationMode = false }, plc);
+        using var fake = AppServices.CreateBlackBodyController(new HardwareSettings { SimulationMode = true });
+        using var real = AppServices.CreateBlackBodyController(new HardwareSettings { SimulationMode = false });
 
         Assert.IsType<FakeBlackBodyController>(fake);
         Assert.IsType<SrBlackBodyController>(real);
@@ -29,32 +29,29 @@ public class BlackBodyRoutingTests
     [Fact]
     public void AppServices_SelectsSrControllerWhenBlackBodyEnabled()
     {
-        using var plc = new FakePlcController();
         var settings = new HardwareSettings { SimulationMode = false };
         settings.BlackBody.Enabled = true;
 
-        using var bb = AppServices.CreateBlackBodyController(settings, plc);
+        using var bb = AppServices.CreateBlackBodyController(settings);
 
         Assert.IsType<SrBlackBodyController>(bb);
         Assert.Equal(2, bb.Count);
     }
 
     [Fact]
-    public async Task SrController_WritesSetpointToBlackBodyAndPlc()
+    public async Task SrController_WritesSetpointToBlackBodyOnly()
     {
-        var plc = new Mock<IPlcController>();
         var settings = new BlackBodySettings
         {
             Simulated = true,
             Units = [new BlackBodyUnitSettings()]
         };
-        using var blackBody = new SrBlackBodyController(settings, plc: plc.Object);
+        using var blackBody = new SrBlackBodyController(settings);
         await blackBody.ConnectAsync();
 
         await blackBody.SetTemperatureAsync(0, 35f);
 
         Assert.Equal(35f, await blackBody.GetTargetTemperatureAsync(0));
-        plc.Verify(x => x.SetBlackBodyTemperatureAsync(0, 35f), Times.Once);
     }
 
     [Fact]
@@ -83,12 +80,10 @@ public class BlackBodyRoutingTests
     }
 
     [Fact]
-    public async Task PlcStatusService_WritesDirectBlackBodyValuesToPlc()
+    public async Task PlcStatusService_PublishesDirectBlackBodyValuesInSnapshot()
     {
         var plc = new Mock<IPlcController>();
         plc.Setup(x => x.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot());
-        plc.Setup(x => x.WriteBlackBodyTemperaturesAsync(It.IsAny<int>(), It.IsAny<float>(), It.IsAny<float>()))
-            .Returns(Task.CompletedTask);
         var blackBody = new Mock<IBlackBodyController>();
         blackBody.SetupGet(x => x.Count).Returns(2);
         blackBody.Setup(x => x.GetCurrentTemperatureAsync(0)).ReturnsAsync(30.1f);
@@ -99,8 +94,6 @@ public class BlackBodyRoutingTests
 
         await service.RefreshAsync();
 
-        plc.Verify(x => x.WriteBlackBodyTemperaturesAsync(0, 30.1f, 35f), Times.Once);
-        plc.Verify(x => x.WriteBlackBodyTemperaturesAsync(1, 40.2f, 45f), Times.Once);
         Assert.Equal(30.1f, service.Snapshot.BlackBody1Pv);
         Assert.Equal(35f, service.Snapshot.BlackBody1Sv);
         Assert.Equal(40.2f, service.Snapshot.BlackBody2Pv);

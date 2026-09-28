@@ -64,6 +64,10 @@ namespace HeatingCameraSystem.Protocols
             await WriteBitAsync(_s.BitTempStart, true);
             await WriteBitAsync(_s.BitTempStopLamp, false);
             await WriteBitAsync(_s.BitTempStop, false);
+
+            await Task.Delay(100);
+            await WriteBitAsync(_s.BitChamberRun, false);
+            await WriteBitAsync(_s.BitTempStart, false);
         }
 
         public async Task StopChamberAsync()
@@ -72,6 +76,10 @@ namespace HeatingCameraSystem.Protocols
             await WriteBitAsync(_s.BitTempStopLamp, true);
             await WriteBitAsync(_s.BitTempStop, true);
             await WriteBitAsync(_s.BitChamberRun, false);
+
+            await Task.Delay(100);
+            await WriteBitAsync(_s.BitTempStopLamp, false);
+            await WriteBitAsync(_s.BitTempStop, false);
         }
 
         /// <summary>목표 온도(℃)를 0.1℃ 단위 워드(x10)로 기록한다.</summary>
@@ -102,12 +110,6 @@ namespace HeatingCameraSystem.Protocols
 
         public async Task<float> GetCurrentBlackBodyTemperatureAsync(int blackBodyIndex)
             => FromScaled(await ReadWordAsync(blackBodyIndex == 0 ? _s.Bb1Pv : _s.Bb2Pv), 100);
-
-        public async Task WriteBlackBodyTemperaturesAsync(int blackBodyIndex, float currentTemperature, float targetTemperature)
-        {
-            await WriteWordAsync(blackBodyIndex == 0 ? _s.Bb1Pv : _s.Bb2Pv, ToScaled(currentTemperature, 100));
-            await WriteWordAsync(blackBodyIndex == 0 ? _s.Bb1Sv : _s.Bb2Sv, ToScaled(targetTemperature, 100));
-        }
 
         // ── 서보/모션 ──
         /// <summary>포지션 이동 트리거 비트를 올린다(P 비트 모멘터리). positionIndex는 1부터 시작한다.</summary>
@@ -206,7 +208,6 @@ namespace HeatingCameraSystem.Protocols
             string[] scalarWordTokens =
             {
                 _s.TempPv, _s.TempTarget, _s.HumPv, _s.HumSv,
-                _s.Bb1Pv, _s.Bb1Sv, _s.Bb2Pv, _s.Bb2Sv,
                 _s.ServoXPos, _s.ServoYPos, _s.ServoXErrorCode, _s.ServoYErrorCode,
                 _s.ServoCurrentPoint, _s.StepCurrent, _s.StepTotal, _s.FanSpeed, _s.GasFlow,
                 _s.AdminOverheatLimit, _s.AdminCoolerRoomBoundary, _s.AdminCooler2ndBoundary,
@@ -238,10 +239,7 @@ namespace HeatingCameraSystem.Protocols
             s.TargetTemperature = Word(_s.TempTarget, 10);
             s.CurrentHumidity = Word(_s.HumPv, 10);
             s.TargetHumidity = Word(_s.HumSv, 10);
-            s.BlackBody1Pv = Word(_s.Bb1Pv, 100);
-            s.BlackBody1Sv = Word(_s.Bb1Sv, 100);
-            s.BlackBody2Pv = Word(_s.Bb2Pv, 100);
-            s.BlackBody2Sv = Word(_s.Bb2Sv, 100);
+            // 흑체 PV/SV는 PLC 레지스터에서 읽지 않는다 — PlcStatusService가 직접-제어 판독값을 실어 준다.
             s.ServoXPosition = Word(_s.ServoXPos, 10);
             s.ServoYPosition = Word(_s.ServoYPos, 10);
             s.ServoXBusy = Bit(_s.ServoXBusyBit);

@@ -25,7 +25,8 @@ namespace HeatingCameraSystem.Master.Services
         private bool _polling;
         private bool _blackBodyPolling;
 
-        // 직접 판독한 흑체 값 캐시. null이면 아직 판독 전 → PLC 레지스터 값을 그대로 둔다.
+        // 흑체 값의 유일한 공급원(PLC 레지스터 경로는 없다). null이면 한 번도 판독 못한 상태.
+        // 판독 실패 시 지우지 않는다 → 마지막 정상값이 남고 Faulted 플래그로 구분한다.
         private float? _bb1Pv, _bb1Sv, _bb2Pv, _bb2Sv;
 
         [ObservableProperty] private PlcStatusSnapshot _snapshot = new();
@@ -123,7 +124,6 @@ namespace HeatingCameraSystem.Master.Services
 
         /// <summary>
         /// 흑체 유닛별 독립 판독. 한 유닛이 실패해도 다른 유닛과 PLC 폴링에는 영향을 주지 않는다.
-        /// PLC로의 표시값 미러링은 판독에 성공한 유닛에 대해서만 수행한다.
         /// </summary>
         private async Task PollBlackBodyAsync()
         {
@@ -142,13 +142,6 @@ namespace HeatingCameraSystem.Master.Services
                         float target = await _blackBody.GetTargetTemperatureAsync(i);
                         StoreBlackBody(i, current, target, faulted: false);
                         anyOk = true;
-
-                        // PLC 미러링 실패는 흑체 판독 실패가 아니다 — 흑체 값은 이미 확보됐다.
-                        if (_plc != null)
-                        {
-                            try { await _plc.WriteBlackBodyTemperaturesAsync(i, current, target); }
-                            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[BlackBody{i}] PLC mirror failed: {ex.Message}"); }
-                        }
                     }
                     catch (Exception ex)
                     {
@@ -191,7 +184,7 @@ namespace HeatingCameraSystem.Master.Services
             else if (index == 1) BlackBody2Faulted = true;
         }
 
-        // 직접 판독값이 있으면 PLC 레지스터 값보다 우선한다(흑체가 1차 소스).
+        // 흑체 직접 판독값을 스냅샷에 실어 화면이 재판독하지 않게 한다.
         private void MergeCachedBlackBody(PlcStatusSnapshot s)
         {
             if (_bb1Pv.HasValue) s.BlackBody1Pv = _bb1Pv.Value;

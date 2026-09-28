@@ -142,14 +142,6 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.FromResult(_bbCurrent.GetOrAdd(blackBodyIndex, 25.0f));
         }
 
-        /// <summary>현재 온도만 기록하고 목표 온도는 저장하지 않는다.</summary>
-        public Task WriteBlackBodyTemperaturesAsync(int blackBodyIndex, float currentTemperature, float targetTemperature)
-        {
-            EnsureConnected();
-            _bbCurrent[blackBodyIndex] = currentTemperature;
-            return Task.CompletedTask;
-        }
-
         /// <summary>이동 시간 없이 즉시 도착 처리하고 현재 포인트를 갱신한다.</summary>
         public Task MoveServoToPositionAsync(int positionIndex)
         {

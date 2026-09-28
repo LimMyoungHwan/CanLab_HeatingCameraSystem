@@ -38,6 +38,7 @@
     <None Remove="Assets\canlab.ico" />
     <Resource Include="Assets\canlab.ico" />
     <None Update="Resources\Lang\*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Assets\BB70_000.raw" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

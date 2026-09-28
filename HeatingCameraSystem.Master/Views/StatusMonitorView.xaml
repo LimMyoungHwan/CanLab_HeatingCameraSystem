@@ -14,6 +14,7 @@
         <conv:BoolToBrushConverter x:Key="Lamp" OnBrush="#4ae183" OffBrush="#465463" />
         <conv:BoolToBrushConverter x:Key="ErrLamp" OnBrush="#ff5b52" OffBrush="#465463" />
         <conv:BoolToBrushConverter x:Key="ConnectionLamp" OnBrush="#4ae183" OffBrush="#ff5b52" />
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background" Value="#161b2a" />
@@ -179,6 +180,8 @@
                             <TextBlock Grid.Row="2" Text="{loc:Loc Status_Bb2Current}" Style="{StaticResource Lbl}" /><TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding BlackBody2Pv, StringFormat={}{0:F1}}" Style="{StaticResource Val}" />
                             <TextBlock Grid.Row="3" Text="{loc:Loc Status_Bb2Target}" Style="{StaticResource Lbl}" /><TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding BlackBody2Sv, StringFormat={}{0:F1}}" Style="{StaticResource Val}" />
                         </Grid>
+                        <TextBlock Text="{Binding BlackBodyStatusMessage}" Foreground="#ff5b52" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"
+                                   Visibility="{Binding IsBlackBodyFaulted, Converter={StaticResource BooleanToVisibilityConverter}}" />
                     </StackPanel>
                 </Border>
 

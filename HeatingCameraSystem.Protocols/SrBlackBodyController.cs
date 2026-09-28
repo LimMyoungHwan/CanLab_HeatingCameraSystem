@@ -35,17 +35,14 @@ namespace HeatingCameraSystem.Protocols
         }
 
         private readonly BlackBodySettings _settings;
-        private readonly IPlcController? _plc;
         private readonly Unit[] _units;
         private volatile bool _connected;
 
         public SrBlackBodyController(
             BlackBodySettings settings,
-            Func<BlackBodyUnitSettings, ISrLink>? linkFactory = null,
-            IPlcController? plc = null)
+            Func<BlackBodyUnitSettings, ISrLink>? linkFactory = null)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            _plc = plc;
             Func<BlackBodyUnitSettings, ISrLink> factory = linkFactory ?? DefaultLink;
             var units = new List<Unit>();
             foreach (BlackBodyUnitSettings cfg in settings.Units)
@@ -91,13 +88,9 @@ namespace HeatingCameraSystem.Protocols
             _connected = false;
         }
 
-        /// <summary>SV를 해당 유닛에 쓴다. PLC가 주입돼 있으면 같은 값을 PLC 흑체 SV에도 병행 기록한다.</summary>
+        /// <summary>SV를 해당 유닛에 쓴다. 흑체는 PLC를 거치지 않는 직접-제어 장비다.</summary>
         public Task SetTemperatureAsync(int blackBodyIndex, float celsius)
-            => _plc == null
-                ? WithUnit(blackBodyIndex, u => SendNoReplyLocked(u, SrProtocol.SetTemperature(celsius)))
-                : Task.WhenAll(
-                    WithUnit(blackBodyIndex, u => SendNoReplyLocked(u, SrProtocol.SetTemperature(celsius))),
-                    _plc.SetBlackBodyTemperatureAsync(blackBodyIndex, celsius));
+            => WithUnit(blackBodyIndex, u => SendNoReplyLocked(u, SrProtocol.SetTemperature(celsius)));
 
         public Task<float> GetCurrentTemperatureAsync(int blackBodyIndex)
             => WithUnit(blackBodyIndex, u => QueryFloatLocked(u, SrProtocol.GetTemperature(), SrProtocol.ParamCurrentTemperature));

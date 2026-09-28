@@ -14,8 +14,6 @@ public class PlcBlackBodyIsolationTests
     {
         var plc = new Mock<IPlcController>();
         plc.Setup(x => x.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { CurrentTemperature = temperature });
-        plc.Setup(x => x.WriteBlackBodyTemperaturesAsync(It.IsAny<int>(), It.IsAny<float>(), It.IsAny<float>()))
-            .Returns(Task.CompletedTask);
         return plc;
     }
 
@@ -58,8 +56,6 @@ public class PlcBlackBodyIsolationTests
         Assert.False(service.BlackBody2Faulted);
         Assert.Equal(40.2f, service.BlackBody2Pv);
         Assert.Equal(45f, service.BlackBody2Sv);
-        plc.Verify(x => x.WriteBlackBodyTemperaturesAsync(1, 40.2f, 45f), Times.Once);
-        plc.Verify(x => x.WriteBlackBodyTemperaturesAsync(0, It.IsAny<float>(), It.IsAny<float>()), Times.Never);
     }
 
     [Fact]
@@ -67,8 +63,6 @@ public class PlcBlackBodyIsolationTests
     {
         var plc = new Mock<IPlcController>();
         plc.Setup(x => x.ReadStatusAsync()).ThrowsAsync(new InvalidOperationException("plc down"));
-        plc.Setup(x => x.WriteBlackBodyTemperaturesAsync(It.IsAny<int>(), It.IsAny<float>(), It.IsAny<float>()))
-            .Returns(Task.CompletedTask);
         var bb = BlackBody();
         bb.Setup(x => x.GetCurrentTemperatureAsync(0)).ReturnsAsync(30.1f);
         bb.Setup(x => x.GetTargetTemperatureAsync(0)).ReturnsAsync(35f);
@@ -101,31 +95,10 @@ public class PlcBlackBodyIsolationTests
     }
 
     [Fact]
-    public async Task PlcMirrorFailure_DoesNotFaultTheBlackBodyUnit()
-    {
-        var plc = new Mock<IPlcController>();
-        plc.Setup(x => x.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot());
-        plc.Setup(x => x.WriteBlackBodyTemperaturesAsync(It.IsAny<int>(), It.IsAny<float>(), It.IsAny<float>()))
-            .ThrowsAsync(new InvalidOperationException("mirror write refused"));
-        var bb = BlackBody(1);
-        bb.Setup(x => x.GetCurrentTemperatureAsync(0)).ReturnsAsync(30.1f);
-        bb.Setup(x => x.GetTargetTemperatureAsync(0)).ReturnsAsync(35f);
-        var service = new PlcStatusService(plc.Object, bb.Object);
-
-        await service.RefreshAsync();
-
-        Assert.False(service.BlackBody1Faulted);
-        Assert.True(service.IsBlackBodyConnected);
-        Assert.Equal(30.1f, service.BlackBody1Pv);
-    }
-
-    [Fact]
     public async Task DirectBlackBodyReadings_OverridePlcRegisterValues()
     {
         var plc = new Mock<IPlcController>();
         plc.Setup(x => x.ReadStatusAsync()).ReturnsAsync(() => new PlcStatusSnapshot { BlackBody1Pv = 11f, BlackBody1Sv = 12f });
-        plc.Setup(x => x.WriteBlackBodyTemperaturesAsync(It.IsAny<int>(), It.IsAny<float>(), It.IsAny<float>()))
-            .Returns(Task.CompletedTask);
         var bb = BlackBody(1);
         bb.Setup(x => x.GetCurrentTemperatureAsync(0)).ReturnsAsync(30.1f);
         bb.Setup(x => x.GetTargetTemperatureAsync(0)).ReturnsAsync(35f);
@@ -143,8 +116,6 @@ public class PlcBlackBodyIsolationTests
     {
         var plc = new Mock<IPlcController>();
         plc.Setup(x => x.ReadStatusAsync()).ThrowsAsync(new InvalidOperationException("plc down"));
-        plc.Setup(x => x.WriteBlackBodyTemperaturesAsync(It.IsAny<int>(), It.IsAny<float>(), It.IsAny<float>()))
-            .Returns(Task.CompletedTask);
         var bb = BlackBody(1);
         bb.Setup(x => x.GetCurrentTemperatureAsync(0)).ReturnsAsync(30.1f);
         bb.Setup(x => x.GetTargetTemperatureAsync(0)).ReturnsAsync(35f);

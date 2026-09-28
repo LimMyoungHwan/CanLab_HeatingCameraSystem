@@ -75,12 +75,14 @@ namespace HeatingCameraSystem.AgentUI
             }
 
             AgentUiConfig config = AgentUiConfig.LoadOrCreate();
-            string? simulationRawPath = Environment.GetEnvironmentVariable("HCS_SIM_RAW_PATH");
-            simulationRawPath = @"E:\Source\Canlab\HeatingCameraSystem\참고\BB70_000.raw";
-            if (!string.IsNullOrWhiteSpace(simulationRawPath))
+            // 기본 리플레이 원본은 exe와 함께 배포되는 Assets\BB70_000.raw다. 작업 디렉터리가
+            // exe 폴더가 아닐 수 있으므로(바로가기·서비스·스크립트) 상대경로를 쓰지 않는다.
+            string? envRawPath = Environment.GetEnvironmentVariable("HCS_SIM_RAW_PATH");
+            string simulationRawPath = string.IsNullOrWhiteSpace(envRawPath)
+                ? Path.Combine(AppContext.BaseDirectory, "Assets", "BB70_000.raw")
+                : Path.GetFullPath(envRawPath);
+            if (config.SimulationMode)
             {
-                simulationRawPath = Path.GetFullPath(simulationRawPath);
-                config.SimulationMode = true;
                 AgentUiLog.Logger.Information("Simulation RAW replay enabled: {RawPath}", simulationRawPath);
             }
 

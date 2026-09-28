@@ -339,6 +339,8 @@
                                     </StackPanel>
                                 </StackPanel>
                             </Grid>
+                            <TextBlock Text="{Binding BlackBodyStatusMessage}" Foreground="#ff5b52" FontSize="11" TextWrapping="Wrap"
+                                       Visibility="{Binding IsBlackBodyFaulted, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                         </StackPanel>
                     </Border>
 

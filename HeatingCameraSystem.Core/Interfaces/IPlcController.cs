@@ -44,16 +44,14 @@ namespace HeatingCameraSystem.Core.Interfaces
         /// <summary>습도 제어 ON/OFF 요청 시 D281에 트리거 값 1을 쓴다.</summary>
         Task SetHumidityControlAsync(bool on);
 
-        // ── 흑체 온도 제어 (index 0=흑체1, 1=흑체2) ──
+        // ── 흑체 온도 (index 0=흑체1, 1=흑체2) ──
+        // 운영 경로는 SrBlackBodyController(직접-제어)다. 아래 둘은 PlcBlackBodyAdapter 전용 대체 경로다.
 
         /// <summary>지정 흑체의 목표 온도(SV)를 ℃로 설정한다.</summary>
         Task SetBlackBodyTemperatureAsync(int blackBodyIndex, float temperature);
 
         /// <summary>지정 흑체의 현재 온도(PV)를 ℃로 읽는다.</summary>
         Task<float> GetCurrentBlackBodyTemperatureAsync(int blackBodyIndex);
-
-        /// <summary>지정 흑체의 현재/목표 온도를 한 번에 쓴다.</summary>
-        Task WriteBlackBodyTemperaturesAsync(int blackBodyIndex, float currentTemperature, float targetTemperature);
 
         // ── 서보/직교로봇 모션 ──
 

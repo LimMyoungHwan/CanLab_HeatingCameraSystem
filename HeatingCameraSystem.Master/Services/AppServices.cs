@@ -137,7 +137,7 @@ namespace HeatingCameraSystem.Master.Services
 
             System.Diagnostics.Debug.WriteLine($"[AppServices] Simulated: {DescribeSimulated(Settings)}");
 
-            BlackBodyController = CreateBlackBodyController(Settings, PlcController);
+            BlackBodyController = CreateBlackBodyController(Settings);
 
             AgentDirectory = new AgentDirectory();
             RecipeEngine = new RecipeEngine(PlcController, NatsService, HistoryRepo, Settings.RecipeEngine, ImageCacheDir, CameraDeviceRepo, BlackBodyController, AgentDirectory, RecipeMeasurementRepo);
@@ -170,11 +170,11 @@ namespace HeatingCameraSystem.Master.Services
             return string.Join(", ", names);
         }
 
-        /// <summary>흑체 컨트롤러를 만든다. 흑체가 시뮬 대상이면 Fake, 아니면 PLC 경유 SR 실물 구현이다.</summary>
-        public static IBlackBodyController CreateBlackBodyController(HardwareSettings settings, IPlcController plc)
+        /// <summary>흑체 컨트롤러를 만든다. 흑체가 시뮬 대상이면 Fake, 아니면 SR 직접-제어 실물 구현이다.</summary>
+        public static IBlackBodyController CreateBlackBodyController(HardwareSettings settings)
         {
             if (IsSimulated(settings, s => s.BlackBody)) return new FakeBlackBodyController();
-            return new SrBlackBodyController(settings.BlackBody, plc: plc);
+            return new SrBlackBodyController(settings.BlackBody);
         }
 
         /// <summary>

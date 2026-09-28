@@ -242,7 +242,6 @@ public class DashboardLiveTrendTests
         public Task SetHumidityControlAsync(bool on) => Task.CompletedTask;
         public Task SetBlackBodyTemperatureAsync(int blackBodyIndex, float temperature) => Task.CompletedTask;
         public Task<float> GetCurrentBlackBodyTemperatureAsync(int blackBodyIndex) => Task.FromResult(0f);
-        public Task WriteBlackBodyTemperaturesAsync(int blackBodyIndex, float currentTemperature, float targetTemperature) => Task.CompletedTask;
         public Task MoveServoToPositionAsync(int positionIndex) => Task.CompletedTask;
         public Task<bool> IsServoAtPositionAsync(int positionIndex) => Task.FromResult(true);
         public Task SetServoSpeedAsync(int percent) => Task.CompletedTask;
