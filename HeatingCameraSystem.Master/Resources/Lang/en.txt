@@ -377,6 +377,8 @@ Alarm_Msg_FanSpeedOutOfRange=Step {0}/{1} fan speed {2:F1}Hz is outside the allo
 
 Alarm_Msg_ProductionTargetsMissing=A save root is set but the band/black body is empty, so nothing can be saved: {0} — pick a band and a black body for every target camera in the recipe editor.
 
+Alarm_Msg_SaveRootMissing=The save root is empty, so capture files will not be stored on the Master — set a save root in the recipe editor if you need rule-based storage.
+
 Dash_SyncingCaptures=Copying capture files… {0} / {1}
 
 Dialog_ProductionRun_Title=Capture Data Storage

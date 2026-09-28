@@ -659,7 +659,8 @@ namespace HeatingCameraSystem.Tests
 
             mockNats.Verify(n => n.PublishCaptureCommandAsync(It.Is<CaptureCommandMessage>(m => m.ShotCount == 3)), Times.Once);
             mockHistory.Verify(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>()), Times.Exactly(3));
-            Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Warning);
+            Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Warning
+                && e.Code != AlarmCodes.ProductionNamingFailed);
         }
 
         [Fact]
@@ -1560,6 +1561,10 @@ namespace HeatingCameraSystem.Tests
             recipe.SaveRootPath = string.Empty;
             recipe.Steps[1].CameraTargets[1].TargetBlackBody = null;
             Assert.Null(RecipeEngine.DescribeMissingProductionTargets(recipe));
+
+            Assert.True(RecipeEngine.HasCaptureStep(recipe));
+            recipe.Steps[1].CameraOperation = CameraControlOps.Nuc;
+            Assert.False(RecipeEngine.HasCaptureStep(recipe));
         }
 
         private static void WireCaptureRoundTrip(Mock<INatsCommunicationService> mockNats)

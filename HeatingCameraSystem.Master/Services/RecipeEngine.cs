@@ -183,6 +183,12 @@ namespace HeatingCameraSystem.Master.Services
 
             Console.WriteLine($"[RecipeEngine] Starting recipe: {recipe.Name}");
 
+            // 막지 않고 경고만 한다 — .y16 경로는 저장 루트와 무관하고, 규칙 저장을 안 하는 시험
+            // 실행도 정상이다. 아래 대역·흑체 검사가 같은 조건에서 통째로 스킵되는 걸 덮는 경고다.
+            if (string.IsNullOrWhiteSpace(recipe.SaveRootPath) && HasCaptureStep(recipe))
+                AlarmSink.Raise(AlarmCodes.ProductionNamingFailed, AlarmSeverity.Warning, RecipeSource,
+                    L("Alarm_Msg_SaveRootMissing"));
+
             if (DescribeMissingProductionTargets(recipe) is string missingTargets)
             {
                 string message = L("Alarm_Msg_ProductionTargetsMissing", missingTargets);
@@ -915,6 +921,11 @@ namespace HeatingCameraSystem.Master.Services
             }
         }
 
+        private static bool IsCaptureStep(RecipeStep step)
+            => step.Kind == RecipeStepKind.CameraCommand && step.CameraOperation == CameraControlOps.Capture;
+
+        internal static bool HasCaptureStep(Recipe recipe) => recipe.Steps.Any(IsCaptureStep);
+
         /// <summary>
         /// 저장 루트를 지정한 실행(=규칙 저장을 하겠다는 뜻)인데 대역·흑체가 비어 있는 캡처 대상을
         /// 찾아 <c>"#3 CAM-01"</c> 형태로 모아 돌려준다. 없으면 null.
@@ -930,7 +941,7 @@ namespace HeatingCameraSystem.Master.Services
             for (int i = 0; i < recipe.Steps.Count; i++)
             {
                 RecipeStep step = recipe.Steps[i];
-                if (step.Kind != RecipeStepKind.CameraCommand || step.CameraOperation != CameraControlOps.Capture)
+                if (!IsCaptureStep(step))
                     continue;
 
                 List<RecipeCameraTarget> targets = step.CameraTargets.Count > 0

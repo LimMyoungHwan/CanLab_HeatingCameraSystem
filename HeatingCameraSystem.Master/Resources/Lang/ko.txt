@@ -377,6 +377,8 @@ Alarm_Msg_FanSpeedOutOfRange=스텝 {0}/{1} 팬 속도 {2:F1}Hz가 허용 범위
 
 Alarm_Msg_ProductionTargetsMissing=저장 루트를 지정했지만 대역·흑체가 비어 있어 저장할 수 없습니다: {0} — 레시피 편집에서 대상 카메라마다 대역과 흑체를 고르세요.
 
+Alarm_Msg_SaveRootMissing=저장 루트가 비어 있어 촬영 파일이 Master에 저장되지 않습니다 — 규칙 저장이 필요하면 레시피 편집에서 저장 루트를 지정하세요.
+
 Dash_SyncingCaptures=촬영 파일 복사 중… {0} / {1}
 
 Dialog_ProductionRun_Title=촬영 데이터 저장 설정
