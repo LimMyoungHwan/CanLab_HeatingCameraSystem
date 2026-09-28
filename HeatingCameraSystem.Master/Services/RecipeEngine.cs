@@ -189,6 +189,20 @@ namespace HeatingCameraSystem.Master.Services
                 AlarmSink.Raise(AlarmCodes.ProductionNamingFailed, AlarmSeverity.Warning, RecipeSource,
                     L("Alarm_Msg_SaveRootMissing"));
 
+            // 온도 설정은 응답 없는 전송이라 흑체가 꺼져 있어도 성공한다. 실행 전에 한 번 읽어 알린다.
+            if (recipe.Steps.Any(s => s.Kind == RecipeStepKind.BlackBodyControl))
+            {
+                for (int i = 0; i < _blackBody.Count; i++)
+                {
+                    try { await _blackBody.GetCurrentTemperatureAsync(i); }
+                    catch (Exception ex)
+                    {
+                        AlarmSink.Raise(AlarmCodes.BlackBodyFailed, AlarmSeverity.Warning, RecipeSource,
+                            L("Alarm_Msg_BlackBodyPreflightFailed", PlcStatusService.DescribeBlackBodyFailure(i, ex)));
+                    }
+                }
+            }
+
             if (DescribeMissingProductionTargets(recipe) is string missingTargets)
             {
                 string message = L("Alarm_Msg_ProductionTargetsMissing", missingTargets);
@@ -568,10 +582,12 @@ namespace HeatingCameraSystem.Master.Services
                         Math.Abs(current[1] - target1) <= ToleranceC(step))
                         break;
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    AlarmSink.Raise(AlarmCodes.BlackBodyFailed, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_BlackBodyReadFailed", step.StepId, step.BlackBodyIndex, ex.Message));
-                    break;
+                    // 온도를 확인 못 한 흑체로 찍은 데이터는 캘리브레이션에 못 쓰므로 촬영으로 넘어가지 않는다.
+                    string message = L("Alarm_Msg_BlackBodyReadFailed", step.StepId, step.BlackBodyIndex, ex.Message);
+                    AlarmSink.Raise(AlarmCodes.BlackBodyFailed, AlarmSeverity.Error, RecipeSource, message);
+                    throw new InvalidOperationException(message, ex);
                 }
                 await Task.Delay(1000, cancellationToken);
             }

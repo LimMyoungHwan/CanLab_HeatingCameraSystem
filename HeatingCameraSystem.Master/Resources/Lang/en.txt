@@ -427,7 +427,13 @@ Alarm_Msg_MotorPointMismatch=Step {0}/{1} servo stopped but the current point is
 
 Alarm_Msg_BlackBodySetFailed=Step {0} black body {1} temperature set failed: {2}
 
-Alarm_Msg_BlackBodyReadFailed=Step {0} black body {1} temperature read failed: {2}
+Alarm_Msg_BlackBodyReadFailed=Step {0} black body {1} temperature read failed, stopping the recipe — check the black body power and communication cable: {2}
+
+Alarm_Msg_BlackBodyPreflightFailed=The recipe has black body steps but the black body cannot be reached. Turn the black body on before running — otherwise the recipe stops at the stabilization wait, or steps without a wait capture with the black body off target: {0}
+
+BlackBody_NoResponse=Black body {0} is not responding — check that the black body is powered on and the communication cable is connected.
+
+BlackBody_Restored=Black body {0} communication restored.
 
 Alarm_Msg_ControlPublishFailed=Step {0} camera {1} command send failed: {2}
 

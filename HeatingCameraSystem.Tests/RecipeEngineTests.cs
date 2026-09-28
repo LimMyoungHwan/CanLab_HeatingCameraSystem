@@ -392,6 +392,39 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
+        public async Task ExecuteRecipeAsync_BlackBodyOff_WarnsBeforeRunAndStopsBeforeCapture()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+            var mockBlackBody = new Mock<IBlackBodyController>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+            mockBlackBody.SetupGet(b => b.Count).Returns(2);
+            mockBlackBody.Setup(b => b.SetTemperatureAsync(It.IsAny<int>(), It.IsAny<float>())).Returns(Task.CompletedTask);
+            mockBlackBody.Setup(b => b.GetCurrentTemperatureAsync(It.IsAny<int>())).ThrowsAsync(new TimeoutException());
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.BlackBodyControl, TargetBlackBodyTemperature = 50.0f, WaitForStabilization = true },
+                    new() { Kind = RecipeStepKind.CameraCommand, CameraOperation = CameraControlOps.Capture, CameraIndex = 1 }
+                }
+            };
+
+            AlarmSink.Entries.Clear();
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object, blackBody: mockBlackBody.Object)
+                    .ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(10)));
+
+            Assert.Contains(AlarmSink.Entries, e => e.Code == AlarmCodes.BlackBodyFailed && e.Severity == AlarmSeverity.Warning);
+            Assert.Contains(AlarmSink.Entries, e => e.Code == AlarmCodes.BlackBodyFailed && e.Severity == AlarmSeverity.Error);
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Never);
+        }
+
+        [Fact]
         public async Task ExecuteRecipeAsync_BlackBodyControl_UsesStepTolerance()
         {
             var mockPlc = new Mock<IPlcController>();

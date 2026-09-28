@@ -140,13 +140,19 @@ namespace HeatingCameraSystem.Master.Services
                     {
                         float current = await _blackBody.GetCurrentTemperatureAsync(i);
                         float target = await _blackBody.GetTargetTemperatureAsync(i);
+                        if (IsBlackBodyFaulted(i))
+                            AlarmSink.Raise(AlarmCodes.BlackBodyFailed, AlarmSeverity.Info, "BlackBody",
+                                string.Format(LocalizationManager.Instance["BlackBody_Restored"], i + 1));
                         StoreBlackBody(i, current, target, faulted: false);
                         anyOk = true;
                     }
                     catch (Exception ex)
                     {
+                        failure = DescribeBlackBodyFailure(i, ex);
+                        // 끊긴 순간 한 번만 알린다. 시작 시 이미 꺼져 있어도 첫 판독에서 알린다.
+                        if (!IsBlackBodyFaulted(i))
+                            AlarmSink.Raise(AlarmCodes.BlackBodyFailed, AlarmSeverity.Error, "BlackBody", failure);
                         MarkBlackBodyFaulted(i);
-                        failure = ex.Message;
                         System.Diagnostics.Debug.WriteLine($"[BlackBody{i}] poll failed: {ex.Message}");
                     }
                 }
@@ -154,7 +160,7 @@ namespace HeatingCameraSystem.Master.Services
                 IsBlackBodyConnected = anyOk;
                 BlackBodyStatusMessage = failure.Length == 0
                     ? string.Format(LocalizationManager.Instance["Dash_Refreshed"], DateTime.Now.ToString("HH:mm:ss"))
-                    : string.Format(LocalizationManager.Instance["Dash_ReadFailed"], failure);
+                    : failure;
             }
             finally
             {
@@ -177,6 +183,19 @@ namespace HeatingCameraSystem.Master.Services
                 BlackBody2Pv = current; BlackBody2Sv = target; BlackBody2Faulted = faulted;
             }
         }
+
+        private bool IsBlackBodyFaulted(int index)
+            => index == 0 ? BlackBody1Faulted : index == 1 && BlackBody2Faulted;
+
+        /// <summary>
+        /// 흑체 판독 실패를 운영자 문구로 바꾼다. 응답 없음(시리얼 timeout / UDP 무응답)은 전원이
+        /// 꺼졌는지 케이블이 빠졌는지 코드로 구분할 수 없으므로 둘 다 확인하라고 안내한다.
+        /// 포트 열기 실패 등 나머지는 원문을 그대로 보여준다.
+        /// </summary>
+        internal static string DescribeBlackBodyFailure(int index, Exception ex)
+            => ex is TimeoutException or System.Net.Sockets.SocketException
+                ? string.Format(LocalizationManager.Instance["BlackBody_NoResponse"], index + 1)
+                : string.Format(LocalizationManager.Instance["Dash_ReadFailed"], ex.Message);
 
         private void MarkBlackBodyFaulted(int index)
         {

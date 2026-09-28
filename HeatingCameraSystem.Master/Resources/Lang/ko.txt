@@ -427,7 +427,13 @@ Alarm_Msg_MotorPointMismatch=스텝 {0}/{1} 서보는 정지했지만 현재 포
 
 Alarm_Msg_BlackBodySetFailed=스텝 {0} 블랙바디 {1} 온도 설정 실패: {2}
 
-Alarm_Msg_BlackBodyReadFailed=스텝 {0} 블랙바디 {1} 온도 읽기 실패: {2}
+Alarm_Msg_BlackBodyReadFailed=스텝 {0} 블랙바디 {1} 온도 읽기 실패로 레시피를 중단합니다 — 흑체 전원과 통신 케이블을 확인하세요: {2}
+
+Alarm_Msg_BlackBodyPreflightFailed=레시피에 흑체 스텝이 있지만 흑체를 확인할 수 없습니다. 흑체를 켠 뒤 실행하세요 — 이대로 진행하면 안정화 대기에서 레시피가 중단되거나, 대기가 없는 스텝은 흑체 온도가 맞지 않은 채 촬영됩니다: {0}
+
+BlackBody_NoResponse=흑체 {0} 응답 없음 — 흑체 전원이 켜져 있는지, 통신 케이블이 연결돼 있는지 확인하세요.
+
+BlackBody_Restored=흑체 {0} 통신이 복구되었습니다.
 
 Alarm_Msg_ControlPublishFailed=스텝 {0} 카메라 {1} 명령 전송 실패: {2}
 
