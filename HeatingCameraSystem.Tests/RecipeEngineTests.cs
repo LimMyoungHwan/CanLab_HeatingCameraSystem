@@ -100,6 +100,30 @@ namespace HeatingCameraSystem.Tests
             Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Error);
         }
 
+        [Fact]
+        public async Task ExecuteRecipeAsync_KeepChamberRunning_DoesNotStopChamberAtEnd()
+        {
+            var mockPlc     = new Mock<IPlcController>();
+            var mockNats    = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.GetCurrentBlackBodyTemperatureAsync(It.IsAny<int>())).ReturnsAsync(30.0f);
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
+            WireCaptureRoundTrip(mockNats);
+
+            var engine = new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object);
+            var recipe = HappyPathRecipe();
+            recipe.KeepChamberRunning = true;
+
+            await engine.ExecuteRecipeAsync(recipe, CancellationToken.None);
+
+            mockPlc.Verify(p => p.StartChamberAsync(), Times.Once);
+            mockPlc.Verify(p => p.StopChamberAsync(), Times.Never);
+        }
+
         // S2: humidity drifts out of the ChamberControl safety band, operator never resumes (gate throws)
         //     -> the later capture step is NEVER reached and an Error alarm is raised.
         [Fact]

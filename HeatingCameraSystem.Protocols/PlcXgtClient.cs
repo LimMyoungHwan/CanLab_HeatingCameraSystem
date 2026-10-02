@@ -25,6 +25,7 @@ namespace HeatingCameraSystem.Protocols
         private TcpChannel? _channel;
         private FEnetClient? _client;
         private volatile bool _isConnected;
+        private CancellationTokenSource? _aliveCts;
 
         public bool IsConnected => _isConnected;
 
@@ -46,10 +47,48 @@ namespace HeatingCameraSystem.Protocols
                 _client = client;
                 _isConnected = true;
             });
+            StartAliveSignal();
+        }
+
+        // PC alive 신호(LiveSignal)는 상태 폴링과 분리된 백그라운드 루프가 1초마다 토글한다.
+        // 상태 폴링에 얹으면 UI 스레드(DispatcherTimer) 지연·폴링 재진입 가드의 틱 버림·
+        // 다른 ReadStatusAsync 호출자의 추가 토글에 끌려 간격이 5초 넘게 벌어졌다.
+        private void StartAliveSignal()
+        {
+            if (string.IsNullOrWhiteSpace(_s.LiveSignal)) return;
+            _aliveCts?.Cancel();
+            var cts = _aliveCts = new CancellationTokenSource();
+            _ = Task.Run(() => AliveLoopAsync(cts.Token));
+        }
+
+        private async Task AliveLoopAsync(CancellationToken ct)
+        {
+            bool on = false;
+            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(_s.LiveSignalIntervalMs));
+            try
+            {
+                while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+                {
+                    if (!_isConnected) continue;
+                    try
+                    {
+                        on = !on;
+                        await WriteBitAsync(_s.LiveSignal, on).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 순간 단절은 ConnectionMonitorService가 복구한다. 루프는 계속 돈다.
+                        System.Diagnostics.Debug.WriteLine($"[PlcXgt] alive write failed: {ex.Message}");
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
         }
 
         public void Disconnect()
         {
+            _aliveCts?.Cancel();
+            _aliveCts = null;
             _isConnected = false;
             try { _client?.Dispose(); } catch { /* 무시 */ }
             try { _channel?.Dispose(); } catch { /* 무시 */ }

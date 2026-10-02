@@ -662,6 +662,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// </summary>
         internal void HandlePlcErrors(bool[] errorBits)
         {
+            // 실장비 소스(AnotherDevice) 그대로: M4019(인덱스 18)가 켜져 있으면 에러 처리 전체를 건너뛴다.
+            // M4019가 켜진 동안에는 다른 에러 비트도 정지시키지 않는다는 점에 유의.
+            if (errorBits.Length > 18 && errorBits[18]) return;
+
             bool anyError = errorBits.Any(b => b);
             IsEmergencyStop = anyError;
 
@@ -918,12 +922,13 @@ namespace HeatingCameraSystem.Master.ViewModels
             // 입력값을 레시피에 되저장해 다음 실행의 기본값이 되게 한다.
             if (_dialogService is not null)
             {
-                ProductionRunInput? input = _dialogService.PromptProductionRun(SelectedRecipe.SaveRootPath, SelectedRecipe.ProductNumber, SelectedRecipe.SaveFormat);
+                ProductionRunInput? input = _dialogService.PromptProductionRun(SelectedRecipe.SaveRootPath, SelectedRecipe.ProductNumber, SelectedRecipe.SaveFormat, SelectedRecipe.KeepChamberRunning);
                 if (input is null) { RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopped"]; return; }
 
                 SelectedRecipe.SaveRootPath = input.SaveRootPath;
                 SelectedRecipe.ProductNumber = input.ProductNumber;
                 SelectedRecipe.SaveFormat = input.SaveFormat;
+                SelectedRecipe.KeepChamberRunning = input.KeepChamberRunning;
                 if (AppServices.RecipeRepo is not null) await AppServices.RecipeRepo.SaveAsync(SelectedRecipe);
                 AppServices.RecipeEngine.AbortDecisionRequested = agentId => Task.FromResult(_dialogService.AskCaptureAbortDecision(agentId));
             }

@@ -676,3 +676,4 @@ Dialog_ProductionRun_FormatRaw=RAW (16비트 원본 · 캘리브레이션용)
 Dialog_ProductionRun_FormatJpeg=JPEG (8비트 · 육안검사/보고서용)
 
 Dialog_ProductionRun_JpegWarning=JPEG는 8비트로 저장되어 열 데이터가 남지 않습니다. 캘리브레이션에는 쓸 수 없습니다.
+Dialog_ProductionRun_KeepChamber=레시피가 끝나도 챔버를 끄지 않음 (다음 레시피에서 온도 유지 · 비상정지 시에는 꺼짐)

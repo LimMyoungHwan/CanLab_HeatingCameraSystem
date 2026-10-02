@@ -22,7 +22,7 @@ namespace HeatingCameraSystem.AgentUI.Services
             Converters = { new JsonStringEnumConverter() }
         };
 
-        public bool SimulationMode { get; set; } = true;
+        public bool SimulationMode { get; set; } = false;
 
         public List<CameraDescriptor> Cameras { get; set; } = new();
 

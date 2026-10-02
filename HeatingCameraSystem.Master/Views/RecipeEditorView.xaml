@@ -211,13 +211,38 @@
                     AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
                     <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
                         <TextBlock Text="카메라 명령" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
                     </StackPanel>
-                    <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" TextWrapping="Wrap" FontSize="11"
+                    <StackPanel Width="440" Margin="0,8,0,0" HorizontalAlignment="Left" Grid.Column="1" Grid.Row="2" Grid.ColumnSpan="2">
+                        <TextBlock Text="대상 카메라 (복수 선택 · 대역/흑체는 카메라마다 지정)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                        <ComboBox ItemsSource="{Binding CameraTargets}" IsEditable="True" IsReadOnly="True" Text="{Binding SelectedCameraSummary, Mode=OneWay}" StaysOpenOnEdit="True" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Width="160" VerticalAlignment="Center" Foreground="{StaticResource TextOnSurface}" PreviewMouseDown="CameraTargetCheckBox_PreviewMouseDown"/>
+                                        <ComboBox Width="110" Margin="8,0,0,0"
+                                                      ItemsSource="{Binding DataContext.ChamberRangeOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      SelectedValuePath="Value" SelectedValue="{Binding TargetChamber, Mode=TwoWay}" DisplayMemberPath="Label"
+                                                      Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
+                                        <ComboBox Width="130" Margin="8,0,0,0"
+                                                      ItemsSource="{Binding DataContext.BlackBodyRoleOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      SelectedValuePath="Value" SelectedValue="{Binding TargetBlackBody, Mode=TwoWay}" DisplayMemberPath="Label"
+                                                      Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                    <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" TextWrapping="Wrap" FontSize="11"
                                Foreground="{StaticResource TextOnSurfaceVariant}"
                                Text="{Binding CapturePlanSummary, Mode=OneWay, StringFormat='→ {0}'}"
                                Visibility="{Binding IsCaptureOperation, Converter={StaticResource BooleanToVisibilityConverter}}"/>
@@ -246,26 +271,6 @@
                         <StackPanel Margin="0,0,16,0" Width="110" IsEnabled="{Binding IsCaptureOperation}">
                             <TextBlock Text="결과 대기" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                             <CheckBox IsChecked="{Binding WaitForCaptureResult}" Content="기다림" Margin="0,6,0,0" Foreground="{StaticResource TextOnSurface}"/>
-                        </StackPanel>
-                        <StackPanel Width="440">
-                            <TextBlock Text="대상 카메라 (복수 선택 · 대역/흑체는 카메라마다 지정)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
-                            <ComboBox ItemsSource="{Binding CameraTargets}" IsEditable="True" IsReadOnly="True" Text="{Binding SelectedCameraSummary, Mode=OneWay}" StaysOpenOnEdit="True" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal">
-                                            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Width="160" VerticalAlignment="Center" Foreground="{StaticResource TextOnSurface}" PreviewMouseDown="CameraTargetCheckBox_PreviewMouseDown"/>
-                                            <ComboBox Width="110" Margin="8,0,0,0"
-                                                      ItemsSource="{Binding DataContext.ChamberRangeOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                      SelectedValuePath="Value" SelectedValue="{Binding TargetChamber, Mode=TwoWay}" DisplayMemberPath="Label"
-                                                      Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
-                                            <ComboBox Width="130" Margin="8,0,0,0"
-                                                      ItemsSource="{Binding DataContext.BlackBodyRoleOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                      SelectedValuePath="Value" SelectedValue="{Binding TargetBlackBody, Mode=TwoWay}" DisplayMemberPath="Label"
-                                                      Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
                         </StackPanel>
                     </StackPanel>
                 </Grid>

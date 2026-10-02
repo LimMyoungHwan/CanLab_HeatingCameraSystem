@@ -16,6 +16,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
@@ -46,6 +47,7 @@
         <TextBlock x:Name="PreviewText" Grid.Row="4" Grid.ColumnSpan="3"
                    TextWrapping="Wrap" Margin="0,4,0,12" FontFamily="Consolas" Opacity="0.7"/>
 
+
         <TextBlock x:Name="JpegWarning" Grid.Row="5" Grid.ColumnSpan="3"
                    TextWrapping="Wrap" Margin="0,0,0,8" Foreground="#E65100" Visibility="Collapsed"/>
 
@@ -55,7 +57,9 @@
         <TextBlock x:Name="ErrorText" Grid.Row="7" Grid.ColumnSpan="3"
                    TextWrapping="Wrap" Margin="0,0,0,8" Foreground="#C62828" Visibility="Collapsed"/>
 
-        <StackPanel Grid.Row="8" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right">
+        <CheckBox x:Name="KeepChamberCheck" Grid.Row="8" Grid.ColumnSpan="3" Margin="0,4,0,12"/>
+
+        <StackPanel Grid.Row="9" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="OkButton" Padding="20,6" Margin="0,0,8,0" IsDefault="True" Click="OnOk"/>
             <Button x:Name="CancelButton" Padding="20,6" IsCancel="True"/>
         </StackPanel>

@@ -34,6 +34,21 @@ public class DashboardPlcErrorStopTests
     }
 
     [Fact]
+    public void M4019On_BypassesErrorHandling_LikeFieldSource()
+    {
+        var plc = new Mock<IPlcController>();
+        var vm = CreateVm(plc);
+
+        var bits = ErrorAt(18);
+        bits[1] = true;
+        vm.HandlePlcErrors(bits);
+
+        plc.Verify(p => p.TriggerEmergencyStopAsync(), Times.Never);
+        plc.Verify(p => p.StopChamberAsync(), Times.Never);
+        Assert.False(vm.IsEmergencyStop);
+    }
+
+    [Fact]
     public void HeldError_DoesNotRefire_WhileLatched()
     {
         AlarmSink.Entries.Clear();

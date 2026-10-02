@@ -11,7 +11,7 @@ namespace HeatingCameraSystem.Master.Views
     /// </summary>
     public partial class ProductionRunDialog : Window
     {
-        public ProductionRunDialog(string initialPath, string initialProductNumber, ProductionCaptureFormat initialFormat)
+        public ProductionRunDialog(string initialPath, string initialProductNumber, ProductionCaptureFormat initialFormat, bool initialKeepChamber)
         {
             InitializeComponent();
 
@@ -28,6 +28,8 @@ namespace HeatingCameraSystem.Master.Views
 
             LocalPathWarning.Text = L("Dialog_ProductionRun_LocalPathWarning");
             JpegWarning.Text = L("Dialog_ProductionRun_JpegWarning");
+            KeepChamberCheck.Content = L("Dialog_ProductionRun_KeepChamber");
+            KeepChamberCheck.IsChecked = initialKeepChamber;
 
             SaveRootBox.Text = initialPath;
             ProductBox.Text = initialProductNumber;
@@ -46,6 +48,8 @@ namespace HeatingCameraSystem.Master.Views
 
         public ProductionCaptureFormat SaveFormat
             => JpegRadio.IsChecked == true ? ProductionCaptureFormat.Jpeg : ProductionCaptureFormat.Raw;
+
+        public bool KeepChamberRunning => KeepChamberCheck.IsChecked == true;
 
         private static string L(string key) => LocalizationManager.Instance[key];
 

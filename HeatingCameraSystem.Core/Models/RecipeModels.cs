@@ -41,6 +41,12 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>생산 저장 규칙의 파일 포맷. 레시피 시작 시 운영자가 고른다.</summary>
         public ProductionCaptureFormat SaveFormat { get; set; } = ProductionCaptureFormat.Raw;
 
+        /// <summary>
+        /// true면 레시피가 끝나거나 운영자가 중단해도 챔버를 끄지 않는다(다음 레시피로 온도 유지).
+        /// 비상정지·PLC 에러로 끝날 때는 이 값과 무관하게 끈다. 레시피 시작 시 운영자가 고른다.
+        /// </summary>
+        public bool KeepChamberRunning { get; set; }
+
         /// <summary>순차적으로 실행될 스텝 목록.</summary>
         public List<RecipeStep> Steps { get; set; } = new();
     }

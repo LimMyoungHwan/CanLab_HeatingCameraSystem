@@ -6,7 +6,7 @@ using HeatingCameraSystem.Master.Localization;
 namespace HeatingCameraSystem.Master.Services
 {
     /// <summary>레시피 시작 전 운영자가 지정하는 저장 위치·제품 번호·파일 포맷.</summary>
-    public sealed record ProductionRunInput(string SaveRootPath, string ProductNumber, ProductionCaptureFormat SaveFormat);
+    public sealed record ProductionRunInput(string SaveRootPath, string ProductNumber, ProductionCaptureFormat SaveFormat, bool KeepChamberRunning = false);
 
     /// <summary>운영자용 알림 팝업 seam. 테스트에서는 페이크/모의로 대체한다(headless에서 실제 MessageBox 미표시).</summary>
     public interface IDialogService
@@ -14,7 +14,7 @@ namespace HeatingCameraSystem.Master.Services
         void ShowError(string title, string message);
 
         /// <summary>저장 폴더·제품 번호를 묻는다. 운영자가 취소하면 null이며, 이때 레시피는 시작하지 않는다.</summary>
-        ProductionRunInput? PromptProductionRun(string initialPath, string initialProductNumber, ProductionCaptureFormat initialFormat);
+        ProductionRunInput? PromptProductionRun(string initialPath, string initialProductNumber, ProductionCaptureFormat initialFormat, bool initialKeepChamber);
 
         /// <summary>
         /// 촬영 중단 지시에 응답이 없을 때 운영자 판단을 받는다.
@@ -44,16 +44,16 @@ namespace HeatingCameraSystem.Master.Services
         private static void Show(string title, string message)
             => MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
 
-        public ProductionRunInput? PromptProductionRun(string initialPath, string initialProductNumber, ProductionCaptureFormat initialFormat)
+        public ProductionRunInput? PromptProductionRun(string initialPath, string initialProductNumber, ProductionCaptureFormat initialFormat, bool initialKeepChamber)
             => OnUi(() =>
             {
-                var dialog = new Views.ProductionRunDialog(initialPath, initialProductNumber, initialFormat)
+                var dialog = new Views.ProductionRunDialog(initialPath, initialProductNumber, initialFormat, initialKeepChamber)
                 {
                     Owner = Application.Current?.MainWindow
                 };
 
                 return dialog.ShowDialog() == true
-                    ? new ProductionRunInput(dialog.SaveRootPath, dialog.ProductNumber, dialog.SaveFormat)
+                    ? new ProductionRunInput(dialog.SaveRootPath, dialog.ProductNumber, dialog.SaveFormat, dialog.KeepChamberRunning)
                     : null;
             });
 

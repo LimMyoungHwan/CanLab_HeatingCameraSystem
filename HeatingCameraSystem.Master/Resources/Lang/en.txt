@@ -676,3 +676,4 @@ Dialog_ProductionRun_FormatRaw=RAW (16-bit original, for calibration)
 Dialog_ProductionRun_FormatJpeg=JPEG (8-bit, for visual check / report)
 
 Dialog_ProductionRun_JpegWarning=JPEG is saved as 8-bit and keeps no thermal data. It cannot be used for calibration.
+Dialog_ProductionRun_KeepChamber=Keep chamber running after the recipe ends (hold temperature for the next recipe; still stops on emergency stop)

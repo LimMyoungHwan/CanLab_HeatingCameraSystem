@@ -386,7 +386,6 @@ namespace HeatingCameraSystem.Master.ViewModels
                 TargetChamberHumidity = 50.0,
                 CameraOperation = CameraControlOps.Capture
             };
-            step.CameraTargets.Add(new CameraTargetModel { CameraIndex = n, IsSelected = true });
             if (kind == RecipeStepKind.BlackBodyControl)
             {
                 step.BlackbodyRef = 25.0f;

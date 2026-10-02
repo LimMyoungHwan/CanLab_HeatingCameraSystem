@@ -170,6 +170,8 @@ namespace HeatingCameraSystem.Core.Config
         public string GasFlow { get; set; } = "D1031";
         public string StepCurrent { get; set; } = "D3002";
         public string StepTotal { get; set; } = "D3000";
+        public string LiveSignal { get; set; } = "M3800"; // PC alive 신호(PC→PLC). 빈 값이면 끔
+        public int LiveSignalIntervalMs { get; set; } = 1000; // alive 토글 주기(상태 폴링과 독립)
 
         // ── 장비 상태 램프 비트 (D60.x, D61.0) ──
         public string StatusHeater { get; set; } = "D60.1";

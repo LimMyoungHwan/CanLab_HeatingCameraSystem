@@ -464,8 +464,9 @@ namespace HeatingCameraSystem.Master.Services
             finally
             {
                 // 정상 완료든 취소·비상정지든 챔버는 반드시 세운다. PLC 알람으로 중단될 때
-                // 챔버만 계속 도는 상황을 막는 유일한 지점이다.
-                if (chamberStarted)
+                // 챔버만 계속 도는 상황을 막는 유일한 지점이다. 운영자가 "챔버 유지"를 고른
+                // 경우만 예외이며, 그때도 비상정지면 끈다.
+                if (chamberStarted && !(recipe.KeepChamberRunning && !IsEmergencyStopRequested))
                     await StopChamberWithRetryAsync();
             }
 
