@@ -1,5 +1,6 @@
 using HeatingCameraSystem.Core.Interfaces;
 using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -725,6 +726,8 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public ObservableCollection<AgentCameraOption> OnlineAgentCameras { get; } = new();
 
+        private readonly Dictionary<(string AgentId, int CameraIndex), DateTime> _cameraLastSeen = new();
+
         private void SubscribeCameraServices()
         {
             var nats = AppServices.NatsService;
@@ -745,11 +748,53 @@ namespace HeatingCameraSystem.Master.ViewModels
             if (string.IsNullOrEmpty(msg.AgentId)) return;
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
+                _cameraLastSeen[(msg.AgentId, msg.CameraIndex)] = DateTime.UtcNow;
                 if (!OnlineAgentCameras.Any(a => a.AgentId == msg.AgentId && a.CameraIndex == msg.CameraIndex))
                     OnlineAgentCameras.Add(new AgentCameraOption { AgentId = msg.AgentId, CameraIndex = msg.CameraIndex });
+                PruneOfflineAgentCameras(OnlineAgentCameras, _cameraLastSeen, DateTime.UtcNow);
+                if (SelectedPreviewCamera is not null
+                    && !OnlineAgentCameras.Any(a => a.AgentId == SelectedPreviewCamera.AgentId && a.CameraIndex == SelectedPreviewCamera.CameraIndex))
+                    SelectedPreviewCamera = null;
                 foreach (var step in Recipes.SelectMany(recipe => recipe.Steps))
+                {
+                    PruneStaleTargets(step.CameraTargets, OnlineAgentCameras);
                     SyncCameraTargets(step);
+                }
             });
+        }
+
+        public static int PruneOfflineAgentCameras(
+            IList<AgentCameraOption> online,
+            IDictionary<(string AgentId, int CameraIndex), DateTime> lastSeen,
+            DateTime utcNow)
+        {
+            int removed = 0;
+            for (int i = online.Count - 1; i >= 0; i--)
+            {
+                var key = (online[i].AgentId, online[i].CameraIndex);
+                if (!lastSeen.TryGetValue(key, out DateTime seen) || utcNow - seen > AgentDirectory.OnlineThreshold)
+                {
+                    online.RemoveAt(i);
+                    removed++;
+                }
+            }
+            return removed;
+        }
+
+        public static int PruneStaleTargets(IList<CameraTargetModel> targets, IEnumerable<AgentCameraOption> online)
+        {
+            var keys = new HashSet<(string, int)>(online.Select(o => (o.AgentId, o.CameraIndex)));
+            int removed = 0;
+            for (int i = targets.Count - 1; i >= 0; i--)
+            {
+                CameraTargetModel target = targets[i];
+                if (target.AgentId.Length > 0 && !keys.Contains((target.AgentId, target.CameraIndex)))
+                {
+                    targets.RemoveAt(i);
+                    removed++;
+                }
+            }
+            return removed;
         }
 
         private void SyncCameraTargets(RecipeStepModel step)
