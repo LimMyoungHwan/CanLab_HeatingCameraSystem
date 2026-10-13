@@ -30,8 +30,20 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     continue;
                 }
 
-                if (IsAlreadyRegistered(cameras, serial, containerId))
+                int existing = FindRegisteredIndex(cameras, serial, containerId);
+                if (existing >= 0)
                 {
+                    // 같은 물리 장치다. 모드 변경에 S/N이 바뀌거나 USB 포트를 옮긴 경우에도
+                    // 새 항목을 만들지 않고 기존 항목을 새 관측값으로 갱신한다. AgentId 유지.
+                    // 값이 있는 쪽만 덮어쓴다(못 읽은 쪽으로 기존 값을 지우지 않는다).
+                    CameraDescriptor cam = cameras[existing];
+                    string? port = pair.SerialPort?.PortName;
+                    cameras[existing] = cam with
+                    {
+                        SerialPortName = port ?? cam.SerialPortName,
+                        UsbContainerId = containerId ?? cam.UsbContainerId,
+                        CameraSerialNumber = serial ?? cam.CameraSerialNumber,
+                    };
                     continue;
                 }
 
@@ -95,6 +107,114 @@ namespace HeatingCameraSystem.Protocols.Cameras
             }
 
             return added;
+        }
+
+        /// <summary>
+        /// 현재 열거에 없는 카메라를 목록에서 제거한다. 키는 Register와 같은 안정 정체성
+        /// (S/N 우선, UsbContainerId 폴백): 페어 S/N·컨테이너나 비디오 컨테이너 어디에도
+        /// 걸리지 않는 항목을 지운다. 열거가 둘 다 비었으면 조회 실패로 보고 아무것도
+        /// 지우지 않는다 — 전부 없는 것으로 오인하는 학살을 막는다. 안정 키 없는 항목은
+        /// 판단 불가라 남긴다. 목록을 제자리에서 수정하고 제거 개수를 반환한다.
+        /// </summary>
+        public static int PruneDisconnected(
+            IList<CameraDescriptor> cameras,
+            IReadOnlyList<CameraComPair> pairs,
+            IReadOnlyList<VideoDevice> devices)
+        {
+            if (pairs.Count == 0 && devices.Count == 0)
+            {
+                return 0;
+            }
+
+            var pairSerials = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var pairContainers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (CameraComPair pair in pairs)
+            {
+                if (IsUsableSerial(pair.CameraSerialNumber))
+                {
+                    pairSerials.Add(pair.CameraSerialNumber!);
+                }
+
+                if (!string.IsNullOrWhiteSpace(pair.Camera.UsbParentId))
+                {
+                    pairContainers.Add(pair.Camera.UsbParentId);
+                }
+            }
+
+            var videoContainers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (VideoDevice device in devices)
+            {
+                if (!string.IsNullOrWhiteSpace(device.ContainerId))
+                {
+                    videoContainers.Add(device.ContainerId);
+                }
+            }
+
+            int removed = 0;
+            for (int i = cameras.Count - 1; i >= 0; i--)
+            {
+                CameraDescriptor cam = cameras[i];
+                bool hasSerial = IsUsableSerial(cam.CameraSerialNumber);
+                bool hasContainer = !string.IsNullOrWhiteSpace(cam.UsbContainerId);
+                if (!hasSerial && !hasContainer)
+                {
+                    continue;
+                }
+
+                bool present =
+                    (hasSerial && pairSerials.Contains(cam.CameraSerialNumber!)) ||
+                    (hasContainer && (pairContainers.Contains(cam.UsbContainerId!) || videoContainers.Contains(cam.UsbContainerId!)));
+                if (!present)
+                {
+                    cameras.RemoveAt(i);
+                    removed++;
+                }
+            }
+
+            return removed;
+        }
+
+        /// <summary>
+        /// 같은 AgentId가 두 개 이상이면 첫 항목만 남긴다. 설정 화면 중복 추가의 잔해를
+        /// 기동·핫플러그 때 쓸어낸다. 런타임·NATS가 AgentId 키라 둘째 이후는 어차피 무효다.
+        /// 제거 개수를 반환한다.
+        /// </summary>
+        public static int DedupeByAgentId(IList<CameraDescriptor> cameras)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            int removed = 0;
+            for (int i = 0; i < cameras.Count; i++)
+            {
+                if (!seen.Add(cameras[i].AgentId))
+                {
+                    cameras.RemoveAt(i);
+                    removed++;
+                    i--;
+                }
+            }
+
+            return removed;
+        }
+
+        private static int FindRegisteredIndex(IEnumerable<CameraDescriptor> cameras, string? serial, string? containerId)
+        {
+            int index = 0;
+            foreach (CameraDescriptor cam in cameras)
+            {
+                if (serial is not null && string.Equals(cam.CameraSerialNumber, serial, StringComparison.OrdinalIgnoreCase))
+                {
+                    return index;
+                }
+
+                if (containerId is not null && string.Equals(cam.UsbContainerId, containerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return index;
+                }
+
+                index++;
+            }
+
+            return -1;
         }
 
         private static int NextAgentNumber(IEnumerable<CameraDescriptor> cameras, string host)

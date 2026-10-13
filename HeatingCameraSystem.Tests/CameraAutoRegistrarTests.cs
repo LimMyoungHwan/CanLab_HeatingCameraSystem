@@ -195,5 +195,91 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal("PC_Agent_3", cams[1].AgentId);
             Assert.Equal("{CID-NEW}", cams[1].UsbContainerId);
         }
+
+        [Fact]
+        public void Register_SerialMatch_UpdatesContainerAndPortInPlace()
+        {
+            var cams = new List<CameraDescriptor>
+            {
+                new("PC_Agent_1", 5, "Existing", "COM9", "Dev", "SN-1", "{CID-OLD}"),
+            };
+            var pairs = new List<CameraComPair> { Pair(Camera("Same", "{CID-NEW}", 7), "SN-1", "COM5") };
+
+            int added = CameraAutoRegistrar.Register(cams, pairs, Host);
+
+            Assert.Equal(0, added);
+            Assert.Single(cams);
+            Assert.Equal("PC_Agent_1", cams[0].AgentId);
+            Assert.Equal("COM5", cams[0].SerialPortName);
+            Assert.Equal("{CID-NEW}", cams[0].UsbContainerId);
+        }
+
+        [Fact]
+        public void Register_ContainerMatch_UpdatesSerialInPlace()
+        {
+            var cams = new List<CameraDescriptor>
+            {
+                new("PC_Agent_1", 0, "Existing", "COM9", null, "SN-OLD1", "{CID-1}"),
+            };
+            var pairs = new List<CameraComPair> { Pair(Camera("Same", "{CID-1}"), "SN-NEW1", "COM5") };
+
+            int added = CameraAutoRegistrar.Register(cams, pairs, Host);
+
+            Assert.Equal(0, added);
+            Assert.Single(cams);
+            Assert.Equal("SN-NEW1", cams[0].CameraSerialNumber);
+            Assert.Equal("COM5", cams[0].SerialPortName);
+        }
+
+        [Fact]
+        public void DedupeByAgentId_RemovesLaterDuplicatesKeepsFirst()
+        {
+            var cams = new List<CameraDescriptor>
+            {
+                new("PC_Agent_1", 0, "First", "COM4", null, "SN-1", "{CID-1}"),
+                new("PC_Agent_1", 0, "Second", "COM4", null, "SN-1", "{CID-1}"),
+                new("PC_Agent_2", 1, "Other", "COM5", null, "SN-2", "{CID-2}"),
+            };
+
+            int removed = CameraAutoRegistrar.DedupeByAgentId(cams);
+
+            Assert.Equal(1, removed);
+            Assert.Equal(2, cams.Count);
+            Assert.Equal("First", cams[0].Alias);
+        }
+
+        [Fact]
+        public void PruneDisconnected_RemovesAbsentKeepsPresent()
+        {
+            var cams = new List<CameraDescriptor>
+            {
+                new("PC_Agent_1", 0, "KeepSerial", "COM9", null, "KEEP-SN1", "{CID-OLD}"),
+                new("PC_Agent_2", 1, "KeepVideo", null, null, null, "{CID-V}"),
+                new("PC_Agent_3", 2, "Ghost", "COM7", null, "GHOST-SN9", "{CID-GHOST}"),
+            };
+            var pairs = new List<CameraComPair> { Pair(Camera("Keep", "{CID-NEW}"), "KEEP-SN1", "COM9") };
+            var devices = new List<VideoDevice> { Video("CLTC_T_VGA V", "{CID-V}", 1) };
+
+            int removed = CameraAutoRegistrar.PruneDisconnected(cams, pairs, devices);
+
+            Assert.Equal(1, removed);
+            Assert.Equal(2, cams.Count);
+            Assert.DoesNotContain(cams, c => c.AgentId == "PC_Agent_3");
+        }
+
+        [Fact]
+        public void PruneDisconnected_EmptyEnumerations_KeepsAll()
+        {
+            var cams = new List<CameraDescriptor>
+            {
+                new("PC_Agent_1", 0, "Existing", "COM9", null, "SN-1", "{CID-1}"),
+            };
+
+            int removed = CameraAutoRegistrar.PruneDisconnected(
+                cams, new List<CameraComPair>(), new List<VideoDevice>());
+
+            Assert.Equal(0, removed);
+            Assert.Single(cams);
+        }
     }
 }
