@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -118,7 +119,18 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         }
 
         [RelayCommand]
-        private void AddCamera() => Cameras.Add(new CameraRow());
+        private void AddCamera()
+        {
+            var usedIds = new HashSet<string>(Cameras.Select(row => row.AgentId), StringComparer.OrdinalIgnoreCase);
+            int n = 1;
+            while (usedIds.Contains($"Camera_{n}"))
+            {
+                n++;
+            }
+
+            int index = Cameras.Count == 0 ? 0 : Cameras.Max(row => row.OpenCvIndex) + 1;
+            Cameras.Add(new CameraRow { AgentId = $"Camera_{n}", Alias = $"Camera {n}", OpenCvIndex = index });
+        }
 
         [RelayCommand]
         private void RemoveCamera(CameraRow? row)
@@ -132,6 +144,28 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         [RelayCommand]
         private void Save()
         {
+            // 같은 AgentId·COM 포트가 두 행이면 1대 카메라를 두 패널이 다투고 하나가
+            // Faulted가 된다. 저장 전에 막는다.
+            string? dupId = Cameras
+                .Where(row => !string.IsNullOrWhiteSpace(row.AgentId))
+                .GroupBy(row => row.AgentId.Trim(), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(g => g.Count() > 1)?.Key;
+            if (dupId is not null)
+            {
+                StatusText = $"저장 거부: AgentId '{dupId}' 중복. 한 행을 지우세요.";
+                return;
+            }
+
+            string? dupPort = Cameras
+                .Where(row => !string.IsNullOrWhiteSpace(row.SerialPortName))
+                .GroupBy(row => row.SerialPortName.Trim(), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(g => g.Count() > 1)?.Key;
+            if (dupPort is not null)
+            {
+                StatusText = $"저장 거부: 포트 '{dupPort}' 중복. 한 행의 포트를 비우거나 지우세요.";
+                return;
+            }
+
             _config.SimulationMode = SimulationMode;
             _config.NatsUrl = NatsUrl;
             _config.StoragePath = StoragePath;
@@ -178,12 +212,15 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             try
             {
                 var pairs = await _pairing.GetPairsAsync();
+                // 한 페어는 한 행에만: 같은 행값 둘에 같은 포트를 채워 중복 항목을 만들지 않는다.
+                var consumed = new HashSet<CameraComPair>();
                 int matched = 0;
                 foreach (CameraRow row in Cameras)
                 {
-                    CameraComPair? pair = FindPairForRow(pairs, row);
+                    CameraComPair? pair = FindPairForRow(pairs.Where(p => !consumed.Contains(p)).ToList(), row);
                     if (pair?.SerialPort is not null)
                     {
+                        consumed.Add(pair);
                         row.SerialPortName = pair.SerialPort.PortName;
                         if (IsUsableSerial(pair.CameraSerialNumber))
                             row.CameraSerialNumber = pair.CameraSerialNumber;
