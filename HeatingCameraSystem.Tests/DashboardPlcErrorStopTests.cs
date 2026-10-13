@@ -125,6 +125,54 @@ public class DashboardPlcErrorStopTests
         Assert.True(chamberCalled);
     }
 
+    [Fact]
+    public void ServoYErrorAlone_DoesNotStop()
+    {
+        AlarmSink.Entries.Clear();
+        var plc = new Mock<IPlcController>();
+        var vm = CreateVm(plc);
+
+        vm.HandlePlcErrors(ErrorAt(2));
+
+        plc.Verify(p => p.TriggerEmergencyStopAsync(), Times.Never);
+        plc.Verify(p => p.StopChamberAsync(), Times.Never);
+        Assert.False(vm.IsEmergencyStop);
+        Assert.True(vm.StartRecipeCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void ServoYError_WithOtherError_OtherStillTrips()
+    {
+        AlarmSink.Entries.Clear();
+        var plc = new Mock<IPlcController>();
+        var vm = CreateVm(plc);
+
+        var bits = ErrorAt(1);
+        bits[2] = true;
+        vm.HandlePlcErrors(bits);
+
+        plc.Verify(p => p.TriggerEmergencyStopAsync(), Times.Once);
+        Assert.True(vm.IsEmergencyStop);
+    }
+
+    [Fact]
+    public async Task PriorLatch_ReleasesWhenOnlyServoYRemains()
+    {
+        AlarmSink.Entries.Clear();
+        var plc = new Mock<IPlcController>();
+        var vm = CreateVm(plc);
+
+        vm.HandlePlcErrors(ErrorAt(1));
+        Assert.False(vm.StartRecipeCommand.CanExecute(null));
+
+        var onlyY = new bool[PlcDeviceCatalog.ErrorNames.Length];
+        onlyY[2] = true;
+        plc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(Snapshot(onlyY, servoX: 0f, servoY: 0f));
+        await vm.RefreshPlcSnapshotAsync();
+
+        Assert.True(vm.StartRecipeCommand.CanExecute(null));
+    }
+
     private static PlcStatusSnapshot Snapshot(bool[]? errorBits = null, float servoX = 0f, float servoY = 0f) =>
         new PlcStatusSnapshot
         {
