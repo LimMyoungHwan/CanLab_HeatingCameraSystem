@@ -232,6 +232,9 @@ namespace HeatingCameraSystem.Core.Models
             ""                              // M4020 (미사용)
         };
 
+        /// <summary>정지 사유에서 제외하는 에러 비트 인덱스. M4002(X)·M4003(Y) 서보드라이브 — 표시·이력은 유지.</summary>
+        public static readonly HashSet<int> NonStoppingErrorBitIndices = new() { 1, 2 };
+
         /// <summary>입력 P000~P01F 라벨.</summary>
         public static readonly string[] InputNames =
         {

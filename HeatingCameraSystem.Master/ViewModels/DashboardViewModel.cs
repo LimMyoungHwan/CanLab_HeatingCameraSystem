@@ -205,8 +205,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private bool _plcErrorLatched;
         private int _activeRecipeStepIndex = -1;
         private const float OriginToleranceMm = 0.5f;
-        // M4003 서보드라이브2 Y축 에러 비트. 정지 사유에서 제외한다(표시·알람 목록은 유지).
-        private const int ServoYErrorBitIndex = 2;
+        private static bool IsStoppingError(int i) => !PlcDeviceCatalog.NonStoppingErrorBitIndices.Contains(i);
         private CancellationTokenSource? _recipeCts;
         private TaskCompletionSource<object?>? _pauseGate;
         private System.Windows.Threading.DispatcherTimer? _offlineCheckTimer;
@@ -668,7 +667,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             // M4019가 켜진 동안에는 다른 에러 비트도 정지시키지 않는다는 점에 유의.
             if (errorBits.Length > 18 && errorBits[18]) return;
 
-            bool anyError = errorBits.Where((b, i) => i != ServoYErrorBitIndex).Any(b => b);
+            bool anyError = errorBits.Where((b, i) => b && IsStoppingError(i)).Any();
             IsEmergencyStop = anyError;
 
             if (anyError && !_plcErrorLatched)
@@ -679,7 +678,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 var names = PlcDeviceCatalog.ErrorNames;
                 var fired = new List<string>();
                 for (int i = 0; i < errorBits.Length && i < names.Length; i++)
-                    if (i != ServoYErrorBitIndex && errorBits[i] && !string.IsNullOrEmpty(names[i]))
+                    if (IsStoppingError(i) && errorBits[i] && !string.IsNullOrEmpty(names[i]))
                         fired.Add(LocalizationManager.Instance.GetOrDefault("PlcErr_" + i, names[i]));
                 string message = fired.Count > 0
                     ? Localize("Plc_ErrorStop", string.Join(", ", fired))
@@ -713,7 +712,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void ReleaseRecoveryLockIfRecovered(PlcStatusSnapshot s)
         {
             if (!RecoveryLockActive) return;
-            bool errorsClear = !s.ErrorBits.Where((b, i) => i != ServoYErrorBitIndex).Any(b => b);
+            bool errorsClear = !s.ErrorBits.Where((b, i) => b && IsStoppingError(i)).Any();
             bool atOrigin = Math.Abs(s.ServoXPosition) <= OriginToleranceMm
                          && Math.Abs(s.ServoYPosition) <= OriginToleranceMm;
             if (errorsClear && atOrigin)
@@ -937,6 +936,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             _recipeCts?.Cancel();
             _recipeCts = new CancellationTokenSource();
+            AlarmSink.Raise(AlarmSeverity.Info, "레시피", $"수동 시작: {SelectedRecipe?.Name}");
             RecipeStatus = Localize("Dash_RecipeRunning", SelectedRecipe.Name);
             RecipeProgressValue = 0;
             RecipePhaseText = string.Empty;
@@ -1019,6 +1019,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand]
         private void StopRecipe()
         {
+            AlarmSink.Raise(AlarmSeverity.Info, "레시피", $"수동 중지: {SelectedRecipe?.Name}");
             _recipeCts?.Cancel();
             RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopping"];
         }

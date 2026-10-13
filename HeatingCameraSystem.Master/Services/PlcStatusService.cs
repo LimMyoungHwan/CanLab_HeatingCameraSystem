@@ -230,7 +230,8 @@ namespace HeatingCameraSystem.Master.Services
                 if (bits[i] && !was && !string.IsNullOrEmpty(names[i]))
                 {
                     AlarmSink.Raise(AlarmSeverity.Error, "PLC", LocalizationManager.Instance.GetOrDefault("PlcErr_" + i, names[i]));
-                    anyNewError = true;
+                    if (!PlcDeviceCatalog.NonStoppingErrorBitIndices.Contains(i))
+                        anyNewError = true;
                 }
             }
             _prevErrorBits = (bool[])bits.Clone();

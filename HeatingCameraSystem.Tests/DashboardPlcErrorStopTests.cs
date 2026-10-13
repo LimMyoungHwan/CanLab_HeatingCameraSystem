@@ -25,7 +25,7 @@ public class DashboardPlcErrorStopTests
         var plc = new Mock<IPlcController>();
         var vm = CreateVm(plc);
 
-        vm.HandlePlcErrors(ErrorAt(1));
+        vm.HandlePlcErrors(ErrorAt(3));
 
         plc.Verify(p => p.TriggerEmergencyStopAsync(), Times.Once);
         plc.Verify(p => p.StopChamberAsync(), Times.Once);
@@ -40,7 +40,7 @@ public class DashboardPlcErrorStopTests
         var vm = CreateVm(plc);
 
         var bits = ErrorAt(18);
-        bits[1] = true;
+        bits[3] = true;
         vm.HandlePlcErrors(bits);
 
         plc.Verify(p => p.TriggerEmergencyStopAsync(), Times.Never);
@@ -55,8 +55,8 @@ public class DashboardPlcErrorStopTests
         var plc = new Mock<IPlcController>();
         var vm = CreateVm(plc);
 
-        vm.HandlePlcErrors(ErrorAt(1));
-        vm.HandlePlcErrors(ErrorAt(1));
+        vm.HandlePlcErrors(ErrorAt(3));
+        vm.HandlePlcErrors(ErrorAt(3));
 
         plc.Verify(p => p.TriggerEmergencyStopAsync(), Times.Once);
         plc.Verify(p => p.StopChamberAsync(), Times.Once);
@@ -69,9 +69,9 @@ public class DashboardPlcErrorStopTests
         var plc = new Mock<IPlcController>();
         var vm = CreateVm(plc);
 
-        vm.HandlePlcErrors(ErrorAt(1));
+        vm.HandlePlcErrors(ErrorAt(3));
         vm.HandlePlcErrors(new bool[PlcDeviceCatalog.ErrorNames.Length]);
-        vm.HandlePlcErrors(ErrorAt(1));
+        vm.HandlePlcErrors(ErrorAt(3));
 
         plc.Verify(p => p.TriggerEmergencyStopAsync(), Times.Exactly(2));
         plc.Verify(p => p.StopChamberAsync(), Times.Exactly(2));
@@ -86,8 +86,8 @@ public class DashboardPlcErrorStopTests
         var dialog = new Mock<IDialogService>();
         var vm = new DashboardViewModel(plc.Object, null, null, startTimers: false, dialogService: dialog.Object);
 
-        vm.HandlePlcErrors(ErrorAt(1));
-        vm.HandlePlcErrors(ErrorAt(1));
+        vm.HandlePlcErrors(ErrorAt(3));
+        vm.HandlePlcErrors(ErrorAt(3));
 
         dialog.Verify(d => d.ShowError(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
         Assert.Contains(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Error && e.Source == "PLC");
@@ -102,7 +102,7 @@ public class DashboardPlcErrorStopTests
         plc.Setup(p => p.StopChamberAsync()).ThrowsAsync(new InvalidOperationException("chamber boom"));
         var vm = CreateVm(plc);
 
-        vm.HandlePlcErrors(ErrorAt(1));
+        vm.HandlePlcErrors(ErrorAt(3));
 
         Assert.Contains(AlarmSink.Entries, e => e is not null && e.Severity == AlarmSeverity.Error && e.Message.Contains("estop boom"));
         Assert.Contains(AlarmSink.Entries, e => e is not null && e.Severity == AlarmSeverity.Error && e.Message.Contains("chamber boom"));
@@ -120,9 +120,24 @@ public class DashboardPlcErrorStopTests
             .Returns(new TaskCompletionSource<bool>().Task);
 
         var vm = CreateVm(plc);
-        vm.HandlePlcErrors(ErrorAt(1));
+        vm.HandlePlcErrors(ErrorAt(3));
 
         Assert.True(chamberCalled);
+    }
+
+    [Fact]
+    public void ServoXErrorAlone_DoesNotStop()
+    {
+        AlarmSink.Entries.Clear();
+        var plc = new Mock<IPlcController>();
+        var vm = CreateVm(plc);
+
+        vm.HandlePlcErrors(ErrorAt(1));
+
+        plc.Verify(p => p.TriggerEmergencyStopAsync(), Times.Never);
+        plc.Verify(p => p.StopChamberAsync(), Times.Never);
+        Assert.False(vm.IsEmergencyStop);
+        Assert.True(vm.StartRecipeCommand.CanExecute(null));
     }
 
     [Fact]
@@ -147,7 +162,7 @@ public class DashboardPlcErrorStopTests
         var plc = new Mock<IPlcController>();
         var vm = CreateVm(plc);
 
-        var bits = ErrorAt(1);
+        var bits = ErrorAt(3);
         bits[2] = true;
         vm.HandlePlcErrors(bits);
 
@@ -162,7 +177,7 @@ public class DashboardPlcErrorStopTests
         var plc = new Mock<IPlcController>();
         var vm = CreateVm(plc);
 
-        vm.HandlePlcErrors(ErrorAt(1));
+        vm.HandlePlcErrors(ErrorAt(3));
         Assert.False(vm.StartRecipeCommand.CanExecute(null));
 
         var onlyY = new bool[PlcDeviceCatalog.ErrorNames.Length];
@@ -190,7 +205,7 @@ public class DashboardPlcErrorStopTests
 
         Assert.True(vm.StartRecipeCommand.CanExecute(null));
 
-        vm.HandlePlcErrors(ErrorAt(1));
+        vm.HandlePlcErrors(ErrorAt(3));
 
         Assert.False(vm.StartRecipeCommand.CanExecute(null));
     }
@@ -202,7 +217,7 @@ public class DashboardPlcErrorStopTests
         var plc = new Mock<IPlcController>();
         var vm = CreateVm(plc);
 
-        vm.HandlePlcErrors(ErrorAt(1));
+        vm.HandlePlcErrors(ErrorAt(3));
         plc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(Snapshot(servoX: 5f, servoY: 5f));
         await vm.RefreshPlcSnapshotAsync();
 
@@ -216,7 +231,7 @@ public class DashboardPlcErrorStopTests
         var plc = new Mock<IPlcController>();
         var vm = CreateVm(plc);
 
-        vm.HandlePlcErrors(ErrorAt(1));
+        vm.HandlePlcErrors(ErrorAt(3));
         plc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(Snapshot(servoX: 0f, servoY: 0f));
         await vm.RefreshPlcSnapshotAsync();
 
@@ -230,14 +245,14 @@ public class DashboardPlcErrorStopTests
 
         var plcAt = new Mock<IPlcController>();
         var vmAt = CreateVm(plcAt);
-        vmAt.HandlePlcErrors(ErrorAt(1));
+        vmAt.HandlePlcErrors(ErrorAt(3));
         plcAt.Setup(p => p.ReadStatusAsync()).ReturnsAsync(Snapshot(servoX: 0.5f, servoY: 0.5f));
         await vmAt.RefreshPlcSnapshotAsync();
         Assert.True(vmAt.StartRecipeCommand.CanExecute(null));
 
         var plcOver = new Mock<IPlcController>();
         var vmOver = CreateVm(plcOver);
-        vmOver.HandlePlcErrors(ErrorAt(1));
+        vmOver.HandlePlcErrors(ErrorAt(3));
         plcOver.Setup(p => p.ReadStatusAsync()).ReturnsAsync(Snapshot(servoX: 0.6f, servoY: 0f));
         await vmOver.RefreshPlcSnapshotAsync();
         Assert.False(vmOver.StartRecipeCommand.CanExecute(null));
