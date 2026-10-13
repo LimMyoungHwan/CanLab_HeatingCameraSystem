@@ -135,10 +135,19 @@ namespace HeatingCameraSystem.AgentUI
             if (!config.SimulationMode)
             {
                 IReadOnlyList<CameraComPair> pairs = GetPairsOrEmpty(pairing);
+                int deduped = CameraAutoRegistrar.DedupeByAgentId(config.Cameras);
+                PruneDisconnectedCameras(config, pairs);
                 AutoRegisterDetectedCameras(config, pairs);
                 AutoRegisterVideoOnlyCameras(config);
-                ReconcileSerialPortsFromPairing(config, pairs);
-                ReconcileVideoIndicesFromEnumeration(config);
+                int serialChanged = ReconcileSerialPortsFromPairing(config, pairs);
+                int videoChanged = ReconcileVideoIndicesFromEnumeration(config);
+                if (deduped > 0 || serialChanged > 0 || videoChanged > 0)
+                {
+                    config.Save();
+                    AgentUiLog.Logger.Information(
+                        "Camera inventory reconciled: deduped={Deduped} serial={Serial} video={Video}",
+                        deduped, serialChanged, videoChanged);
+                }
             }
 
             RebuildCameraPanels();
@@ -363,8 +372,37 @@ namespace HeatingCameraSystem.AgentUI
             }
         }
 
-        private static void ReconcileSerialPortsFromPairing(AgentUiConfig config, IReadOnlyList<CameraComPair> pairs)
+        // 케이블을 뽑은 채로 기동하면 고스트 항목을 지운다. 런타임 중 핫플러그에서는
+        // 호출하지 않는다 — 뽑았다 꽂으면 같은 AgentId로 살아나야 하므로.
+        private void PruneDisconnectedCameras(AgentUiConfig config, IReadOnlyList<CameraComPair> pairs)
         {
+            IReadOnlyList<VideoDevice> devices = Array.Empty<VideoDevice>();
+            if (_videoEnumerator is not null)
+            {
+                try
+                {
+                    devices = _videoEnumerator.Enumerate();
+                }
+                catch (Exception ex)
+                {
+                    AgentUiLog.Logger.Warning(ex, "Video enumeration for prune failed; keeping configured cameras");
+                }
+            }
+
+            int removed = CameraAutoRegistrar.PruneDisconnected(config.Cameras, pairs, devices);
+            if (removed > 0)
+            {
+                config.Save();
+                AgentUiLog.Logger.Information("Pruned {Count} disconnected camera(s)", removed);
+            }
+        }
+
+        private static int ReconcileSerialPortsFromPairing(AgentUiConfig config, IReadOnlyList<CameraComPair> pairs)
+        {
+            // 이번 실행에서 이미 배정한 포트: 두 항목이 같은 페어에 걸리면(구 설정 중복)
+            // 먼저 처리된 쪽이 가져가고 나머지는 기존 값을 유지한다.
+            var claimedPorts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int changed = 0;
             for (int i = 0; i < config.Cameras.Count; i++)
             {
                 CameraDescriptor cam = config.Cameras[i];
@@ -375,12 +413,27 @@ namespace HeatingCameraSystem.AgentUI
                 }
 
                 string newPort = pair.SerialPort.PortName;
-                config.Cameras[i] = cam with
+                if (!string.Equals(cam.SerialPortName, newPort, StringComparison.OrdinalIgnoreCase)
+                    && claimedPorts.Contains(newPort))
+                {
+                    AgentUiLog.Logger.Warning(
+                        "Camera {AgentId}: serial {New} already claimed by another camera; keeping {Old}",
+                        cam.AgentId, newPort, cam.SerialPortName ?? "(none)");
+                    continue;
+                }
+
+                CameraDescriptor updated = cam with
                 {
                     SerialPortName = newPort,
                     CameraSerialNumber = IsUsableSerial(pair.CameraSerialNumber) ? pair.CameraSerialNumber : cam.CameraSerialNumber,
                     UsbContainerId = string.IsNullOrWhiteSpace(pair.Camera.UsbParentId) ? cam.UsbContainerId : pair.Camera.UsbParentId,
                 };
+                if (!updated.Equals(cam))
+                {
+                    config.Cameras[i] = updated;
+                    changed++;
+                }
+                claimedPorts.Add(newPort);
 
                 if (!string.Equals(cam.SerialPortName, newPort, StringComparison.OrdinalIgnoreCase))
                 {
@@ -389,13 +442,15 @@ namespace HeatingCameraSystem.AgentUI
                         cam.AgentId, cam.SerialPortName ?? "(none)", newPort);
                 }
             }
+
+            return changed;
         }
 
-        private void ReconcileVideoIndicesFromEnumeration(AgentUiConfig config)
+        private int ReconcileVideoIndicesFromEnumeration(AgentUiConfig config)
         {
             if (_videoEnumerator is null)
             {
-                return;
+                return 0;
             }
 
             IReadOnlyList<VideoDevice> devices;
@@ -406,7 +461,7 @@ namespace HeatingCameraSystem.AgentUI
             catch (Exception ex)
             {
                 AgentUiLog.Logger.Warning(ex, "Video device enumeration failed; keeping configured OpenCvIndex");
-                return;
+                return 0;
             }
 
             int changed = VideoIndexReconciler.Reconcile(config.Cameras, devices);
@@ -414,6 +469,8 @@ namespace HeatingCameraSystem.AgentUI
             {
                 AgentUiLog.Logger.Information("Rebound {Count} camera OpenCvIndex value(s) by ContainerId", changed);
             }
+
+            return changed;
         }
 
         /// <summary>
@@ -597,10 +654,18 @@ namespace HeatingCameraSystem.AgentUI
                         if (_config is not null && !_config.SimulationMode && _pairing is not null)
                         {
                             IReadOnlyList<CameraComPair> pairs = GetPairsOrEmpty(_pairing);
+                            if (CameraAutoRegistrar.DedupeByAgentId(_config.Cameras) > 0)
+                            {
+                                _config.Save();
+                            }
                             AutoRegisterDetectedCameras(_config, pairs);
                             AutoRegisterVideoOnlyCameras(_config);
-                            ReconcileSerialPortsFromPairing(_config, pairs);
-                            ReconcileVideoIndicesFromEnumeration(_config);
+                            int serialChanged = ReconcileSerialPortsFromPairing(_config, pairs);
+                            int videoChanged = ReconcileVideoIndicesFromEnumeration(_config);
+                            if (serialChanged + videoChanged > 0)
+                            {
+                                _config.Save();
+                            }
                         }
 
                         await Dispatcher.InvokeAsync(RebuildCameraPanels).Task.ConfigureAwait(false);
