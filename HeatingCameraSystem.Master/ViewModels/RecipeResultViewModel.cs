@@ -45,6 +45,8 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private string _statusMessage = string.Empty;
         [ObservableProperty] private bool _hasMeasurements;
         [ObservableProperty] private bool _isBusy;
+        [ObservableProperty] private DateTime _fromDate = DateTime.Today.AddDays(-6);
+        [ObservableProperty] private DateTime _toDate = DateTime.Today;
 
         /// <summary>차트가 구독한다. 선택 회차의 측정이 다시 로드될 때마다 발생.</summary>
         public event EventHandler<IReadOnlyList<RecipeMeasurementRecord>>? MeasurementsLoaded;
@@ -213,21 +215,12 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             try
             {
-                foreach (string runId in await repo.ListRunIdsAsync())
-                {
-                    var samples = (await repo.QueryByRunAsync(runId)).ToList();
-                    if (samples.Count == 0) continue;
+                var from = DateTime.SpecifyKind(FromDate.Date, DateTimeKind.Local);
+                var to = DateTime.SpecifyKind(ToDate.Date.AddDays(1), DateTimeKind.Local);
+                foreach (var run in BuildRuns(await repo.QueryBetweenAsync(from, to)))
+                    Runs.Add(run);
 
-                    Runs.Add(new RecipeRunModel
-                    {
-                        RunId = runId,
-                        RecipeName = samples[0].RecipeName,
-                        StartedAt = samples[0].Timestamp,
-                        MeasurementCount = samples.Count
-                    });
-                }
-
-                StatusMessage = Runs.Count == 0 ? "기록된 실행 회차가 없습니다." : string.Empty;
+                StatusMessage = Runs.Count == 0 ? "선택한 기간에 기록된 실행 회차가 없습니다." : string.Empty;
                 SelectedRun = Runs.FirstOrDefault();
             }
             catch (Exception ex)
@@ -235,6 +228,20 @@ namespace HeatingCameraSystem.Master.ViewModels
                 StatusMessage = $"회차 목록 조회 실패: {ex.Message}";
             }
         }
+
+        // ponytail: 기간 경계에 걸친 회차는 기간 안쪽 측정만 집계된다. 문제 되면 RunId로 전체를 다시 조회.
+        internal static List<RecipeRunModel> BuildRuns(IEnumerable<RecipeMeasurementRecord> samples)
+            => samples
+                .GroupBy(s => s.RunId, StringComparer.Ordinal)
+                .Select(g => new RecipeRunModel
+                {
+                    RunId = g.Key,
+                    RecipeName = g.First().RecipeName,
+                    StartedAt = g.Min(s => s.Timestamp),
+                    MeasurementCount = g.Count()
+                })
+                .OrderByDescending(r => r.StartedAt)
+                .ToList();
 
         private async Task LoadRunAsync(RecipeRunModel? run)
         {

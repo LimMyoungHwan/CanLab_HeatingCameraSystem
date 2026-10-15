@@ -52,6 +52,16 @@ namespace HeatingCameraSystem.Master.Services
             return Task.FromResult<IEnumerable<string>>(runIds);
         }
 
+        public Task<IEnumerable<RecipeMeasurementRecord>> QueryBetweenAsync(DateTime from, DateTime to)
+        {
+            var results = _col.Query()
+                .Where(r => r.Timestamp >= from && r.Timestamp < to)
+                .OrderBy(r => r.Timestamp)
+                .ToList();
+
+            return Task.FromResult<IEnumerable<RecipeMeasurementRecord>>(results);
+        }
+
         public Task DeleteOlderThanAsync(DateTime cutoff)
         {
             _col.DeleteMany(r => r.Timestamp < cutoff);

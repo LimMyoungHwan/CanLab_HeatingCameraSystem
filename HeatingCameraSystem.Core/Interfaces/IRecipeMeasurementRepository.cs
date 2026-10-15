@@ -16,6 +16,9 @@ namespace HeatingCameraSystem.Core.Interfaces
         /// <summary>측정이 남아 있는 실행 회차의 RunId를 최신순으로 반환한다.</summary>
         Task<IEnumerable<string>> ListRunIdsAsync(int limit = 100);
 
+        /// <summary>[from, to) 구간의 측정을 시간 오름차순으로 반환한다(결과 화면 기간 조회용).</summary>
+        Task<IEnumerable<RecipeMeasurementRecord>> QueryBetweenAsync(DateTime from, DateTime to);
+
         Task DeleteOlderThanAsync(DateTime cutoff);
     }
 }

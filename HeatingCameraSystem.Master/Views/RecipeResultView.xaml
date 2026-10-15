@@ -28,7 +28,17 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Margin="12">
                     <TextBlock Text="실행 회차" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextOnSurface}"/>
-                    <Button Content="새로고침" Command="{Binding RefreshCommand}" Margin="0,8,0,0" Padding="0,6"
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <DatePicker Grid.Column="0" SelectedDate="{Binding FromDate}"/>
+                        <TextBlock Grid.Column="1" Text="~" Margin="6,0" VerticalAlignment="Center" Foreground="{StaticResource TextOnSurface}"/>
+                        <DatePicker Grid.Column="2" SelectedDate="{Binding ToDate}"/>
+                    </Grid>
+                    <Button Content="조회" Command="{Binding RefreshCommand}" Margin="0,8,0,0" Padding="0,6"
                             Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
                 </StackPanel>
                 <ListBox ItemsSource="{Binding Runs}" SelectedItem="{Binding SelectedRun}" Margin="8"
