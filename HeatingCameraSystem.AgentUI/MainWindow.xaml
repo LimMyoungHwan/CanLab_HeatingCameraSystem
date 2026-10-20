@@ -263,13 +263,16 @@
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
                                                     </Grid.RowDefinitions>
                                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="S/N: " Foreground="#909090"/>
                                                     <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SerialNumber}"/>
                                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="FPA: " Foreground="#909090"/>
                                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FpaTemperature}"/>
-                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{loc:Loc Cam_OutputFormat}" Foreground="#909090"/>
-                                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding OutputFormatText}" TextWrapping="Wrap">
+                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="LSB: " Foreground="#909090"/>
+                                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding BiasLsb}"/>
+                                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="{loc:Loc Cam_OutputFormat}" Foreground="#909090"/>
+                                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding OutputFormatText}" TextWrapping="Wrap">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
                                                                 <Setter Property="Foreground" Value="#7CD97C"/>

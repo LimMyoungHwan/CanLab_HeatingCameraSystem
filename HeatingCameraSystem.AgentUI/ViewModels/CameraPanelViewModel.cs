@@ -26,7 +26,11 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private readonly string _agentId;
         private readonly int _captureBurstCount;
         private readonly Func<CaptureResultMessage, Task>? _publishResult;
+        private readonly CancellationTokenSource? _infoPollCts;
         private string? _lastTemperatureFailure;
+
+        private const string Unknown = "—";
+        private static readonly TimeSpan InfoPollInterval = TimeSpan.FromSeconds(1);
 
         [ObservableProperty]
         private string _title;
@@ -38,10 +42,13 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private string _status;
 
         [ObservableProperty]
-        private string _serialNumber = "—";
+        private string _serialNumber = Unknown;
 
         [ObservableProperty]
-        private string _fpaTemperature = "—";
+        private string _fpaTemperature = Unknown;
+
+        [ObservableProperty]
+        private string _biasLsb = Unknown;
 
         [ObservableProperty]
         private string _serialStatus = string.Empty;
@@ -71,6 +78,14 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
             _runtime.FrameReady += OnFrameReady;
             _runtime.StatusChanged += OnStatusChanged;
+
+            if (_serial is not null)
+            {
+                _infoPollCts = new CancellationTokenSource();
+                ICameraSerialClient pollSerial = _serial;
+                CancellationToken pollToken = _infoPollCts.Token;
+                _ = Task.Run(() => PollInfoLoopAsync(pollSerial, pollToken));
+            }
         }
 
         /// <summary>카메라 루프 스레드에서 프레임을 변환해 UI 스레드로 넘긴다. 변환 실패 프레임은 조용히 버린다.</summary>
@@ -207,9 +222,10 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
             try
             {
-                SerialNumber = await _serial.ReadSerialNumberAsync();
+                string serialNumber = await _serial.ReadSerialNumberAsync();
                 double fpa = await _serial.ReadFpaTemperatureAsync();
-                FpaTemperature = $"{fpa:F1} ℃";
+                byte lsb = await _serial.ReadBiasAsync();
+                ApplyInfo((serialNumber, fpa, lsb));
                 await ReadOutputFormatAsync();
                 SerialStatus = $"정보 갱신 {DateTime.Now:HH:mm:ss}";
             }
@@ -217,6 +233,75 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             {
                 SerialStatus = $"읽기 실패: {ex.Message}";
             }
+        }
+
+        /// <summary>
+        /// S/N·FPA·LSB 표시를 1초마다 갱신한다. 시리얼 I/O는 <see cref="ICameraSerialClient"/> 구현이
+        /// SerialPort를 동기 호출하므로 반드시 UI 스레드 밖에서 돌려야 한다 — 그래서 DispatcherTimer가
+        /// 아니라 백그라운드 루프이고, 표시 반영만 디스패처로 넘긴다.
+        /// <para>
+        /// S/N도 매 틱 읽는다(왕복 7회). 불변값이 아니라 모드 신호이기 때문이다 — 카메라가 STOP이면
+        /// 전부 0인 S/N이 나오므로(<c>CameraComPairingStartRecoveryTests</c>가 이 동작을 고정한다)
+        /// 운영 중 S/N이 바뀌면 카메라 모드가 바뀐 것으로 읽는다. 1회만 읽으면 그 전환이 안 보인다.
+        /// </para>
+        /// <para>
+        /// 주기는 <see cref="PeriodicTimer"/>가 아니라 사이클 끝의 지연으로 보장한다. PeriodicTimer는
+        /// 놓친 틱을 즉시 돌려주므로, 카메라가 응답을 멈춰 7회 × ReadTimeout(200ms)이 걸리면 폴링이
+        /// 쉬는 구간 없이 연속으로 돌아 셔터·캡처와 공유하는 포트 락을 굶긴다.
+        /// </para>
+        /// </summary>
+        private async Task PollInfoLoopAsync(ICameraSerialClient serial, CancellationToken ct)
+        {
+            try
+            {
+                while (true)
+                {
+                    await Task.Delay(InfoPollInterval, ct).ConfigureAwait(false);
+
+                    (string SerialNumber, double Fpa, byte Lsb)? reading = null;
+                    try
+                    {
+                        string serialNumber = await serial.ReadSerialNumberAsync(ct).ConfigureAwait(false);
+                        double fpa = await serial.ReadFpaTemperatureAsync(ct).ConfigureAwait(false);
+                        byte lsb = await serial.ReadBiasAsync(ct).ConfigureAwait(false);
+                        reading = (serialNumber, fpa, lsb);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception)
+                    {
+                        // 링크 끊김·타임아웃은 화면만 비우고 다음 틱에 복구한다. 사유 로그는 하트비트
+                        // 경로(NoteTemperatureFailure)가 이미 남기므로 여기서 또 남기면 1초마다 중복된다.
+                    }
+
+                    _ = _dispatcher.InvokeAsync(() => ApplyInfo(reading));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // 패널 Dispose — 정상 종료 경로.
+            }
+        }
+
+        /// <summary>
+        /// 읽은 값을 표시 속성에 반영한다. <paramref name="reading"/>이 null이면(읽기 실패) 세 값을 모두
+        /// 비운다 — 셋 다 실시간 값이라, 못 읽은 상태에서 옛값을 남기면 유효한 현재값처럼 보인다.
+        /// </summary>
+        internal void ApplyInfo((string SerialNumber, double Fpa, byte Lsb)? reading)
+        {
+            if (reading is not { } value)
+            {
+                SerialNumber = Unknown;
+                FpaTemperature = Unknown;
+                BiasLsb = Unknown;
+                return;
+            }
+
+            SerialNumber = value.SerialNumber;
+            FpaTemperature = $"{value.Fpa:F1} ℃";
+            BiasLsb = $"0x{value.Lsb:X2}";
         }
 
         public CameraOutputFormat[] OutputFormats { get; } = Enum.GetValues<CameraOutputFormat>();
@@ -591,6 +676,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
         public void Dispose()
         {
+            _infoPollCts?.Cancel();
+            _infoPollCts?.Dispose();
             _runtime.FrameReady -= OnFrameReady;
             _runtime.StatusChanged -= OnStatusChanged;
             _serial?.Dispose();

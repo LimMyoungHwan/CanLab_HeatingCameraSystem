@@ -71,6 +71,9 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
         public Task SetBiasAsync(byte value, CancellationToken ct = default)
             => SetBiasRegisterAsync(CameraBiasRegister.GskLsb, value, ct);
 
+        public Task<byte> ReadBiasAsync(CancellationToken ct = default)
+            => QueryAsync((byte)ClMainId.Detector, (byte)ClDetectorSubId.GskLsb, ClRw.Read, 0, ct);
+
         public Task SetBiasRegisterAsync(CameraBiasRegister register, byte value, CancellationToken ct = default)
             => QueryAsync((byte)ClMainId.Detector, (byte)ToDetectorSubId(register), ClRw.Write, value, ct);
 

@@ -76,6 +76,8 @@ namespace HeatingCameraSystem.Protocols.Simulation
             return Task.CompletedTask;
         }
 
+        public Task<byte> ReadBiasAsync(CancellationToken ct = default) => Task.FromResult(Bias);
+
         public Task SetBiasRegisterAsync(CameraBiasRegister register, byte value, CancellationToken ct = default)
         {
             BiasRegisters[register] = value;

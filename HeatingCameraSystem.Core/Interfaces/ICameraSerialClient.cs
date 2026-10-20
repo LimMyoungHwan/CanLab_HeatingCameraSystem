@@ -61,6 +61,12 @@ namespace HeatingCameraSystem.Core.Interfaces
         /// <summary>검출기 GSK LSB 바이어스 레지스터(0~255)를 설정한다.</summary>
         Task SetBiasAsync(byte value, CancellationToken ct = default);
 
+        /// <summary>
+        /// 검출기 GSK LSB 바이어스 레지스터(0~255)를 읽는다. 같은 레지스터에 READ를 보내는
+        /// 벤더 레퍼런스는 <c>참고/AISEN_CODE/main.py:1769-1788</c>.
+        /// </summary>
+        Task<byte> ReadBiasAsync(CancellationToken ct = default);
+
         Task SetBiasRegisterAsync(CameraBiasRegister register, byte value, CancellationToken ct = default);
 
         /// <summary>true이면 카메라를 실행 상태로 만들고, false이면 중지한다.</summary>

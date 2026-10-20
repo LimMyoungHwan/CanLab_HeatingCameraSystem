@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
@@ -46,6 +47,80 @@ namespace HeatingCameraSystem.Tests
                 await panel.StartLiveAsync();
 
                 Assert.False(panel.HasSerialControl);
+            }
+            finally
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+            }
+        }
+
+        [Fact]
+        public void ApplyInfo_FailedReadBlanksAllLiveValues()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "hcs_panel_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                using var runtime = new CameraRuntime(0, new FakeThermalFrameSource(), framePeriodMs: 10);
+                using var index = new LiteDbCaptureIndex(Path.Combine(dir, "idx.db"));
+                using var store = new CaptureStore(dir, index);
+                using var panel = new CameraPanelViewModel("cam", "Agent_1", runtime, Dispatcher.CurrentDispatcher,
+                    new ThermalNucCorrector(), store, captureBurstCount: 1, serial: null);
+
+                panel.ApplyInfo(("545308020", 31.47, 0xA3));
+
+                Assert.Equal("545308020", panel.SerialNumber);
+                Assert.Equal("31.5 ℃", panel.FpaTemperature);
+                Assert.Equal("0xA3", panel.BiasLsb);
+
+                panel.ApplyInfo(null);
+
+                Assert.Equal("—", panel.SerialNumber);
+                Assert.Equal("—", panel.FpaTemperature);
+                Assert.Equal("—", panel.BiasLsb);
+            }
+            finally
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+            }
+        }
+
+        [Fact]
+        public async Task InfoPoll_TicksEverySecondAndStopsOnDispose()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "hcs_panel_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                using var runtime = new CameraRuntime(0, new FakeThermalFrameSource(), framePeriodMs: 10);
+                using var index = new LiteDbCaptureIndex(Path.Combine(dir, "idx.db"));
+                using var store = new CaptureStore(dir, index);
+
+                var serial = new Mock<ICameraSerialClient>();
+                serial.Setup(s => s.ReadSerialNumberAsync(It.IsAny<CancellationToken>())).ReturnsAsync("545308020");
+                serial.Setup(s => s.ReadFpaTemperatureAsync(It.IsAny<CancellationToken>())).ReturnsAsync(31.4);
+                serial.Setup(s => s.ReadBiasAsync(It.IsAny<CancellationToken>())).ReturnsAsync((byte)0xA3);
+
+                int BiasReads() => serial.Invocations.Count(i => i.Method.Name == nameof(ICameraSerialClient.ReadBiasAsync));
+                int SerialNumberReads() => serial.Invocations.Count(i => i.Method.Name == nameof(ICameraSerialClient.ReadSerialNumberAsync));
+                using (new CameraPanelViewModel("cam", "Agent_1", runtime, Dispatcher.CurrentDispatcher,
+                    new ThermalNucCorrector(), store, captureBurstCount: 1, serial: serial.Object))
+                {
+                    DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(6);
+                    while (BiasReads() < 2 && DateTime.UtcNow < deadline)
+                    {
+                        await Task.Delay(100);
+                    }
+                }
+
+                Assert.True(BiasReads() >= 2, $"1초 주기 폴링이 아니다: 6초 안에 {BiasReads()}회만 읽었다.");
+                Assert.True(SerialNumberReads() >= 2, $"S/N을 매 틱 읽지 않는다: {SerialNumberReads()}회.");
+
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
+                int atDispose = BiasReads();
+                await Task.Delay(TimeSpan.FromMilliseconds(1500));
+
+                Assert.Equal(atDispose, BiasReads());
             }
             finally
             {

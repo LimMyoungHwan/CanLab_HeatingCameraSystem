@@ -39,6 +39,7 @@ namespace HeatingCameraSystem.Tests
         public Task<short> ReadFpaTemperatureRawAsync(CancellationToken ct = default) => Task.FromResult((short)16560);
         public Task SetShutterAsync(bool open, CancellationToken ct = default) => Task.CompletedTask;
         public Task SetBiasAsync(byte value, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<byte> ReadBiasAsync(CancellationToken ct = default) => Task.FromResult<byte>(0);
         public Task SetBiasRegisterAsync(CameraBiasRegister register, byte value, CancellationToken ct = default) => Task.CompletedTask;
 
             public Task SetCameraRunningAsync(bool running, CancellationToken ct = default)
