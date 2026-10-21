@@ -48,7 +48,7 @@
                     AllowDrop="True" DragEnter="Step_DragEnter" Drop="Step_Drop" MouseLeftButtonUp="Step_Select">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <TextBlock Text="☰" FontSize="18" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,12,0" Cursor="SizeAll" PreviewMouseLeftButtonDown="Step_PreviewMouseLeftButtonDown" MouseMove="Step_MouseMove"/>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
@@ -56,10 +56,17 @@
                     </StackPanel>
                     <Button Grid.Column="2" Content="X" Foreground="{StaticResource TextOnSurfaceVariant}" Background="Transparent" BorderThickness="0" Command="{Binding DataContext.DeleteStepCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/>
                     <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
-                        <StackPanel Margin="0,0,16,0" Width="100"><TextBlock Text="이동 타입" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><ComboBox ItemsSource="{Binding DataContext.MotorMoveTypeOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Value" SelectedValue="{Binding MotorMoveType}" DisplayMemberPath="Label" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0" Width="100" ToolTipService.ShowOnDisabled="True" ToolTip="Point로 저장된 스텝은 좌표로 바꿀 수 없습니다. 지우고 새로 추가하세요."><TextBlock Text="이동 타입" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><ComboBox ItemsSource="{Binding DataContext.MotorMoveTypeOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Value" SelectedValue="{Binding MotorMoveType}" DisplayMemberPath="Label" IsEnabled="{Binding CanChangeMotorMoveType}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/></StackPanel>
                         <StackPanel Margin="0,0,16,0" Width="100" Visibility="{Binding ShowsManualCoordinates, Converter={StaticResource BooleanToVisibilityConverter}}"><TextBlock Text="X (mm)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding PositionX}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
                         <StackPanel Margin="0,0,16,0" Width="100" Visibility="{Binding ShowsManualCoordinates, Converter={StaticResource BooleanToVisibilityConverter}}"><TextBlock Text="Y (mm)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><TextBox Text="{Binding PositionY}" Background="Transparent" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/></StackPanel>
-                        <StackPanel Width="100" Visibility="{Binding ShowsAutomaticPoint, Converter={StaticResource BooleanToVisibilityConverter}}"><TextBlock Text="POINT (1-20)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><ComboBox ItemsSource="{Binding DataContext.ServoPointOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding TargetPositionIndex}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/></StackPanel>
+                        <StackPanel Margin="0,0,16,0" Width="100" Visibility="{Binding ShowsAutomaticPoint, Converter={StaticResource BooleanToVisibilityConverter}}"><TextBlock Text="POINT (1-20)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/><ComboBox ItemsSource="{Binding DataContext.ServoPointOptions, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding TargetPositionIndex}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/></StackPanel>
+                        <TextBlock VerticalAlignment="Bottom" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"
+                                   Visibility="{Binding IsPointLocked, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                   Text="Point로 저장된 스텝은 좌표로 바꿀 수 없습니다. 지우고 새로 추가하세요."/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,10,0,0">
+                        <CheckBox Content="계획 슬롯: 셀 위치" IsChecked="{Binding UsesCellPosition, Mode=OneWay}" Command="{Binding DataContext.TogglePositionSlotCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Foreground="{StaticResource TextOnSurface}" VerticalAlignment="Center" ToolTip="계획에서만 선택 카메라의 역할 위치로 치환합니다. 독립 실행 위치는 유지됩니다."/>
+                        <ComboBox ItemsSource="{x:Static vm:RecipeStepModel.PositionRoles}" SelectedItem="{Binding CellPositionRole}" IsEnabled="{Binding UsesCellPosition}" Width="100" Margin="12,0,0,0" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -221,26 +228,33 @@
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="{Binding StepNumber, StringFormat='#{0}'}" Foreground="{StaticResource Primary}" FontWeight="Bold" Margin="0,0,12,0"/>
                         <TextBlock Text="카메라 명령" Foreground="{StaticResource TextOnSurface}" FontWeight="SemiBold"/>
+                        <CheckBox Content="계획 슬롯: 셀 카메라" IsChecked="{Binding UseCellCamera}" Foreground="{StaticResource TextOnSurface}" Margin="20,0,0,0" ToolTip="계획에서만 Agent/카메라를 치환합니다. 대역·역할과 독립 실행 기본 대상은 유지됩니다."/>
                     </StackPanel>
                     <StackPanel Width="440" Margin="0,8,0,0" HorizontalAlignment="Left" Grid.Column="1" Grid.Row="2" Grid.ColumnSpan="2">
                         <TextBlock Text="대상 카메라 (복수 선택 · 대역/흑체는 카메라마다 지정)" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}"/>
-                        <ComboBox ItemsSource="{Binding CameraTargets}" IsEditable="True" IsReadOnly="True" Text="{Binding SelectedCameraSummary, Mode=OneWay}" StaysOpenOnEdit="True" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal">
-                                        <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" Width="160" VerticalAlignment="Center" Foreground="{StaticResource TextOnSurface}" PreviewMouseDown="CameraTargetCheckBox_PreviewMouseDown"/>
-                                        <ComboBox Width="110" Margin="8,0,0,0"
-                                                      ItemsSource="{Binding DataContext.ChamberRangeOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                      SelectedValuePath="Value" SelectedValue="{Binding TargetChamber, Mode=TwoWay}" DisplayMemberPath="Label"
-                                                      Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
-                                        <ComboBox Width="130" Margin="8,0,0,0"
-                                                      ItemsSource="{Binding DataContext.BlackBodyRoleOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                      SelectedValuePath="Value" SelectedValue="{Binding TargetBlackBody, Mode=TwoWay}" DisplayMemberPath="Label"
-                                                      Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
+                        <Grid>
+                            <ComboBox x:Name="CameraTargetCombo" ItemsSource="{Binding CameraTargets}" SelectionChanged="CameraTargetCombo_SelectionChanged" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" Width="160" VerticalAlignment="Center" Foreground="{StaticResource TextOnSurface}" PreviewMouseDown="CameraTargetCheckBox_PreviewMouseDown"><TextBlock Text="{Binding Label}"/></CheckBox>
+                                            <ComboBox Width="110" Margin="8,0,0,0"
+                                                          ItemsSource="{Binding DataContext.ChamberRangeOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          SelectedValuePath="Value" SelectedValue="{Binding TargetChamber, Mode=TwoWay}" DisplayMemberPath="Label"
+                                                          Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
+                                            <ComboBox Width="130" Margin="8,0,0,0"
+                                                          ItemsSource="{Binding DataContext.BlackBodyRoleOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          SelectedValuePath="Value" SelectedValue="{Binding TargetBlackBody, Mode=TwoWay}" DisplayMemberPath="Label"
+                                                          Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <!-- 전역 ComboBox 템플릿은 Text를 그리지 않으므로 요약을 직접 그린다. -->
+                            <TextBlock x:Name="CameraTargetSummaryText" Text="{Binding SelectedCameraSummary, Mode=OneWay}" IsHitTestVisible="False"
+                                       Margin="8,0,30,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                       Foreground="{StaticResource TextOnSurface}"/>
+                        </Grid>
                     </StackPanel>
                     <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" TextWrapping="Wrap" FontSize="11"
                                Foreground="{StaticResource TextOnSurfaceVariant}"
@@ -341,6 +355,21 @@
         </DataTemplate>
     </UserControl.Resources>
 
+    <TabControl x:Name="EditorTabs" Background="{StaticResource BgSurface}" BorderThickness="0">
+        <TabControl.Resources>
+            <Style TargetType="TabItem">
+                <Setter Property="Background" Value="{StaticResource BgSurfaceContainer}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextOnSurface}"/>
+                <Setter Property="Padding" Value="18,8"/>
+                <Style.Triggers>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Foreground" Value="{StaticResource BgSurface}"/>
+                        <Setter Property="Background" Value="{StaticResource Primary}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+        </TabControl.Resources>
+        <TabItem Header="레시피 편집">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="250"/>
@@ -373,6 +402,8 @@
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
                                         <TextBox Name="RecipeNameTextBox" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" FontWeight="Bold" FontSize="14" Background="Transparent" BorderThickness="0" Margin="-2,0,0,0">
                                             <TextBox.Style>
@@ -386,7 +417,15 @@
                                                 </Style>
                                             </TextBox.Style>
                                         </TextBox>
-                                        <TextBlock Grid.Row="1" Text="{Binding LastModified, StringFormat='MODIFIED: {0}'}" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,4,0,0"/>
+                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,6,0,0">
+                                            <Border Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="3" Padding="6,2">
+                                                <TextBlock Text="{Binding TypeLabel}" FontSize="11" Foreground="{StaticResource Primary}"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="2" Text="{Binding PlanValidationLabel}" TextWrapping="Wrap" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Error}" Margin="0,6,0,0"
+                                                   Visibility="{Binding HasPlanValidationError, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                        <TextBlock Grid.Row="3" Text="{Binding LastModified, StringFormat='MODIFIED: {0}'}" FontSize="10" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,4,0,0"/>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -396,15 +435,20 @@
                 
                 <Border Grid.Row="2" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,1,0,0" Padding="16">
                     <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         
-                        <Button Grid.Column="0" Content="{loc:Loc Recipe_NewRecipe}" Command="{Binding AddRecipeCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Primary}" BorderThickness="0" Margin="0,0,4,0" Padding="0,8"/>
-                        <Button Grid.Column="1" Content="{loc:Loc Recipe_CopyRecipe}" Command="{Binding CopyRecipeCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Secondary}" BorderThickness="0" Margin="4,0,4,0" Padding="0,8"/>
-                        <Button Grid.Column="2" Content="{loc:Loc Common_Delete}" Command="{Binding DeleteRecipeCommand}" CommandParameter="{Binding SelectedRecipe}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Error}" BorderThickness="0" Margin="4,0,0,0" Padding="0,8"/>
+                        <Button Grid.Row="0" Grid.ColumnSpan="2" Content="{loc:Loc Recipe_NewPlanRecipe}" Command="{Binding AddPlanRecipeCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Primary}" BorderThickness="0" Margin="0,0,0,8" Padding="8,10"/>
+                        <Button Grid.Row="1" Grid.ColumnSpan="2" Content="{loc:Loc Recipe_NewStepRecipe}" Command="{Binding AddRecipeCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Margin="0,0,0,8" Padding="8,10"/>
+                        <Button Grid.Row="2" Grid.Column="0" Content="{loc:Loc Recipe_CopyRecipe}" Command="{Binding CopyRecipeCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Secondary}" BorderThickness="0" Margin="0,0,4,0" Padding="0,8"/>
+                        <Button Grid.Row="2" Grid.Column="1" Content="{loc:Loc Common_Delete}" Command="{Binding DeleteRecipeCommand}" CommandParameter="{Binding SelectedRecipe}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Error}" BorderThickness="0" Margin="4,0,0,0" Padding="0,8"/>
                     </Grid>
                 </Border>
             </Grid>
@@ -431,7 +475,6 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="1.5*"/>
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Grid.Column="0" Margin="0,0,16,0" Visibility="Collapsed">
@@ -473,29 +516,33 @@
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
-
-                            <StackPanel Grid.Column="4">
-                                <TextBlock Text="CAPTURE MODE" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                                <Border Background="{StaticResource BgSurfaceContainer}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" CornerRadius="4" Padding="2">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <!-- Note: using simplistic toggle buttons or regular buttons binding to a command. -->
-                                        <!-- This is just a placeholder look -->
-                                        <Button Grid.Column="0" Content="Sequential" Background="{StaticResource Primary}" Foreground="#002020" BorderThickness="0" FontWeight="Bold" Padding="0,8"/>
-                                        <Button Grid.Column="1" Content="Simultaneous" Background="Transparent" Foreground="{StaticResource TextOnSurfaceVariant}" BorderThickness="0" Padding="0,8"/>
-                                    </Grid>
-                                </Border>
-                            </StackPanel>
                         </Grid>
 
+                        <CheckBox x:Name="OverwriteDuplicateShotsCheckBox" Margin="0,16,0,0" Content="같은 폴더 중복 저장(덮어쓰기)"
+                                  IsChecked="{Binding OverwriteDuplicateShots}" Foreground="{StaticResource TextOnSurface}"
+                                  ToolTip="체크: 같은 폴더에 다시 찍으면 000부터 덮어씁니다 / 해제: 번호를 이어서 저장합니다(기본)"/>
+                        <WrapPanel Margin="0,16,0,0">
+                            <Button Content="이 레시피로 계획 만들기" Command="{Binding DataContext.ConvertToPlanCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Visibility="{Binding IsLegacyRecipe, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    ToolTip="이 스텝 레시피를 실시간으로 연결한 계획을 만듭니다. 슬롯과 카메라는 명시적으로 지정하세요."
+                                    Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Primary}" BorderThickness="0" Padding="12,8"/>
+                            <Button Content="스텝 목록으로 만들기 (복사본)" Command="{Binding DataContext.FlattenPlanCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Visibility="{Binding IsPlanRecipe, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    ToolTip="현재 계획을 검증하여 실행 스텝 복사본을 만듭니다. 원본 계획은 유지됩니다."
+                                    Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource Primary}" BorderThickness="0" Padding="12,8"/>
+                        </WrapPanel>
+                        <TextBlock Text="{Binding DataContext.TemplateUsage, RelativeSource={RelativeSource AncestorType=UserControl}}" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                        <Border Margin="0,12,0,0" Padding="12" BorderThickness="2" BorderBrush="{StaticResource Error}" Background="{StaticResource BgSurface}"
+                                Visibility="{Binding DataContext.HasOperationError, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="{Binding DataContext.OperationError, RelativeSource={RelativeSource AncestorType=UserControl}}" TextWrapping="Wrap"
+                                       Foreground="{StaticResource Error}" FontSize="14" FontWeight="SemiBold"
+                                       AutomationProperties.LiveSetting="Assertive"/>
+                        </Border>
                     </StackPanel>
                 </Border>
 
                 <!-- Steps Scroll Area -->
-                <ScrollViewer Grid.Row="1" Padding="16">
+                <ScrollViewer Grid.Row="1" Padding="16" Visibility="{Binding IsLegacyRecipe, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <StackPanel>
                         <TextBlock Text="STEPS (DRAG TO REORDER)" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,8"/>
                         
@@ -536,22 +583,18 @@
                     </StackPanel>
                 </ScrollViewer>
 
+                <local:CapturePlanEditorView Grid.Row="1"
+                                             Visibility="{Binding DataContext.SelectedRecipe.IsPlanRecipe, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                             DataContext="{Binding DataContext.PlanEditor, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+
                 <!-- Bottom Bar Actions -->
                 <Border Grid.Row="2" Background="{StaticResource BgSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="0,1,0,0" Padding="16">
                     <Grid>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Ellipse Width="8" Height="8" Fill="{StaticResource Secondary}" Margin="0,0,8,0"/>
-                            <TextBlock Text="DB CONNECTION STABLE" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}"/>
-                        </StackPanel>
                         
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <!-- 이 Grid의 DataContext는 SelectedRecipe(RecipeModel)다(391행). VM 커맨드는 반드시
-                                 UserControl까지 올라가서 찾아야 한다 — 직접 바인딩하면 Command가 null이 되어
-                                 버튼이 조용히 아무 일도 하지 않는다. -->
                             <Button Content="IMPORT" Command="{Binding DataContext.ImportRecipeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Background="Transparent" Foreground="{StaticResource Primary}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="24,8" Margin="0,0,8,0" FontWeight="Bold"/>
                             <Button Content="EXPORT" Command="{Binding DataContext.ExportRecipeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Background="Transparent" Foreground="{StaticResource Primary}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="24,8" Margin="0,0,16,0" FontWeight="Bold"/>
                             <TextBlock Text="{Binding DataContext.IoStatusMessage, RelativeSource={RelativeSource AncestorType=UserControl}}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" MaxWidth="320" Margin="0,0,16,0"/>
-                            <Button Content="CANCEL" Background="Transparent" Foreground="{StaticResource TextOnSurfaceVariant}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="24,8" Margin="0,0,16,0" FontWeight="Bold"/>
                             <Button Content="SAVE RECIPE" Command="{Binding DataContext.SaveRecipeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" Background="{StaticResource Secondary}" Foreground="#00210c" BorderThickness="0" Padding="32,8" FontWeight="Bold"/>
                         </StackPanel>
                     </Grid>
@@ -574,7 +617,7 @@
 
                 <StackPanel Grid.Row="1" Margin="0,0,0,16">
                     <TextBlock Text="{loc:Loc Recipe_OnlineAgentCameras}" FontSize="11" Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,0,0,4"/>
-                    <ComboBox ItemsSource="{Binding OnlineAgentCameras}" SelectedItem="{Binding SelectedPreviewCamera}" DisplayMemberPath="Label" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"/>
+                    <ComboBox ItemsSource="{Binding OnlineAgentCameras}" SelectedItem="{Binding SelectedPreviewCamera}" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
                 </StackPanel>
 
                 <Border Grid.Row="2" Background="Black" Width="380" Height="285" Margin="0,0,0,16" HorizontalAlignment="Center">
@@ -640,4 +683,9 @@
             </Grid>
         </Border>
     </Grid>
+        </TabItem>
+        <TabItem Header="카메라 공유 위치표">
+            <local:CameraPositionsView x:Name="PositionsEditor"/>
+        </TabItem>
+    </TabControl>
 </UserControl>

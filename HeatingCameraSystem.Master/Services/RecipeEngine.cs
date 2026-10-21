@@ -39,12 +39,19 @@ namespace HeatingCameraSystem.Master.Services
         private readonly INatsCommunicationService _natsService;
         private readonly ICaptureHistoryRepository _historyRepo;
         private readonly float _tempTolerance;
+        private readonly float _positionToleranceMm;
 
         /// <summary>
         /// 이번 실행의 제품 폴더명(<c>{제품번호}_{회차}</c>). 파일명이 <c>_000</c>부터 고정이라
         /// 회차를 폴더로 갈라놓지 않으면 재실행이 이전 실행을 덮어쓴다.
         /// </summary>
         private string _runProductNumber = string.Empty;
+
+        /// <summary>
+        /// 이번 실행에서 실제 생산 목적지별 다음 파일 번호. 새 실행의 제품 회차 폴더와 함께 초기화한다.
+        /// 계획에 미리 배정된 offset은 하한으로 유지하므로 재개·실패 재촬영도 이중 누적하지 않는다.
+        /// </summary>
+        private readonly Dictionary<(string AgentId, int CameraIndex, string ConditionFolder, string BlackBodyFolder, string FilePrefix), int> _nextProductionShotNumbers = new();
 
         /// <summary>
         /// 직전 ChamberControl 스텝이 지시한 목표 온도(℃). 저장 규칙의 조건 폴더가 이 값을 쓴다.
@@ -65,6 +72,57 @@ namespace HeatingCameraSystem.Master.Services
         private volatile bool _isRunning;
 
         public event EventHandler? EmergencyStopChanged;
+
+        /// <summary>동기 영수증 이벤트. 구독자의 저장 실패는 호출자에게 전파된다.</summary>
+        public event EventHandler<RecipeStepExecution>? StepExecutionChanged;
+
+        public string? CurrentRunId { get; private set; }
+
+        private sealed class StepExecutionState
+        {
+            public required RecipeStep Step { get; init; }
+            public required string RunId { get; init; }
+            public int Index { get; init; }
+            public int Pending { get; set; }
+            public bool Dispatched { get; set; }
+            public bool Finished { get; set; }
+            public RecipeStepOutcome Outcome { get; private set; } = RecipeStepOutcome.Succeeded;
+            public string? Reason { get; private set; }
+
+            public void Fail(string reason)
+            {
+                if (Outcome != RecipeStepOutcome.Failed)
+                    Reason = reason;
+                Outcome = RecipeStepOutcome.Failed;
+            }
+
+            public void Skip(string reason)
+            {
+                if (Outcome != RecipeStepOutcome.Succeeded) return;
+                Outcome = RecipeStepOutcome.Skipped;
+                Reason = reason;
+            }
+        }
+
+        private void ReportStep(StepExecutionState state, RecipeStepOutcome outcome, string? reason = null)
+            => StepExecutionChanged?.Invoke(this, new RecipeStepExecution
+            {
+                RunId = state.RunId,
+                StepId = state.Step.StepId,
+                PlanCellKey = state.Step.PlanCellKey,
+                StepIndex = state.Index,
+                Kind = state.Step.Kind,
+                CameraIndex = state.Step.CameraIndex,
+                Outcome = outcome,
+                Reason = reason
+            });
+
+        private void FinishStep(StepExecutionState state)
+        {
+            if (state.Finished || !state.Dispatched || state.Pending > 0) return;
+            state.Finished = true;
+            ReportStep(state, state.Outcome, state.Reason);
+        }
 
         /// <summary>레시피가 실행 중인지. 하드웨어 구성을 바꾸는 화면이 실행 중 조작을 막는 데 쓴다.</summary>
         public bool IsRunning => _isRunning;
@@ -124,6 +182,7 @@ namespace HeatingCameraSystem.Master.Services
             _historyRepo = historyRepo;
             var s = settings ?? new RecipeEngineSettings();
             _tempTolerance  = s.TemperatureTolerance;
+            _positionToleranceMm = s.PositionToleranceMm;
             _rampStepIntervalSeconds = s.RampStepIntervalSeconds;
             _captureTimeout = TimeSpan.FromSeconds(s.CaptureResultTimeoutSeconds);
             _motorMoveTimeout = TimeSpan.FromSeconds(s.MotorMoveTimeoutSeconds);
@@ -175,8 +234,10 @@ namespace HeatingCameraSystem.Master.Services
         /// 계속한다. 챔버를 켠 뒤에는 정상 완료·취소·PLC 알람 어느 경로로 끝나든 StopChamberAsync를
         /// 호출한다.
         /// </summary>
-        public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null, Func<CancellationToken, Task<bool>>? waitForResumeAsync = null)
+        public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null, Func<CancellationToken, Task<bool>>? waitForResumeAsync = null, string? runId = null)
         {
+            runId ??= Guid.NewGuid().ToString();
+            CurrentRunId = runId;
             using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, GetEmergencyStopToken());
             cancellationToken = linkedCancellation.Token;
             cancellationToken.ThrowIfCancellationRequested();
@@ -213,9 +274,9 @@ namespace HeatingCameraSystem.Master.Services
             // 기록 루프는 레시피 전 구간에서 스텝과 무관하게 돌아야 하므로 별도 태스크로 띄우고,
             // 어떤 경로로 끝나든 finally에서 세운 뒤 마지막 기록까지 비워낸다.
             using var recordingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            string runId = Guid.NewGuid().ToString();
             _runProductNumber = NextRunProductNumber(recipe.SaveRootPath, recipe.ProductNumber);
             _lastChamberTargetC = null;
+            _nextProductionShotNumbers.Clear();
             Task recording = RecordMeasurementsAsync(recipe, runId, recordingCts.Token);
 
             _isRunning = true;
@@ -330,6 +391,8 @@ namespace HeatingCameraSystem.Master.Services
             RecipeStep? humiditySafety = null;
             var captureWaiters = new ConcurrentDictionary<string, CaptureBatch>();
             var pendingCaptures = new List<PendingCapture>();
+            var executions = new List<StepExecutionState>();
+            StepExecutionState? currentExecution = null;
             var controlWaiters = new ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>>();
             var subscribedControlAgents = new HashSet<string>(StringComparer.Ordinal);
             bool chamberStarted = false;
@@ -352,6 +415,10 @@ namespace HeatingCameraSystem.Master.Services
                     RecipeStep step = recipe.Steps[i];
                     currentStep = i;
                     cancellationToken.ThrowIfCancellationRequested();
+                    var execution = new StepExecutionState { Step = step, RunId = runId, Index = i };
+                    currentExecution = execution;
+                    executions.Add(execution);
+                    ReportStep(execution, RecipeStepOutcome.Started);
 
                     switch (step.Kind)
                     {
@@ -418,7 +485,7 @@ namespace HeatingCameraSystem.Master.Services
                             break;
 
                         case RecipeStepKind.CameraCommand:
-                            await ExecuteCameraStepAsync(recipe, step, runId, i, totalSteps, captureWaiters, controlWaiters, subscribedControlAgents, pendingCaptures, skipState, cancellationToken, progress);
+                            await ExecuteCameraStepAsync(recipe, step, runId, i, totalSteps, captureWaiters, controlWaiters, subscribedControlAgents, pendingCaptures, skipState, execution, cancellationToken, progress);
                             break;
 
                         case RecipeStepKind.CaptureJoin:
@@ -432,6 +499,7 @@ namespace HeatingCameraSystem.Master.Services
                             {
                                 AlarmSink.Raise(AlarmCodes.FanSpeedOutOfRange, AlarmSeverity.Warning, RecipeSource,
                                     L("Alarm_Msg_FanSpeedOutOfRange", i + 1, totalSteps, step.TargetFanSpeedHz));
+                                execution.Skip("Fan speed is outside the supported range.");
                                 break;
                             }
                             await _plcController.SetFanSpeedAsync(step.TargetFanSpeedHz);
@@ -439,14 +507,21 @@ namespace HeatingCameraSystem.Master.Services
 
                         default:
                             AlarmSink.Raise(AlarmCodes.StepKindUnsupported, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_StepKindUnsupported", step.Kind));
+                            execution.Skip("Unsupported recipe step kind.");
                             break;
                     }
 
                     await EnforceSafetyBandAsync(temperatureSafety, humiditySafety, i, totalSteps, progress, waitForResumeAsync, cancellationToken);
+                    if (cancellationToken.IsCancellationRequested)
+                        execution.Fail("Execution cancelled.");
+                    execution.Dispatched = true;
+                    FinishStep(execution);
+                    currentExecution = null;
                 }
             }
             catch (OperationCanceledException)
             {
+                currentExecution?.Fail("Execution cancelled.");
                 bool emergency = IsEmergencyStopRequested;
                 AlarmSink.Raise(
                     emergency ? AlarmCodes.EmergencyStopped : AlarmCodes.UserStopped,
@@ -457,17 +532,27 @@ namespace HeatingCameraSystem.Master.Services
             }
             catch (Exception ex)
             {
+                currentExecution?.Fail(ex.Message);
                 AlarmSink.Raise(AlarmCodes.PlcCommFailed, AlarmSeverity.Error, RecipeSource,
                     L("Alarm_Msg_StepFailed", recipe.Name, currentStep + 1, totalSteps, ex.Message));
                 throw;
             }
             finally
             {
+                foreach (var execution in executions)
+                {
+                    if (execution.Finished) continue;
+                    execution.Fail(execution == currentExecution ? "Step did not complete." : "Capture results were not joined.");
+                    execution.Pending = 0;
+                    execution.Dispatched = true;
+                }
                 // 정상 완료든 취소·비상정지든 챔버는 반드시 세운다. PLC 알람으로 중단될 때
                 // 챔버만 계속 도는 상황을 막는 유일한 지점이다. 운영자가 "챔버 유지"를 고른
                 // 경우만 예외이며, 그때도 비상정지면 끈다.
                 if (chamberStarted && !(recipe.KeepChamberRunning && !IsEmergencyStopRequested))
                     await StopChamberWithRetryAsync();
+                foreach (var execution in executions)
+                    FinishStep(execution);
             }
 
             progress?.Report(new RecipeProgress { CurrentStep = totalSteps, TotalSteps = totalSteps, CurrentPhase = LocalizationManager.Instance["Recipe_Phase_Done"] });
@@ -475,15 +560,15 @@ namespace HeatingCameraSystem.Master.Services
 
         /// <summary>
         /// 모터 이동 완료를 기다린다. 자동(포인트) 이동은 현재 포인트가 목표 인덱스가 되고 두 축이
-        /// 모두 정지할 때까지, 수동(좌표) 이동은 두 축이 정지할 때까지 폴링한다. 이동 트리거가
-        /// 모멘터리라 명령 직후엔 아직 Busy가 서지 않아 곧장 통과하던 문제(가끔 이동 없이 다음
-        /// 스텝으로 넘어감)를 포인트 값 확인으로 막는다.
+        /// 모두 정지할 때까지, 수동(좌표) 이동은 현재 좌표가 목표의 허용오차 안에 들어오고 두 축이
+        /// 모두 정지할 때까지 폴링한다. 이동 트리거가 모멘터리라 명령 직후엔 아직 Busy가 서지 않아
+        /// 곧장 통과하던 문제(가끔 이동 없이 다음 스텝으로 넘어감)를 포인트·좌표 도달 확인으로 막는다.
         ///
-        /// 서보가 실제로 구동(Busy)한 뒤 정지했는데 포인트 워드만 목표와 다르면 이동 자체는
-        /// 일어난 것이므로 경고(PLC-005)만 남기고 진행한다. ServoCurrentPoint(D2740)의 주소·인코딩은
-        /// 설비마다 다를 수 있는데, 그 불일치로 레시피를 중단시키면 이후 캡처가 통째로 사라지기
-        /// 때문이다. 구동을 한 번도 못 본 채 제한 시간을 넘기면(이동 명령 미실행 또는 서보 정지가
-        /// 의심되는 경우) 종전대로 알람(PLC-004)을 올리고 예외로 중단한다.
+        /// 서보가 실제로 구동(Busy)한 뒤 정지했는데 포인트 워드나 좌표만 목표와 다르면 이동 자체는
+        /// 일어난 것이므로 경고(PLC-005)만 남기고 진행한다. ServoCurrentPoint(D2740)나 위치 워드의
+        /// 주소·인코딩이 설비마다 다를 수 있는데, 그 불일치로 레시피를 중단시키면 이후 캡처가 통째로
+        /// 사라지기 때문이다. 구동을 한 번도 못 본 채 제한 시간을 넘기면(이동 명령 미실행 또는 서보
+        /// 정지가 의심되는 경우) 종전대로 알람(PLC-004)을 올리고 예외로 중단한다.
         /// </summary>
         private async Task WaitForMotorMoveAsync(RecipeStep step, int index, int totalSteps, CancellationToken cancellationToken)
         {
@@ -511,13 +596,25 @@ namespace HeatingCameraSystem.Master.Services
 
                 if (!automatic)
                 {
-                    if (idle) return;
+                    if (idle)
+                    {
+                        if (MathF.Abs(status.ServoXPosition - step.PositionX) <= _positionToleranceMm
+                            && MathF.Abs(status.ServoYPosition - step.PositionY) <= _positionToleranceMm)
+                            return;
+
+                        if (sawBusy && idleSince is TimeSpan settled && clock.Elapsed - settled >= PointSettleGrace)
+                        {
+                            AlarmSink.Raise(AlarmCodes.MotorPointMismatch, AlarmSeverity.Warning, RecipeSource,
+                                L("Alarm_Msg_MotorCoordinateMismatch", index + 1, totalSteps, step.PositionX, step.PositionY, status.ServoXPosition, status.ServoYPosition));
+                            return;
+                        }
+                    }
                 }
                 else if (idle)
                 {
                     if (status.CurrentPoint == step.TargetPositionIndex) return;
 
-                    if (sawBusy && clock.Elapsed - idleSince!.Value >= PointSettleGrace)
+                    if (sawBusy && idleSince is TimeSpan settled && clock.Elapsed - settled >= PointSettleGrace)
                     {
                         AlarmSink.Raise(AlarmCodes.MotorPointMismatch, AlarmSeverity.Warning, RecipeSource,
                             L("Alarm_Msg_MotorPointMismatch", index + 1, totalSteps, step.TargetPositionIndex, status.CurrentPoint));
@@ -706,16 +803,21 @@ namespace HeatingCameraSystem.Master.Services
             HashSet<string> subscribedControlAgents,
             List<PendingCapture> pending,
             CameraSkipState skipState,
+            StepExecutionState execution,
             CancellationToken cancellationToken,
             IProgress<RecipeProgress>? progress)
         {
             progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = L("Recipe_Phase_CameraOp", step.CameraOperation, index + 1, totalSteps) });
-            List<RecipeCameraTarget> targets = await ActiveTargetsAsync(step, skipState);
-            if (targets.Count == 0) return;
+            List<RecipeCameraTarget> targets = await ActiveTargetsAsync(step, skipState, execution);
+            if (targets.Count == 0)
+            {
+                execution.Skip("No active camera targets.");
+                return;
+            }
 
             if (step.CameraOperation == CameraControlOps.Capture)
             {
-                await RepeatCaptureAsync(recipe, step, runId, index, totalSteps, targets, captureWaiters, pending, skipState, cancellationToken, progress);
+                await RepeatCaptureAsync(recipe, step, runId, index, totalSteps, targets, captureWaiters, pending, skipState, execution, cancellationToken, progress);
                 return;
             }
 
@@ -753,14 +855,24 @@ namespace HeatingCameraSystem.Master.Services
                     // 카메라 통신 실패로 챔버 시퀀스까지 죽이지 않는다. 이 카메라만 건너뛴다.
                     AlarmSink.Raise(AlarmCodes.NatsPublishFailed, AlarmSeverity.Error, RecipeSource, L("Alarm_Msg_ControlPublishFailed", step.StepId, target.CameraIndex, ex.Message));
                     controlWaiters.TryRemove(requestId, out _);
+                    execution.Fail($"Camera {target.CameraIndex}: command publish failed: {ex.Message}");
                     continue;
                 }
 
                 Task controlCompleted = await Task.WhenAny(controlWaiter.Task, Task.Delay(_captureTimeout, cancellationToken));
-                if (controlCompleted != controlWaiter.Task || !controlWaiter.Task.Result.IsSuccess)
+                if (controlCompleted != controlWaiter.Task)
                 {
                     AlarmSink.Raise(AlarmCodes.AgentTimeout, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_ControlTimeout", step.StepId, target.CameraIndex));
                     skipState.NoteFailure(agentId);
+                    execution.Fail($"Camera {target.CameraIndex}: command failed or timed out.");
+                }
+                else if (!controlWaiter.Task.Result.IsSuccess)
+                {
+                    string message = controlWaiter.Task.Result.Message;
+                    string reason = $"Camera {target.CameraIndex}: command {operation} failed: {(string.IsNullOrWhiteSpace(message) ? "agent rejected the command." : message)}";
+                    AlarmSink.Raise(AlarmCodes.AgentTimeout, AlarmSeverity.Warning, RecipeSource, reason);
+                    skipState.NoteFailure(agentId);
+                    execution.Fail(reason);
                 }
                 controlWaiters.TryRemove(requestId, out _);
             }
@@ -795,6 +907,7 @@ namespace HeatingCameraSystem.Master.Services
             ConcurrentDictionary<string, CaptureBatch> captureWaiters,
             List<PendingCapture> pending,
             CameraSkipState skipState,
+            StepExecutionState execution,
             CancellationToken cancellationToken,
             IProgress<RecipeProgress>? progress)
         {
@@ -821,8 +934,12 @@ namespace HeatingCameraSystem.Master.Services
 
                 foreach (var target in targets)
                 {
-                    if (await IsSkippedAsync(step, target, skipState)) continue;
-                    await CaptureOnceAsync(recipe, step, runId, round, target, captureWaiters, pending, skipState, cancellationToken);
+                    if (await IsSkippedAsync(step, target, skipState))
+                    {
+                        execution.Skip($"Camera {target.CameraIndex}: intentionally skipped after an unresponsive camera.");
+                        continue;
+                    }
+                    await CaptureOnceAsync(recipe, step, runId, round, target, captureWaiters, pending, skipState, execution, cancellationToken);
                 }
             }
         }
@@ -863,7 +980,8 @@ namespace HeatingCameraSystem.Master.Services
             string AgentId,
             int CameraIndex,
             int ExpectedResults,
-            string RunId);
+            string RunId,
+            StepExecutionState Execution);
 
         /// <summary>운영자가 중단 실패 상황에서 고를 수 있는 선택지.</summary>
         public enum CaptureAbortDecision
@@ -1027,17 +1145,28 @@ namespace HeatingCameraSystem.Master.Services
             ConcurrentDictionary<string, CaptureBatch> captureWaiters,
             List<PendingCapture> pending,
             CameraSkipState skipState,
+            StepExecutionState execution,
             CancellationToken cancellationToken)
         {
             string agentId = await ResolveTargetAgentIdAsync(step, target);
 
             // 회차마다 다른 키를 써야 이전 회차 결과가 다음 회차 배치로 새지 않는다.
-            string requestId = $"{step.StepId}:{agentId}:{target.CameraIndex}:{round}";
+            string requestId = RecipeCaptureRequestKey.Create(step.StepId, agentId, target.CameraIndex, round);
 
             ProductionNaming? production = await ResolveProductionNamingAsync(recipe, step, target);
+            if (production is null && !string.IsNullOrWhiteSpace(recipe.SaveRootPath))
+                execution.Fail($"Camera {target.CameraIndex}: production capture naming failed.");
 
             // 장수는 규칙 저장 여부와 무관하게 운영자가 스텝에 입력한 값만 쓴다.
             int shots = step.ShotCount > 0 ? step.ShotCount : 1;
+            int shotNumberOffset = recipe.OverwriteDuplicateShots ? 0 : step.ShotNumberOffset + round * shots;
+            if (!recipe.OverwriteDuplicateShots && production is not null)
+            {
+                var destination = (agentId, target.CameraIndex, production.ConditionFolder, production.BlackBodyFolder, production.FilePrefix);
+                _nextProductionShotNumbers.TryGetValue(destination, out int nextFree);
+                shotNumberOffset = Math.Max(shotNumberOffset, nextFree);
+                _nextProductionShotNumbers[destination] = shotNumberOffset + shots;
+            }
 
             // 규칙 저장은 배치 전체를 결과 1건으로 보고한다. 장마다 JPEG을 실어 보내면 100장 x
             // 카메라수 만큼의 미리보기가 Master 메모리에 쌓이기 때문이다.
@@ -1060,7 +1189,9 @@ namespace HeatingCameraSystem.Master.Services
                     BlackBodyFolder = production?.BlackBodyFolder ?? string.Empty,
                     FilePrefix = production?.FilePrefix ?? string.Empty,
                     WriteBiasJson = production?.WriteBiasJson ?? false,
-                    SaveFormat = recipe.SaveFormat
+                    SaveFormat = recipe.SaveFormat,
+                    // 생산 저장은 스텝·회차를 넘어 이어 찍되 미리 컴파일된 offset보다 앞당기지 않는다.
+                    ShotNumberOffset = shotNumberOffset
                 });
             }
             catch (Exception ex)
@@ -1068,15 +1199,17 @@ namespace HeatingCameraSystem.Master.Services
                 // 카메라 통신 실패로 챔버 시퀀스까지 죽이지 않는다. 이 회차만 건너뛴다.
                 AlarmSink.Raise(AlarmCodes.NatsPublishFailed, AlarmSeverity.Error, RecipeSource, L("Alarm_Msg_CapturePublishFailed", step.StepId, target.CameraIndex, ex.Message));
                 captureWaiters.TryRemove(requestId, out _);
+                execution.Fail($"Camera {target.CameraIndex}, round {round + 1}: capture publish failed: {ex.Message}");
                 return;
             }
 
-            var item = new PendingCapture(requestId, batch, step, agentId, target.CameraIndex, expectedResults, runId);
+            var item = new PendingCapture(requestId, batch, step, agentId, target.CameraIndex, expectedResults, runId, execution);
 
             // 결과를 기다리지 않는 스텝(fork)은 CaptureJoin 스텝이 대신 거둔다. 여기서 배치를
             // 지우면 그때까지 오는 결과가 갈 곳을 잃으므로 captureWaiters에서 빼지 않는다.
             if (!step.WaitForCaptureResult)
             {
+                execution.Pending++;
                 lock (pending) pending.Add(item);
                 return;
             }
@@ -1086,6 +1219,8 @@ namespace HeatingCameraSystem.Master.Services
                 // 장수만큼 결과가 오므로 대기 한도도 장수에 비례해 늘린다.
                 TimeSpan batchTimeout = TimeSpan.FromTicks(_captureTimeout.Ticks * shots);
                 await Task.WhenAny(batch.Completed, Task.Delay(batchTimeout, cancellationToken));
+                if (cancellationToken.IsCancellationRequested)
+                    execution.Fail("Execution cancelled.");
                 await CollectCaptureAsync(item, skipState);
             }
             finally
@@ -1127,8 +1262,12 @@ namespace HeatingCameraSystem.Master.Services
 
             foreach (PendingCapture item in items)
             {
+                if (cancellationToken.IsCancellationRequested)
+                    item.Execution.Fail("Execution cancelled.");
                 await CollectCaptureAsync(item, skipState);
                 captureWaiters.TryRemove(item.RequestId, out _);
+                item.Execution.Pending--;
+                FinishStep(item.Execution);
             }
 
             if (finished == all) return true;
@@ -1220,12 +1359,25 @@ namespace HeatingCameraSystem.Master.Services
             foreach (var result in results)
             {
                 if (result.IsSuccess)
-                    await StoreCaptureResultAsync(item.Step, item.RunId, item.CameraIndex, result);
+                {
+                    try
+                    {
+                        await StoreCaptureResultAsync(item.Step, item.RunId, item.CameraIndex, result);
+                    }
+                    catch (Exception ex)
+                    {
+                        item.Execution.Fail($"Camera {item.CameraIndex}: capture history storage failed: {ex.Message}");
+                        throw;
+                    }
+                }
             }
 
             int stored = results.Count(r => r.IsSuccess);
+            if (results.Any(result => !result.IsSuccess))
+                item.Execution.Fail($"Camera {item.CameraIndex}: agent reported a failed capture.");
             if (stored < item.ExpectedResults)
             {
+                item.Execution.Fail($"Camera {item.CameraIndex}: stored {stored} of {item.ExpectedResults} expected capture results.");
                 AlarmSink.Raise(AlarmCodes.PartialCapture, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_PartialCapture", item.Step.StepId, item.CameraIndex, stored, item.ExpectedResults));
 
                 // 한 장도 못 받은 건 카메라가 죽었다는 뜻이다. 일부라도 왔으면 살아 있으니 스킵 대상이 아니다.
@@ -1264,6 +1416,7 @@ namespace HeatingCameraSystem.Master.Services
                 RecipeStepId = captureResult.RecipeStepId,
                 RunId = runId,
                 AgentRawPath = captureResult.ImagePath,
+                ProductionRawPath = captureResult.ProductionRawPath,
                 Timestamp = captureResult.Timestamp,
                 Temperature = temperature,
                 Humidity = humidity,
@@ -1368,7 +1521,7 @@ namespace HeatingCameraSystem.Master.Services
         private async Task<bool> IsSkippedAsync(RecipeStep step, RecipeCameraTarget target, CameraSkipState skipState)
             => skipState.Skipped.Count > 0 && skipState.Skipped.Contains(await ResolveTargetAgentIdAsync(step, target));
 
-        private async Task<List<RecipeCameraTarget>> ActiveTargetsAsync(RecipeStep step, CameraSkipState skipState)
+        private async Task<List<RecipeCameraTarget>> ActiveTargetsAsync(RecipeStep step, CameraSkipState skipState, StepExecutionState? execution = null)
         {
             var declared = step.CameraTargets.Count > 0
                 ? step.CameraTargets
@@ -1379,6 +1532,8 @@ namespace HeatingCameraSystem.Master.Services
             {
                 if (!await IsSkippedAsync(step, target, skipState))
                     active.Add(target);
+                else
+                    execution?.Skip($"Camera {target.CameraIndex}: intentionally skipped after an unresponsive camera.");
             }
             return active;
         }

@@ -111,6 +111,14 @@ namespace HeatingCameraSystem.Core.Models
         public int ShotCount { get; set; }
 
         /// <summary>
+        /// 규칙 저장(<c>BB{bb}_{nnn}</c>) 파일 번호의 시작값. 파일 번호 = 이 값 + 이 명령 안의 장 순번(0부터).
+        /// 0이면 <c>_000</c>부터다. 음수는 0으로 취급한다. 필드가 없는 구버전 Master의 메시지는 0으로 읽혀 기존 동작과 같다.
+        /// 구버전 Agent는 이 필드를 무시하고 항상 <c>_000</c>부터 쓰므로 같은 폴더의 앞선 파일을 덮어쓴다.
+        /// 규칙 저장이 아닌 경로(<c>.y16</c>)에는 영향이 없다.
+        /// </summary>
+        public int ShotNumberOffset { get; set; }
+
+        /// <summary>
         /// 생산 저장 규칙의 최종 목적지 루트(Master 공유 경로). 비어 있으면 규칙 저장을 하지 않고
         /// 기존 동작만 수행한다.
         /// </summary>
@@ -154,6 +162,9 @@ namespace HeatingCameraSystem.Core.Models
 
         /// <summary>Agent PC에 저장된 원본(방사 측정용) 파일 경로.</summary>
         public string ImagePath { get; set; } = string.Empty;
+
+        /// <summary>대표 프레임의 Master 생산 .raw 목적지. JPEG·비생산 촬영은 비어 있으며 파일 존재를 보장하지 않는다.</summary>
+        public string ProductionRawPath { get; set; } = string.Empty;
 
         public DateTime Timestamp { get; set; }
 

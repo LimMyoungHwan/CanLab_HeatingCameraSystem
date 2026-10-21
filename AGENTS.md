@@ -21,7 +21,7 @@ Tests (.NET 8-windows)     ← xUnit + Moq 통합 테스트 프로젝트.
 
 ```powershell
 dotnet build                                             # 솔루션 전체 빌드
-dotnet test --no-build                                   # 테스트 (현재 254개)
+dotnet test --no-build                                   # 테스트 (현재 684개)
 dotnet run --project HeatingCameraSystem.Master          # WPF Master 실행
 dotnet run --project HeatingCameraSystem.Agent           # Agent 실행 (agent.json 기준)
 dotnet run --project HeatingCameraSystem.Agent -- Bay1 nats://192.168.1.10:4222  # 인수 오버라이드
@@ -128,7 +128,33 @@ Modbus → **XGT 전용 프로토콜**(TCP 2004)로 변경됨. 구현: `PlcXgtCl
 - 운영자 경로는 AgentUI 카메라 패널의 시리얼 제어 절이다 — 현재 포맷을 표시하고(앱 시작 시 `StartLiveAsync`가 자동 판독) 콤보박스+적용 버튼으로 전환한다. 자동 전환은 **일부러 넣지 않았다**: 링크 끊김을 시작 시퀀스에 숨기면 원인 불명 실패가 된다.
 - 저장 파일은 Agent 로컬 버퍼 → 폴더 완성 후 `robocopy /MOVE` → Master UNC. 기존 `.y16` 경로는 별개이며 건드리지 않는다.
 - 규칙 저장 중에는 `.y16`을 **배치당 1장**(결과 화면 대표)만 쓰고 캡처 결과도 **배치당 1건**만 발행한다. 장마다 쓰면 디스크가 두 배, 장마다 발행하면 미리보기 JPEG이 Master 메모리에 쌓인다. `RecipeEngine`의 `PendingCapture.ExpectedResults`가 이 규약을 따라간다 — **찍을 장수가 아니다.**
+- 레시피 결과 히스토그램은 운영자가 검증·저장한 `CaptureHistoryRecord.LinkedRawPath`를 최우선, 그다음 `CaptureResultMessage.ProductionRawPath` → `CaptureHistoryRecord.ProductionRawPath`의 **정확한 Master 목적지**를 매번 읽는다. 자동 기록/자동 추정(근거)/운영자 지정을 구분하고 전체 경로를 표시한다. Agent가 센서번호·제품번호·촬영 offset과 **실제 대표 프레임의 촬영 번호**로 경로를 확정한다. 배치 전체 합산이 아니라 `.y16` 대표와 같은 마지막 촬영 1장이다. 결과 발행은 robocopy보다 먼저이므로 **확인한 경로**가 없을 때만 `원본 .raw 없음/미전송`과 대표 `.y16 (NUC 보정)`을 표시하고 다음 조회 때 재확인한다. 경로 정보가 없는 이전 이력에는 `원본 위치 정보 없음(이전 기록)`을 표시한다 — provenance 누락을 파일 부재로 간주하지 않는다. 존재하지만 손상/읽기 실패한 `.raw`를 `.y16`으로 조용히 대체하지 않는다.
+- 이전 이력은 실행 측정의 RecipeId(없으면 요청 키에서 추출한 StepId)로 레시피 SaveRootPath를 찾고, 실제 AgentId/CameraIndex에 대응하는 스텝의 대역·역할, 직전 챔버 목표(없으면 기록 온도)를 `CaptureNamingRule`에 적용해 생산 트리의 `BB*_nnn.raw` 후보를 조사한다. 조건/역할/BB 일치 순위, 파일 수정 UTC 시각과 촬영 UTC 시각의 차이 순으로 표시한다. **조건/역할/BB가 모두 일치하는 폴더가 정확히 1개이고 가장 가까운 파일이 동률 없이 ±2초 이내**일 때만 자동 추정 사용한다. 다른 센서/제품 폴더가 함께 일치하거나 조건·카메라 근거가 부족하면 자동 연결하지 않는다. 현재 레시피 조건은 과거 provenance가 아닌 추정 근거임을 명시한다. 검색 실패/불완전도 자동 연결 금지다. 후보/파일 선택은 운영자가 확인하며 `LinkedRawPath`와 확인한 프레임 크기를 LiteDB 이력에 저장한다. 선택 파일은 읽기 가능하고 크기가 **width×height×2**여야 한다(대표 이미지 또는 Agent 원본 응답으로 해상도 확인; 모르면 거절). 변경·연결 해제를 지원하며 자동 기록 경로는 보존한다.
+- 캡처의 `RecipeStepId`는 보통 `{StepId}:{AgentId}:{CameraIndex}:{round}` 요청 키다. 생성·해석은 Core의 `RecipeCaptureRequestKey` 한 곳을 사용한다. 첫 `:` 앞부분만 StepId로 읽으며 GUID 또는 레시피에 정확히 존재하는 ID만 인정한다. 구형 bare StepId도 허용하고 AgentId 안의 `_`·`:`는 보존한다. 요청/결과 대기는 전체 키로 상관관계를 유지하고, 스텝/레시피 조회에만 추출한 StepId를 사용한다.
+- `.raw`는 헤더·고정 해상도·비트 이동 없이 프레임 크기만큼의 little-endian `ushort` 나열이다. 히스토그램과 평균/모집단 표준편차/중앙값은 FPA 슬롯(첫 2바이트)을 **항상 제외**한다. 히스토그램은 기존 14비트 256구간을 유지하고 통계는 실제 픽셀 값으로 계산한다.
 - 레퍼런스 구현: `참고/AISEN_CODE/main.py:950-1066`(저장), `:1531-1599`(bias).
+
+### BIAS 보정
+
+- 목표 기본값은 `CameraBiasDefaults`: LOW=8500, MID/HIGH=5000, 허용범위 ±100. 양수인 레시피 `BiasTargetLevel`은 기본값보다 우선하며 기존 레시피를 자동 변경하지 않는다.
+- AgentUI는 LSB마다 write → 100ms 안정화 → 안정화 종료보다 새 timestamp의 서로 다른 원본 프레임 5장 평균값들의 median을 측정한다. 이전 프레임/동일 timestamp의 timeout 폴백은 버리고, 2초 동안 신선한 프레임이 없으면 실패다. timestamp는 호스트 수신 시각이므로 센서의 실제 노출 시각을 보증하지 않는다.
+- coarse → fine → binary 탐색 순서는 유지한다. 최선 LSB는 미수렴이어도 적용하되, 최종 적용 후 같은 방식으로 재측정하여 범위 밖이면 `BIAS 실패: 0x.. (측정 N, 목표 T±100)`와 실패 ACK를 반환한다. Master는 이를 timeout과 구분해 메시지를 보존하고 스텝 실패 영수증/경고를 남긴다.
+- `LastBiasJson`은 매 탐색 시작 때 무효화하고 최종 성공 때만 채운다. 유효한 BIAS 결과가 없는 cold 생산캡처도 정상 촬영·저장·전송하며 **bias.json만 생략**한다. AgentUI Warning 로그와 카메라 패널 촬영 상태에 생략 이유를 표시한다. `CaptureResultMessage`에는 메시지 필드가 없으므로 새 NATS 경고 채널을 만들지 않는다. 과거 산출물은 삭제하지 않고, 로컬 버퍼에 남은 이전 bias.json도 이번 촬영으로 전송하지 않는다. cold 캡처 시작 시의 유효 JSON은 고정하여 해당 배치에 쓴다.
+- AgentUI 기존 로그에 LSB별 측정 레벨과 모드/목표/최선 LSB/최종 레벨/경계 오차/성공 여부를 남긴다. 콘솔 Agent에는 별도 BIAS 구현이 없다. 변경·고객 불일치 조사 근거: `docs/01-plan/features/bias-mismatch.analysis.md`.
+
+### 촬영 계획 레시피
+
+- 설계/저장 계약: `docs/01-plan/features/capture-plan-matrix.plan.md`. `Recipe.Plan == null`은 기존 스텝 레시피이며 **레거시 편집기·실행을 유지**한다. Plan은 안정 Key/템플릿 RecipeId/선택 카메라를 가진 순서 있는 Entries다. 이전 고정 패턴 모델은 사용하지 않는다.
+- 템플릿은 **카메라 한 대용**이다. 항목→카메라→원본 스텝 순서로 **레시피 전체**를 반복한다. 챔버/BB/Wait/BIAS도 카메라마다 원본대로 반복하며 dedup/준비 절차 추출을 하지 않는다.
+- `UseCellCamera` 슬롯은 카메라 명령의 AgentId/CameraIndex만 바꾸고 대역/역할은 유지한다. `CellPositionRole` 슬롯은 MotorMove의 Hot/Cold/Room 위치만 바꾼다. 기본은 슬롯 꺼짐이며 저장된 targets/Point/XY는 독립 실행 기본값이다.
+- 카메라 identity는 heartbeat의 **AgentId + 실제 CameraIndex(0 포함)**다. 1..64 목록/AgentId 접미사 추정은 금지한다. 신규 후보는 실제 온라인 카메라만, 저장된 오프라인 카메라는 표시·보존한다. 위치표 키도 실제 identity × 역할이다.
+- 생성 StepId는 planRecipeId/entryKey/cameraIdentity/templateStepId에서 결정한다. 인덱스·시각·임의 Guid로 재발급하지 않는다. 화면에는 항목 이름/실제 카메라/명령별 역할을 표시하고 내부 키·해시는 숨긴다.
+- 링크는 **RecipeId live link**다. 매 실행 시작에 현재 템플릿/공유 위치로 컴파일한 실행 복사본을 고정한다. 초안은 Plan/실패 이유를 저장하고 Steps를 비운다. 저장된 생성 Steps를 실행 소스로 신뢰하지 않는다.
+- 재개/실패 재촬영은 새 RunId를 root/parent에 연결하고 **선택 카메라의 전체 절차를 처음부터** 실행한다. 현재 템플릿으로 재컴파일하되 Done 셀은 유지한다. fingerprint가 바뀌면 보드/확인창에 **템플릿이 이전 시도 이후 변경됨**을 표시한다. 부분 실행 Steps로 원본을 덮어쓰지 않는다.
+- 완료 기준은 LiteDB `capture_plan_runs` v2의 **모든 필수 스텝 영수증**이다. Capture/BIAS/NUC/이동/Wait까지 전부 성공한 뒤만 Done이며 일부 성공 이력으로 추정하지 않는다. 중단 Running 시도를 복구한다. v1 영수증은 보존하되 v2 체인에서 제외한다.
+- `Entries`가 없는 이전 Plan은 **이전 형식 계획입니다. 다시 만들어 주세요.**로 실행 거절하고 낡은 Steps를 비운다. 자동 변환/폴백하지 않는다. 사용 중 템플릿 삭제는 계획 이름을 안내하며 거절한다.
+- 공유 위치의 **Point 1은 좌표 이동 예약**, 저장된 **Point→Coordinate 변경 금지**다. 모호한 구형 위치는 보존·보고하며 실제 카메라/역할을 추측해 이관하지 않는다.
+- 같은 카메라/생산 폴더의 여러 Capture는 총 장수(반복 포함)를 누적한 `ShotNumberOffset`으로 이어 찍는다. 기본 해제인 `Recipe.OverwriteDuplicateShots`는 엔진이 **실제 계산된 생산 목적지(AgentId + CameraIndex + ConditionFolder + BlackBodyFolder + FilePrefix)**별 다음 빈 번호를 실행마다 관리하도록 한다: 전송 offset = `max(스텝 offset + round × ShotCount, 다음 빈 번호)`, 이후 다음 빈 번호 = `전송 offset + ShotCount`. 일반 스텝 레시피의 기본 offset 0도 안전하게 이어지고, 계획/스텝 목록으로 푼 계획의 사전 누적 offset은 이중 가산하지 않는다. SaveRootPath가 없어 생산 naming이 null이면 할당하지 않는다. **할당 상태는 새 실행마다 초기화**하며 재개/실패 재촬영도 `CompileRemaining`이 배정한 offset 그대로 시작한다(선택 제외된 셀은 컴파일 계산에서 제외; 이전 실행의 할당 상태를 가져오지 않음). 체크하면 계획 컴파일 offset이 모두 0이고 엔진도 저장된 offset과 반복 회차를 무시하고 항상 0을 보내 000부터 덮어쓴다(계획은 템플릿이 아니라 계획 자신의 값 사용). 재촬영 회차 폴더/잔여 파일 규칙은 유지하고 임의 병합/삭제 정책을 추가하지 않는다.
 
 ### Agent ↔ 카메라 매핑
 `RecipeStep.CameraIndex` → NATS 대상 `Agent_{CameraIndex}`.  

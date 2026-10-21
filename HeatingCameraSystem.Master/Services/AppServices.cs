@@ -39,6 +39,9 @@ namespace HeatingCameraSystem.Master.Services
         public static IAlarmHistoryRepository? AlarmHistoryRepo { get; private set; }
         public static ICameraSerialSettingsRepository CameraSerialSettingsRepo { get; private set; } = null!;
         public static ICameraDeviceRepository CameraDeviceRepo { get; private set; } = null!;
+        public static ICameraPositionRepository? CameraPositions { get; private set; }
+        public static ICapturePlanRunRepository? CapturePlanRuns { get; private set; }
+        public static CapturePlanRunService? PlanRuns { get; private set; }
         public static AgentDirectory AgentDirectory { get; private set; } = null!;
         public static NatsCommunicationService? NatsService { get; private set; }
         public static IPlcController? PlcController { get; private set; }
@@ -81,6 +84,9 @@ namespace HeatingCameraSystem.Master.Services
             Directory.CreateDirectory(ImageCacheDir);
 
             Db = new LiteDatabase(Path.Combine(dir, "data.db"));
+            CameraPositions = new LiteDbCameraPositionRepository(Db);
+            CapturePlanRuns = new LiteDbCapturePlanRunRepository(Db);
+            CapturePlanRuns.RecoverInterruptedAsync().GetAwaiter().GetResult();
 
             // 레시피는 이제 <dir>/recipe 아래 JSON 파일 하나씩으로 영속된다(백업은 <dir>/recipe bak).
             var fileRecipeRepo = new FileRecipeRepository(dir);
@@ -95,6 +101,8 @@ namespace HeatingCameraSystem.Master.Services
                 System.Diagnostics.Debug.WriteLine($"[AppServices] Recipe migration failed: {ex.Message}");
             }
             RecipeRepo = fileRecipeRepo;
+            ((LiteDbCameraPositionRepository)CameraPositions).MigrateLegacyAsync(RecipeRepo.GetAllAsync().GetAwaiter().GetResult().ToArray()).GetAwaiter().GetResult();
+            PlanRuns = new CapturePlanRunService(CapturePlanRuns, CameraPositions, RecipeRepo);
 
             DashboardLayoutRepo = new LiteDbDashboardLayoutRepository(Db);
             HistoryRepo = new LiteDbCaptureHistoryRepository(Db);

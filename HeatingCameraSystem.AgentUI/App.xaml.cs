@@ -231,6 +231,8 @@ namespace HeatingCameraSystem.AgentUI
                             : null;
 
                         await dispatcher.InvokeAsync(() => command.ExecuteAsync(parameter)).Task.Unwrap();
+                        if (op is CameraControlOps.BiasLow or CameraControlOps.BiasMid or CameraControlOps.BiasHigh)
+                            return (panel.LastBiasSucceeded, panel.SerialStatus);
                         return (true, "ok");
                     }
                     catch (Exception ex)
@@ -246,7 +248,17 @@ namespace HeatingCameraSystem.AgentUI
                 readFpaRaw: ReadFpaRawForAsync,
                 readBiasJson: descriptor => _mainViewModel?.Cameras
                     .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.LastBiasJson,
-                productionSink: new ProductionCaptureSink(Path.Combine(storageDir, "production")));
+                productionSink: new ProductionCaptureSink(Path.Combine(storageDir, "production")),
+                reportCaptureWarning: (descriptor, warning) =>
+                {
+                    AgentUiLog.Logger.Warning("[{AgentId}] {CaptureWarning}", descriptor.AgentId, warning);
+                    dispatcher.InvokeAsync(() =>
+                    {
+                        CameraPanelViewModel? panel = _mainViewModel?.Cameras
+                            .FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId);
+                        if (panel is not null) panel.CaptureStatus = warning;
+                    });
+                });
             _natsConnector.Start(config.NatsUrl);
 
             if (!config.SimulationMode)

@@ -84,6 +84,47 @@ public class RecipeCsvSerializerTests
     }
 
     [Fact]
+    public void Deserialize_MissingOverwriteDuplicateShots_IsFalse_AndValueImports()
+    {
+        const string oldCsv = """
+        [RECIPE]
+        Key,Value
+        Name,옛 CSV
+        """;
+        Assert.False(RecipeCsvSerializer.Deserialize(oldCsv).OverwriteDuplicateShots);
+
+        Recipe on = RecipeCsvSerializer.Deserialize(RecipeCsvSerializer.Serialize(new Recipe { OverwriteDuplicateShots = true }));
+        Assert.True(on.OverwriteDuplicateShots);
+        Assert.False(RecipeCsvSerializer.Deserialize(RecipeCsvSerializer.Serialize(new Recipe())).OverwriteDuplicateShots);
+    }
+
+    [Fact]
+    public void Deserialize_MissingShotNumberOffsetColumn_IsZero_AndNewColumnImports()
+    {
+        const string oldCsv = """
+        [RECIPE]
+        Key,Value
+        Name,옛 CSV
+
+        [STEPS]
+        Kind,ShotCount
+        CameraCommand,3
+        """;
+        Assert.Equal(0, Assert.Single(RecipeCsvSerializer.Deserialize(oldCsv).Steps).ShotNumberOffset);
+
+        const string newCsv = """
+        [RECIPE]
+        Key,Value
+        Name,새 CSV
+
+        [STEPS]
+        Kind,ShotCount,ShotNumberOffset
+        CameraCommand,3,100
+        """;
+        Assert.Equal(100, Assert.Single(RecipeCsvSerializer.Deserialize(newCsv).Steps).ShotNumberOffset);
+    }
+
+    [Fact]
     public void Deserialize_MalformedNumericCell_ThrowsInvalidDataExceptionWithColumnName()
     {
         const string csv = """
@@ -243,6 +284,7 @@ public class RecipeCsvSerializerTests
             RecordOnTemperatureDelta = 1.25f,
             RecordOnHumidityDelta = 2.5f,
             RecordIntervalSeconds = 30,
+            OverwriteDuplicateShots = true,
             SaveRootPath = @"\\master\capture",
             ProductNumber = "P-001",
             SaveFormat = ProductionCaptureFormat.Jpeg

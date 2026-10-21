@@ -47,6 +47,7 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal(CaptureSource.Manual, inserted.Source);
             Assert.Equal(42.5f, inserted.Temperature);
             Assert.Equal(31.0f, inserted.Humidity);
+            Assert.Empty(inserted.ProductionRawPath);
         }
 
         [Fact]
@@ -105,11 +106,16 @@ namespace HeatingCameraSystem.Tests
                     .Returns(Task.CompletedTask);
                 var recorder = new CaptureResultHistoryRecorder(repo.Object, dir, () => null);
 
-                await recorder.RecordAsync(Manual("Agent_1", "Bay1", new byte[] { 1, 2, 3, 4 }));
+                var result = Manual("Agent_1", "Bay1", new byte[] { 1, 2, 3, 4 });
+                result.ImagePath = @"C:\AgentStorage\representative.y16";
+                result.ProductionRawPath = @"\\Master\Capture\S17_P42\RPP40\cold\BB20_019.raw";
+                await recorder.RecordAsync(result);
 
                 Assert.NotNull(inserted);
                 Assert.EndsWith(".jpg", inserted!.ImagePath);
                 Assert.True(File.Exists(inserted.ImagePath));
+                Assert.Equal(result.ImagePath, inserted.AgentRawPath);
+                Assert.Equal(result.ProductionRawPath, inserted.ProductionRawPath);
             }
             finally
             {
@@ -128,7 +134,9 @@ namespace HeatingCameraSystem.Tests
                 var recorder = new CaptureResultHistoryRecorder(repo, "",
                     () => new PlcStatusSnapshot { CurrentTemperature = 25f, CurrentHumidity = 50f });
 
-                await recorder.RecordAsync(Manual("FOXSTARSOFTPC_Agent_1", "Bay1"));
+                var result = Manual("FOXSTARSOFTPC_Agent_1", "Bay1");
+                result.ProductionRawPath = @"\\Master\Capture\S17_P42\RPP40\cold\BB20_019.raw";
+                await recorder.RecordAsync(result);
 
                 var rows = (await repo.QueryAsync(DateTime.UtcNow.AddMinutes(-5), DateTime.UtcNow.AddMinutes(5))).ToList();
                 Assert.Single(rows);
@@ -136,6 +144,7 @@ namespace HeatingCameraSystem.Tests
                 Assert.Equal("FOXSTARSOFTPC_Agent_1", rows[0].AgentId);
                 Assert.Equal(CaptureSource.Manual, rows[0].Source);
                 Assert.Equal(2, rows[0].CameraIndex);
+                Assert.Equal(result.ProductionRawPath, rows[0].ProductionRawPath);
             }
             finally
             {

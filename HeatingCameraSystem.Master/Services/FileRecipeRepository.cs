@@ -40,7 +40,7 @@ namespace HeatingCameraSystem.Master.Services
                 try
                 {
                     var recipe = JsonSerializer.Deserialize<Recipe>(File.ReadAllText(file));
-                    if (recipe != null) recipes.Add(recipe);
+                    if (recipe != null) recipes.Add(CapturePlanTemplateUsage.NormalizeLoaded(recipe));
                 }
                 catch (Exception ex)
                 {
@@ -58,7 +58,8 @@ namespace HeatingCameraSystem.Master.Services
             if (!File.Exists(path)) return Task.FromResult<Recipe?>(null);
             try
             {
-                return Task.FromResult(JsonSerializer.Deserialize<Recipe>(File.ReadAllText(path)));
+                var recipe = JsonSerializer.Deserialize<Recipe>(File.ReadAllText(path));
+                return Task.FromResult(recipe == null ? null : CapturePlanTemplateUsage.NormalizeLoaded(recipe));
             }
             catch (Exception ex)
             {
@@ -79,6 +80,7 @@ namespace HeatingCameraSystem.Master.Services
         /// <summary>레시피를 삭제한다. 지우기 전에 백업을 남긴다.</summary>
         public Task DeleteAsync(string id)
         {
+            CapturePlanTemplateUsage.RefuseUsedTemplateDeletion(GetAllAsync().GetAwaiter().GetResult(), id);
             var path = PathFor(id);
             if (File.Exists(path))
             {

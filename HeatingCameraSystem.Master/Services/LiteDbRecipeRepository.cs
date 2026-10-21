@@ -22,10 +22,13 @@ namespace HeatingCameraSystem.Master.Services
         }
 
         public Task<IEnumerable<Recipe>> GetAllAsync()
-            => Task.FromResult<IEnumerable<Recipe>>(_col.FindAll().ToList());
+            => Task.FromResult<IEnumerable<Recipe>>(_col.FindAll().Select(CapturePlanTemplateUsage.NormalizeLoaded).ToList());
 
         public Task<Recipe?> GetByIdAsync(string id)
-            => Task.FromResult<Recipe?>(_col.FindOne(x => x.Id == id));
+        {
+            var recipe = _col.FindOne(x => x.Id == id);
+            return Task.FromResult(recipe == null ? null : CapturePlanTemplateUsage.NormalizeLoaded(recipe));
+        }
 
         /// <summary>Upsert 방식이라 신규 저장과 수정을 모두 처리한다.</summary>
         public Task SaveAsync(Recipe recipe)
@@ -36,6 +39,7 @@ namespace HeatingCameraSystem.Master.Services
 
         public Task DeleteAsync(string id)
         {
+            CapturePlanTemplateUsage.RefuseUsedTemplateDeletion(_col.FindAll(), id);
             _col.DeleteMany(x => x.Id == id);
             return Task.CompletedTask;
         }

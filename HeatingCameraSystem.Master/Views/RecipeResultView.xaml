@@ -128,12 +128,39 @@
                 </TabItem>
 
                 <TabItem Header="히스토그램">
-                    <Grid>
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Margin="8">
+                            <TextBlock Text="캡처 탭에서 이미지를 고르고 '히스토그램 보기'를 누르세요."
+                                       Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                            <TextBlock Text="{Binding HistogramSource}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                       Foreground="{StaticResource TextOnSurface}"/>
+                            <TextBlock Text="{Binding HistogramNote}" TextWrapping="Wrap"
+                                       Foreground="{StaticResource TextOnSurfaceVariant}" Margin="0,4,0,0"/>
+                            <TextBlock Text="{Binding HistogramStatistics}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                       Foreground="{StaticResource TextOnSurface}"/>
+                            <WrapPanel Margin="0,8,0,0">
+                                <Button Content="원본 .raw 선택…" Command="{Binding SelectProductionRawCommand}" Padding="12,6" Margin="0,0,8,0"
+                                        Background="{StaticResource BgSurfaceContainer}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                                <Button Content="운영자 연결 해제" Command="{Binding ClearProductionRawLinkCommand}" Padding="12,6" Margin="0,0,8,0"
+                                        Background="{StaticResource BgSurfaceContainer}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                                <Button Content="다시 조회" Command="{Binding LoadHistogramCommand}" Padding="12,6"
+                                        Background="{StaticResource BgSurfaceContainer}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"/>
+                            </WrapPanel>
+                            <Expander Header="이전 기록 원본 후보 (선택 후 '원본 .raw 선택…'으로 확인)" Foreground="{StaticResource TextOnSurface}" Margin="0,8,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding RawDiscoveryNote}" TextWrapping="Wrap" Foreground="{StaticResource TextOnSurfaceVariant}"/>
+                                    <ListBox ItemsSource="{Binding RawCandidates}" SelectedItem="{Binding SelectedRawCandidate}"
+                                             MaxHeight="140" Background="{StaticResource BgSurface}" Foreground="{StaticResource TextOnSurface}"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="원본 RAW 후보">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate><TextBlock Text="{Binding Display}" TextWrapping="Wrap"/></DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </StackPanel>
+                            </Expander>
+                        </StackPanel>
                         <sp:WpfPlot x:Name="Histogram"/>
-                        <TextBlock Text="캡처 탭에서 이미지를 고르고 '히스토그램 보기'를 누르세요."
-                                   HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0"
-                                   Foreground="{StaticResource TextOnSurfaceVariant}"/>
-                    </Grid>
+                    </DockPanel>
                 </TabItem>
             </TabControl>
         </DockPanel>

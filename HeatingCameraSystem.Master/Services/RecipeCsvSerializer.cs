@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using HeatingCameraSystem.Core.Models;
 
 namespace HeatingCameraSystem.Master.Services;
@@ -41,6 +42,7 @@ public static class RecipeCsvSerializer
 
     /// <summary>
     /// CSV를 레시피로 읽는다. 빈 셀은 nullable string 속성에서는 null로, non-null string 속성에서는 빈 문자열로 읽는다.
+    /// Plan은 따옴표로 이스케이프한 JSON 셀로 보존하며, 누락되거나 빈 Plan 셀은 레거시 레시피(null)다.
     /// </summary>
     public static Recipe Deserialize(string csv)
     {
@@ -99,8 +101,11 @@ public static class RecipeCsvSerializer
         return new[]
         {
             Column(nameof(RecipeStep.Kind), "실행할 장치·동작 종류", "RecipeStepKind 값", "전체", "CameraCommand", common),
+            Column(nameof(RecipeStep.PlanCellKey), "계획 항목/실제 카메라 셀 식별자", "비우면 독립 스텝", "전체", "entry/camera", common),
             Column(nameof(RecipeStep.CameraOperation), "카메라 명령", "CameraControlOps 값", "CameraCommand", CameraControlOps.Capture, camera),
             Column(nameof(RecipeStep.CameraTargets), "카메라별 촬영 대상", "CameraIndex:대역:흑체[:AgentId] | 로 여러 개", "CameraCommand", "1:Low:Hot|2:Low:Hot|3:Low:Hot|4:Low:Hot", camera),
+            Column(nameof(RecipeStep.UseCellCamera), "계획 슬롯: 셀 카메라", "True/False, 독립 실행 대상은 유지", "CameraCommand", "True", camera),
+            Column(nameof(RecipeStep.CellPositionRole), "계획 슬롯: 셀 위치 역할", "Hot/Cold/Room, 비우면 저장 위치", "MotorMove", "Cold", motorMove),
             Column(nameof(RecipeStep.CameraIndex), "대상 카메라 인덱스", "1~64", "CameraCommand", "1", camera),
             Column(nameof(RecipeStep.CameraAlias), "운영자가 부여한 카메라 별칭", "비우면 CameraIndex 기반", "CameraCommand", "CAM-01", camera),
             Column(nameof(RecipeStep.TargetPositionIndex), "서보 유닛이 이동해야 할 위치", "포인트 번호", "MotorMove", "3", motorMove),
@@ -112,6 +117,7 @@ public static class RecipeCsvSerializer
             Column(nameof(RecipeStep.ShotCount), "한 번에 찍을 장수", "1 이상", "CameraCommand", "1", camera),
             Column(nameof(RecipeStep.CaptureIntervalSeconds), "몇 초마다 다시 찍는가", "초, 0이면 반복 안 함", "CameraCommand", "60", camera),
             Column(nameof(RecipeStep.CaptureDurationSeconds), "캡처 반복 전체 시간", "초", "CameraCommand", "1800", camera),
+            Column(nameof(RecipeStep.ShotNumberOffset), "저장 파일 번호 시작값(같은 폴더에 이어 찍기)", "0 이상, 0이면 000부터", "CameraCommand", "100", camera),
             Column(nameof(RecipeStep.BiasTargetLevel), "BIAS 자동 탐색 목표 레벨", "0이면 Agent 기본값", "CameraCommand", "8500", camera),
             Column(nameof(RecipeStep.PositionX), "서보 유닛 직접 이동 X 좌표", "mm", "MotorMove", "120.5", motorMove),
             Column(nameof(RecipeStep.PositionY), "서보 유닛 직접 이동 Y 좌표", "mm", "MotorMove", "45.0", motorMove),
@@ -285,6 +291,9 @@ public static class RecipeCsvSerializer
         if (value == null)
             return string.Empty;
 
+        if (property.PropertyType == typeof(CapturePlan))
+            return JsonSerializer.Serialize((CapturePlan)value);
+
         Type type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
         if (type == typeof(string))
             return (string)value;
@@ -435,6 +444,8 @@ public static class RecipeCsvSerializer
 
         try
         {
+            if (valueType == typeof(CapturePlan))
+                return string.IsNullOrWhiteSpace(text) ? null : JsonSerializer.Deserialize<CapturePlan>(text);
             if (valueType == typeof(string))
                 return text.Length == 0 && IsNullableString(property) ? null : text;
             if (valueType == typeof(int))
@@ -448,7 +459,7 @@ public static class RecipeCsvSerializer
             if (valueType.IsEnum)
                 return text.Length == 0 && nullableType != null ? null : Enum.Parse(valueType, text, ignoreCase: true);
         }
-        catch (Exception ex) when (ex is FormatException or OverflowException or ArgumentException)
+        catch (Exception ex) when (ex is FormatException or OverflowException or ArgumentException or JsonException)
         {
             throw CannotReadColumn(property, text, ex);
         }

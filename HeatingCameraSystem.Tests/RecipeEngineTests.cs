@@ -6,6 +6,8 @@ using HeatingCameraSystem.Core.Config;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Master.Services;
+using HeatingCameraSystem.Protocols.Cameras;
+using HeatingCameraSystem.Protocols.Simulation;
 using Moq;
 using Xunit;
 
@@ -80,7 +82,7 @@ namespace HeatingCameraSystem.Tests
 
             mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
             mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
-            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, ServoXPosition = 100, ServoYPosition = 200 });
             mockPlc.Setup(p => p.GetCurrentBlackBodyTemperatureAsync(It.IsAny<int>())).ReturnsAsync(30.0f);
             mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
             WireCaptureRoundTrip(mockNats);
@@ -109,7 +111,7 @@ namespace HeatingCameraSystem.Tests
 
             mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
             mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
-            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, ServoXPosition = 100, ServoYPosition = 200 });
             mockPlc.Setup(p => p.GetCurrentBlackBodyTemperatureAsync(It.IsAny<int>())).ReturnsAsync(30.0f);
             mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
             WireCaptureRoundTrip(mockNats);
@@ -298,7 +300,7 @@ namespace HeatingCameraSystem.Tests
             mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(30.0f);
             mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(60.0f);
             mockPlc.Setup(p => p.MoveServoToPositionAsync(It.IsAny<int>())).Returns(Task.CompletedTask);
-            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, CurrentPoint = 7 });
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, CurrentPoint = 7, ServoXPosition = 10, ServoYPosition = 20 });
             mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
             mockNats.Setup(n => n.SubscribeCameraControlAckAsync(It.IsAny<string>(), It.IsAny<Action<CameraControlAckMessage>>()))
                 .Callback<string, Action<CameraControlAckMessage>>((agentId, callback) => ackCallbacks[agentId] = callback)
@@ -347,6 +349,81 @@ namespace HeatingCameraSystem.Tests
                 m.AgentId == "Agent_2" && m.Op == CameraControlOps.Nuc && !string.IsNullOrEmpty(m.RequestId))), Times.Once);
             mockNats.Verify(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Never);
             mockPlc.Verify(p => p.StopChamberAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_FailedBiasConnectorAck_ReportsFailedReceiptAndRejectionAlarm()
+        {
+            string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "hcs_recipe_bias_" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(dir);
+            try
+            {
+                const string rejection = "BIAS 실패: 0x71 (측정 8501, 목표 8200±100)";
+                var mockNats = new Mock<INatsCommunicationService>();
+                var ackCallbacks = new Dictionary<string, Action<CameraControlAckMessage>>();
+                mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>()))
+                    .Returns(Task.CompletedTask);
+                mockNats.Setup(n => n.SubscribeCameraControlAckAsync(It.IsAny<string>(), It.IsAny<Action<CameraControlAckMessage>>()))
+                    .Callback<string, Action<CameraControlAckMessage>>((agentId, callback) => ackCallbacks[agentId] = callback)
+                    .Returns(Task.CompletedTask);
+                mockNats.Setup(n => n.PublishCameraControlAckAsync(It.IsAny<CameraControlAckMessage>()))
+                    .Callback<CameraControlAckMessage>(ack => ackCallbacks[ack.AgentId](ack))
+                    .Returns(Task.CompletedTask);
+
+                using var manager = new CameraRuntimeManager(
+                    descriptor => new CameraRuntime(descriptor.OpenCvIndex, new FakeThermalFrameSource(), framePeriodMs: 10));
+                using var index = new LiteDbCaptureIndex(System.IO.Path.Combine(dir, "idx.db"));
+                using var store = new CaptureStore(dir, index);
+                var camera = new CameraDescriptor("Agent_1", 1, "Camera 1");
+                await using var connector = new CameraNatsConnector(
+                    mockNats.Object, manager, store, new[] { camera },
+                    cameraControlHandler: (_, _) => Task.FromResult((Success: false, Message: rejection)));
+                mockNats.Setup(n => n.PublishCameraControlAsync(It.IsAny<CameraControlMessage>()))
+                    .Returns<CameraControlMessage>(message => connector.HandleCameraControlAsync(camera, message));
+
+                var step = new RecipeStep
+                {
+                    Kind = RecipeStepKind.CameraCommand,
+                    CameraOperation = CameraControlOps.BiasMid,
+                    BiasTargetLevel = 8200,
+                    CameraTargets = new List<RecipeCameraTarget>
+                    {
+                        new() { AgentId = camera.AgentId, CameraIndex = camera.OpenCvIndex }
+                    }
+                };
+                var recipe = new Recipe { Steps = new List<RecipeStep> { step } };
+                var engine = new RecipeEngine(
+                    new Mock<IPlcController>().Object, mockNats.Object, new Mock<ICaptureHistoryRepository>().Object);
+                var receipts = new List<RecipeStepExecution>();
+                engine.StepExecutionChanged += (_, receipt) => receipts.Add(receipt);
+
+                AlarmSink.Entries.Clear();
+                await engine.ExecuteRecipeAsync(recipe, CancellationToken.None);
+
+                mockNats.Verify(n => n.PublishCameraControlAckAsync(It.Is<CameraControlAckMessage>(ack =>
+                    !ack.IsSuccess &&
+                    ack.RequestId == step.StepId + ":" + camera.AgentId + ":" + camera.OpenCvIndex &&
+                    ack.Op == CameraControlOps.BiasMid &&
+                    ack.Message == rejection)), Times.Once);
+                Assert.Collection(receipts,
+                    started => Assert.Equal(RecipeStepOutcome.Started, started.Outcome),
+                    failed =>
+                    {
+                        Assert.Equal(step.StepId, failed.StepId);
+                        Assert.Equal(RecipeStepOutcome.Failed, failed.Outcome);
+                        Assert.Contains(rejection, failed.Reason ?? string.Empty);
+                        Assert.DoesNotContain("timed out", failed.Reason ?? string.Empty);
+                    });
+                Assert.DoesNotContain(receipts, receipt => receipt.Outcome == RecipeStepOutcome.Succeeded);
+                Assert.Contains(AlarmSink.Entries, alarm =>
+                    alarm.Code == AlarmCodes.AgentTimeout &&
+                    alarm.Severity == AlarmSeverity.Warning &&
+                    alarm.Message.Contains(rejection));
+            }
+            finally
+            {
+                System.IO.Directory.Delete(dir, true);
+            }
         }
 
         [Fact]
@@ -494,7 +571,7 @@ namespace HeatingCameraSystem.Tests
             plc.Setup(p => p.GetCurrentBlackBodyTemperatureAsync(It.IsAny<int>())).ReturnsAsync(30.0f);
             plc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot
             {
-                Chiller = false, DoorLock = false, ServoXBusy = false, ServoYBusy = false
+                Chiller = false, DoorLock = false, ServoXBusy = false, ServoYBusy = false, ServoXPosition = 100, ServoYPosition = 200
             });
             history.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
             WireCaptureRoundTrip(nats);
@@ -566,6 +643,243 @@ namespace HeatingCameraSystem.Tests
             mockHistory.Verify(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>()), Times.Exactly(3));
             // 0초/1초/2초에 실행되므로 2초 이상 걸리고, 누적 지연이 없으니 넉넉잡아 5초를 넘지 않는다.
             Assert.InRange(clock.Elapsed.TotalSeconds, 1.8, 5.0);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_CameraCapture_RepeatedRounds_OverwriteDuplicateShots_KeepsStepOffset()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
+            WireCaptureRoundTrip(mockNats);
+
+            var recipe = new Recipe
+            {
+                OverwriteDuplicateShots = true,
+                Steps = new List<RecipeStep>
+                {
+                    new()
+                    {
+                        Kind = RecipeStepKind.CameraCommand,
+                        CameraOperation = CameraControlOps.Capture,
+                        CameraIndex = 1,
+                        ShotCount = 3,
+                        ShotNumberOffset = 0,
+                        CaptureIntervalSeconds = 1,
+                        CaptureDurationSeconds = 2
+                    }
+                }
+            };
+
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(15));
+
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(It.Is<CaptureCommandMessage>(m => m.ShotNumberOffset == 0)), Times.Exactly(2));
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Exactly(2));
+        }
+
+        [Theory]
+        [InlineData(true, 0, 0)]
+        [InlineData(false, 0, 100)]
+        public async Task ExecuteRecipeAsync_LegacyCopyWithSavedOffsets_OverwriteFlagForcesZero(bool overwrite, int expectedFirst, int expectedSecond)
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
+            WireCaptureRoundTrip(mockNats);
+
+            RecipeStep Capture(int offset) => new()
+            {
+                Kind = RecipeStepKind.CameraCommand, CameraOperation = CameraControlOps.Capture,
+                CameraIndex = 1, ShotCount = 3, ShotNumberOffset = offset
+            };
+            var source = new Recipe { OverwriteDuplicateShots = overwrite, Steps = new List<RecipeStep> { Capture(0), Capture(100) } };
+            Recipe legacy = CapturePlanRecipeCopies.ToLegacyCopy(source, new List<CameraPositionEntry>(), new List<Recipe>());
+
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(legacy)
+                .WaitAsync(TimeSpan.FromSeconds(15));
+
+            var offsets = mockNats.Invocations.Where(i => i.Method.Name == nameof(INatsCommunicationService.PublishCaptureCommandAsync))
+                .Select(i => ((CaptureCommandMessage)i.Arguments[0]).ShotNumberOffset).ToList();
+            Assert.Equal(new[] { expectedFirst, expectedSecond }, offsets);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_CameraCapture_RepeatedRounds_ContinueShotNumberOffset()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false });
+            mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
+            mockPlc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            mockHistory.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
+            WireCaptureRoundTrip(mockNats);
+
+            // 간격 1초 × 전체 2초 = 2회, 회차당 3장, 스텝 오프셋 100 → 회차 0은 100, 회차 1은 103부터.
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new()
+                    {
+                        Kind = RecipeStepKind.CameraCommand,
+                        CameraOperation = CameraControlOps.Capture,
+                        CameraIndex = 1,
+                        ShotCount = 3,
+                        ShotNumberOffset = 100,
+                        CaptureIntervalSeconds = 1,
+                        CaptureDurationSeconds = 2
+                    }
+                }
+            };
+
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe)
+                .WaitAsync(TimeSpan.FromSeconds(15));
+
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(It.Is<CaptureCommandMessage>(m => m.ShotNumberOffset == 100)), Times.Once);
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(It.Is<CaptureCommandMessage>(m => m.ShotNumberOffset == 103)), Times.Once);
+            mockNats.Verify(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Exactly(2));
+        }
+
+        [Theory]
+        [InlineData(BlackBodyRole.Room, "shared", 0, false, true, 0, 3)]
+        [InlineData(BlackBodyRole.Hot, "shared", 0, false, true, 0, 0)]
+        [InlineData(BlackBodyRole.Room, "shared", 1, false, true, 0, 0)]
+        [InlineData(BlackBodyRole.Room, "other", 0, false, true, 0, 0)]
+        [InlineData(BlackBodyRole.Room, "shared", 0, true, true, 100, 0)]
+        [InlineData(BlackBodyRole.Room, "shared", 0, false, false, 0, 0)]
+        [InlineData(BlackBodyRole.Room, "shared", 0, false, true, 100, 100)]
+        public async Task ExecuteRecipeAsync_LegacyProductionCaptures_AllocatePerDestinationAndResetEachRun(
+            BlackBodyRole secondRole, string secondAgent, int secondCamera, bool overwrite, bool production, int savedOffset, int expectedSecond)
+        {
+            RecipeStep first = ProductionCaptureStep();
+            RecipeStep second = ProductionCaptureStep();
+            second.CameraTargets[0].TargetBlackBody = secondRole;
+            second.CameraTargets[0].AgentId = secondAgent;
+            second.CameraTargets[0].CameraIndex = secondCamera;
+            second.ShotNumberOffset = savedOffset;
+            var recipe = new Recipe
+            {
+                SaveRootPath = production ? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "hcsoff_" + Guid.NewGuid().ToString("N")) : string.Empty,
+                OverwriteDuplicateShots = overwrite,
+                Steps = new() { first, second }
+            };
+
+            var commands = await RunCaptureCommandsAsync(recipe, runs: 2);
+
+            Assert.Equal(new[] { 0, expectedSecond, 0, expectedSecond }, commands.Select(c => c.ShotNumberOffset));
+            Assert.All(commands, c => Assert.Equal(3, c.ShotCount));
+            Assert.All(commands, c => Assert.Equal(recipe.SaveRootPath, c.StorageRootUnc));
+            Assert.All(commands, c => Assert.Equal(production ? "RPP25" : string.Empty, c.ConditionFolder));
+            Assert.Equal(production ? "room" : string.Empty, commands[0].BlackBodyFolder);
+            Assert.Equal(production ? "BBroom" : string.Empty, commands[0].FilePrefix);
+        }
+
+        [Theory]
+        [InlineData(CapturePlanRunMode.New, false)]
+        [InlineData(CapturePlanRunMode.New, true)]
+        [InlineData(CapturePlanRunMode.Remaining, false)]
+        [InlineData(CapturePlanRunMode.FailedOnly, false)]
+        public async Task ExecuteRecipeAsync_CompiledProductionPlan_PreservesOffsetsIncludingRoundsAndRetries(CapturePlanRunMode mode, bool flatten)
+        {
+            RecipeStep first = ProductionCaptureStep();
+            first.UseCellCamera = true;
+            first.CaptureIntervalSeconds = 1;
+            first.CaptureDurationSeconds = 2;
+            RecipeStep second = ProductionCaptureStep();
+            second.UseCellCamera = true;
+            var template = new Recipe { Steps = new() { first, second } };
+            var camera = new CameraIdentity { AgentId = "shared", CameraIndex = 0 };
+            var plan = new Recipe
+            {
+                SaveRootPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "hcsplanoff_" + Guid.NewGuid().ToString("N")),
+                Plan = new CapturePlan
+                {
+                    Entries = new()
+                    {
+                        new() { Key = "done", TemplateRecipeId = template.Id, Cameras = new() { camera.Copy() } },
+                        new() { Key = "retry", TemplateRecipeId = template.Id, Cameras = new() { camera.Copy() } }
+                    }
+                }
+            };
+            var recipes = new Mock<IRecipeRepository>();
+            recipes.Setup(r => r.GetAllAsync()).ReturnsAsync(new[] { template });
+            var positions = new Mock<ICameraPositionRepository>();
+            positions.Setup(p => p.GetAllAsync()).ReturnsAsync(Array.Empty<CameraPositionEntry>());
+            var runs = new Mock<ICapturePlanRunRepository>();
+            runs.Setup(r => r.GetLatestChainAsync(plan.Id)).ReturnsAsync(new[]
+            {
+                new CapturePlanRunRecord
+                {
+                    SchemaVersion = 2, RecipeId = plan.Id,
+                    Cells = new()
+                    {
+                        new() { CellKey = CapturePlanCompiler.CellKey("done", camera), State = CapturePlanCellState.Done },
+                        new() { CellKey = CapturePlanCompiler.CellKey("retry", camera), State = CapturePlanCellState.Failed }
+                    }
+                }
+            });
+            var service = new CapturePlanRunService(runs.Object, positions.Object, recipes.Object);
+            var prepared = await service.PrepareAsync(plan, mode);
+            Recipe execution = flatten
+                ? CapturePlanRecipeCopies.ToLegacyCopy(plan, Array.Empty<CameraPositionEntry>(), new[] { template })
+                : prepared.Recipe;
+            int[] expected = mode == CapturePlanRunMode.New ? new[] { 0, 3, 6, 9, 12, 15 } : new[] { 0, 3, 6 };
+            int[] compiled = execution.Steps.SelectMany(s => Enumerable.Range(0, RecipeEngine.CaptureRepeatCount(s))
+                .Select(round => s.ShotNumberOffset + round * s.ShotCount)).ToArray();
+            Assert.Equal(expected, compiled);
+
+            var commands = await RunCaptureCommandsAsync(execution);
+
+            Assert.Equal(compiled, commands.Select(c => c.ShotNumberOffset));
+            Assert.All(commands, c =>
+            {
+                Assert.Equal(plan.SaveRootPath, c.StorageRootUnc);
+                Assert.Equal("RPP25", c.ConditionFolder);
+                Assert.Equal("room", c.BlackBodyFolder);
+                Assert.Equal("BBroom", c.FilePrefix);
+            });
+        }
+
+        private static RecipeStep ProductionCaptureStep() => new()
+        {
+            Kind = RecipeStepKind.CameraCommand, CameraOperation = CameraControlOps.Capture, ShotCount = 3,
+            CameraTargets = new()
+            {
+                new() { AgentId = "shared", CameraIndex = 0, TargetChamber = ChamberRange.Mid, TargetBlackBody = BlackBodyRole.Room }
+            }
+        };
+
+        private static async Task<List<CaptureCommandMessage>> RunCaptureCommandsAsync(Recipe recipe, int runs = 1)
+        {
+            var plc = new Mock<IPlcController>();
+            plc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { TargetTemperature = 25.0f });
+            plc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
+            plc.Setup(p => p.GetCurrentHumidityAsync()).ReturnsAsync(50.0f);
+            var nats = new Mock<INatsCommunicationService>();
+            WireCaptureRoundTrip(nats);
+            var history = new Mock<ICaptureHistoryRepository>();
+            history.Setup(h => h.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
+            var engine = new RecipeEngine(plc.Object, nats.Object, history.Object);
+            for (int run = 0; run < runs; run++)
+                await engine.ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(15));
+            return nats.Invocations.Where(i => i.Method.Name == nameof(INatsCommunicationService.PublishCaptureCommandAsync))
+                .Select(i => (CaptureCommandMessage)i.Arguments[0]).ToList();
         }
 
         [Theory]
@@ -1244,6 +1558,73 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
+        public async Task ExecuteRecipeAsync_ManualMotorMove_WaitsUntilServoPositionReachesTarget()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            mockPlc.Setup(p => p.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>())).Returns(Task.CompletedTask);
+            mockPlc.SetupSequence(p => p.ReadStatusAsync())
+                .ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, ServoXPosition = 0, ServoYPosition = 0 })
+                .ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, ServoXPosition = 0, ServoYPosition = 0 })
+                .ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, ServoXPosition = 120.3f, ServoYPosition = 44.8f });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.MotorMove, MotorMoveType = MotorMoveType.Manual, PositionX = 120.0f, PositionY = 45.0f }
+                }
+            };
+
+            AlarmSink.Entries.Clear();
+            await new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object)
+                .ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(10));
+
+            mockPlc.Verify(p => p.MoveToCoordinateAsync(120.0f, 45.0f), Times.Once);
+            mockPlc.Verify(p => p.ReadStatusAsync(), Times.AtLeast(3));
+            Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Error);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_ManualMotorMove_WhenServoMovedButPositionMismatches_WarnsAndContinues()
+        {
+            var mockPlc = new Mock<IPlcController>();
+            var mockNats = new Mock<INatsCommunicationService>();
+            var mockHistory = new Mock<ICaptureHistoryRepository>();
+
+            int reads = 0;
+            mockPlc.Setup(p => p.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>())).Returns(Task.CompletedTask);
+            mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(() =>
+            {
+                reads++;
+                return reads == 1
+                    ? new PlcStatusSnapshot { ServoXBusy = true, ServoYBusy = false, ServoXPosition = 0, ServoYPosition = 0 }
+                    : new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, ServoXPosition = 50, ServoYPosition = 60 };
+            });
+            mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+
+            var recipe = new Recipe
+            {
+                Steps = new List<RecipeStep>
+                {
+                    new() { Kind = RecipeStepKind.MotorMove, MotorMoveType = MotorMoveType.Manual, PositionX = 100, PositionY = 200 }
+                }
+            };
+
+            var engine = new RecipeEngine(mockPlc.Object, mockNats.Object, mockHistory.Object,
+                new RecipeEngineSettings { MotorMoveTimeoutSeconds = 30 });
+
+            AlarmSink.Entries.Clear();
+            await engine.ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(20));
+
+            Assert.Contains(AlarmSink.Entries, e => e.Code == AlarmCodes.MotorPointMismatch && e.Severity == AlarmSeverity.Warning);
+            Assert.DoesNotContain(AlarmSink.Entries, e => e.Severity == AlarmSeverity.Error);
+        }
+
+        [Fact]
         public async Task ExecuteRecipeAsync_WaitStep_BlocksForDurationWithoutTouchingPlc()
         {
             var mockPlc = new Mock<IPlcController>();
@@ -1635,13 +2016,13 @@ namespace HeatingCameraSystem.Tests
                 .Setup(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()))
                 .Callback<CaptureCommandMessage>(cmd =>
                 {
-                    // 실 Agent와 동일하게 요청된 장수만큼 결과를 되돌려 준다.
-                    int shots = cmd.ShotCount > 0 ? cmd.ShotCount : 1;
-                    for (int i = 0; i < shots; i++)
+                    // 규칙 저장은 배치당 1건, 기존 .y16 경로는 장수만큼 결과를 돌려준다.
+                    int results = HeatingCameraSystem.Protocols.Cameras.ProductionCaptureSink.IsEnabled(cmd) ? 1 : Math.Max(cmd.ShotCount, 1);
+                    for (int i = 0; i < results; i++)
                     {
                         resultCb?.Invoke(new CaptureResultMessage
                         {
-                            AgentId      = "Agent_1",
+                            AgentId      = cmd.TargetAgentId,
                             RecipeStepId = cmd.RecipeStepId,
                             IsSuccess    = true,
                             ImagePath    = $"/test/image_{i}.jpg",

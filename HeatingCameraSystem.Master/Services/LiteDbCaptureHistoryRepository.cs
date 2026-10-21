@@ -29,6 +29,16 @@ namespace HeatingCameraSystem.Master.Services
             return Task.CompletedTask;
         }
 
+        public Task SetRawLinkAsync(string id, string path, int width, int height)
+        {
+            var record = _col.FindById(id) ?? throw new InvalidOperationException("촬영 이력을 찾을 수 없습니다.");
+            record.LinkedRawPath = path;
+            record.PixelWidth = width;
+            record.PixelHeight = height;
+            _col.Update(record);
+            return Task.CompletedTask;
+        }
+
         /// <summary>기간 내 이력을 최신순으로 페이징 조회한다. cameraId를 주면 해당 카메라로 한정한다.</summary>
         public Task<IEnumerable<CaptureHistoryRecord>> QueryAsync(
             DateTime from, DateTime to, string? cameraId = null, int page = 1, int pageSize = 10)

@@ -14,6 +14,8 @@ namespace HeatingCameraSystem.Tests
 {
     public class CameraNatsConnectorTests
     {
+        private const string ValidBiasJson = "{\"CINT\":\"93\",\"TINT\":\"273\",\"GSK_MSB\":1,\"GSK_LSB\":\"80\",\"GFID\":\"AE\"}";
+
         [Fact]
         public async Task HandleCapture_TeesSnapshot_Persists_And_PublishesResult()
         {
@@ -56,6 +58,7 @@ namespace HeatingCameraSystem.Tests
                 Assert.NotNull(published.ImageBytes);
                 Assert.True(published.ImageBytes!.Length > 0);
                 Assert.True(File.Exists(published.ImagePath));
+                Assert.Empty(published.ProductionRawPath);
 
                 Assert.Single(store.Query());
 
@@ -247,7 +250,14 @@ namespace HeatingCameraSystem.Tests
             try
             {
                 var natsMock = new Mock<INatsCommunicationService>();
+                CaptureResultMessage? published = null;
+                bool? rawExistedWhenPublished = null;
                 natsMock.Setup(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()))
+                        .Callback<CaptureResultMessage>(m =>
+                        {
+                            published = m;
+                            rawExistedWhenPublished = File.Exists(m.ProductionRawPath);
+                        })
                         .Returns(Task.CompletedTask);
 
                 ThermalFrame source = GradientFrame();
@@ -266,6 +276,7 @@ namespace HeatingCameraSystem.Tests
                 await using var connector = new CameraNatsConnector(
                     natsMock.Object, manager, store, new[] { descriptor },
                     nucs: new Dictionary<string, ThermalNucCorrector> { ["cam0"] = nuc },
+                    readBiasJson: _ => ValidBiasJson,
                     productionSink: new ProductionCaptureSink(buffer));
 
                 await connector.HandleCaptureAsync(descriptor, new CaptureCommandMessage
@@ -276,15 +287,24 @@ namespace HeatingCameraSystem.Tests
                     ConditionFolder = "RPP40",
                     BlackBodyFolder = "cold",
                     FilePrefix = "BB20",
-                    ShotCount = 1
+                    ShotCount = 3,
+                    ShotNumberOffset = 17,
+                    WriteBiasJson = true
                 });
 
-                string raw = Path.Combine(storage, "S1_P1", "RPP40", "cold", "BB20_000.raw");
+                string raw = Path.Combine(storage, "S1_P1", "RPP40", "cold", "BB20_019.raw");
                 Assert.True(File.Exists(raw));
+                Assert.NotNull(published);
+                Assert.True(published.IsSuccess);
+                Assert.Equal(raw, published.ProductionRawPath);
+                Assert.Equal(false, rawExistedWhenPublished);
+                natsMock.Verify(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()), Times.Once);
+                Assert.Single(store.Query());
 
                 var expected = new byte[source.Pixels.Length * sizeof(ushort)];
                 Buffer.BlockCopy(source.Pixels, 0, expected, 0, expected.Length);
                 Assert.Equal(expected, File.ReadAllBytes(raw));
+                Assert.Equal(ValidBiasJson, File.ReadAllText(Path.Combine(storage, "S1_P1", "RPP40", "bias.json")));
 
                 await manager.StopAllAsync();
             }
@@ -304,7 +324,9 @@ namespace HeatingCameraSystem.Tests
             try
             {
                 var natsMock = new Mock<INatsCommunicationService>();
+                CaptureResultMessage? published = null;
                 natsMock.Setup(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()))
+                        .Callback<CaptureResultMessage>(m => published = m)
                         .Returns(Task.CompletedTask);
 
                 ThermalFrame source = GradientFrame();
@@ -326,6 +348,7 @@ namespace HeatingCameraSystem.Tests
                 await using var connector = new CameraNatsConnector(
                     natsMock.Object, manager, store, new[] { descriptor },
                     nucs: new Dictionary<string, ThermalNucCorrector> { ["cam0"] = nuc },
+                    readBiasJson: _ => ValidBiasJson,
                     productionSink: new ProductionCaptureSink(buffer));
 
                 await connector.HandleCaptureAsync(descriptor, new CaptureCommandMessage
@@ -337,11 +360,14 @@ namespace HeatingCameraSystem.Tests
                     BlackBodyFolder = "cold",
                     FilePrefix = "BB20",
                     ShotCount = 1,
+                    WriteBiasJson = true,
                     SaveFormat = ProductionCaptureFormat.Jpeg
                 });
 
                 string jpeg = Path.Combine(storage, "S1_P1", "RPP40", "cold", "BB20_000.jpg");
                 Assert.True(File.Exists(jpeg));
+                Assert.NotNull(published);
+                Assert.Empty(published.ProductionRawPath);
 
                 ThermalFrame corrected = nuc.Apply(source);
                 Assert.True(corrected.Pixels.Distinct().Count() > 1);
@@ -349,8 +375,229 @@ namespace HeatingCameraSystem.Tests
                 byte[] written = File.ReadAllBytes(jpeg);
                 Assert.Equal(ThermalPreviewEncoder.EncodeJpeg(corrected), written);
                 Assert.NotEqual(ThermalPreviewEncoder.EncodeJpeg(source), written);
+                Assert.Equal(ValidBiasJson, File.ReadAllText(Path.Combine(storage, "S1_P1", "RPP40", "bias.json")));
 
                 await manager.StopAllAsync();
+            }
+            finally
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+            }
+        }
+
+        [Fact]
+        public async Task HandleCapture_Cold_UsesBiasSnapshotEvenIfCacheClearsDuringCapture()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "hcs_coldbias_" + Guid.NewGuid().ToString("N"));
+            string buffer = Path.Combine(dir, "buffer");
+            string storage = Path.Combine(dir, "storage");
+            Directory.CreateDirectory(dir);
+            try
+            {
+                var natsMock = new Mock<INatsCommunicationService>();
+                var results = new List<CaptureResultMessage>();
+                natsMock.Setup(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()))
+                        .Callback<CaptureResultMessage>(results.Add)
+                        .Returns(Task.CompletedTask);
+
+                string? cachedBias = ValidBiasJson;
+                int biasReads = 0;
+                var runtime = new Mock<ICameraRuntime>();
+                runtime.Setup(r => r.StopAsync()).Returns(Task.CompletedTask);
+                runtime.Setup(r => r.CaptureSnapshotAsync(It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+                       .Callback(() => cachedBias = null)
+                       .ReturnsAsync(GradientFrame());
+                using var manager = new CameraRuntimeManager(_ => runtime.Object);
+                var descriptor = new CameraDescriptor("cam0", 0, "Camera 0", CameraSerialNumber: "S1");
+                manager.Add(descriptor);
+
+                using var index = new LiteDbCaptureIndex(Path.Combine(dir, "idx.db"));
+                using var store = new CaptureStore(dir, index);
+                await using var connector = new CameraNatsConnector(
+                    natsMock.Object, manager, store, new[] { descriptor },
+                    readBiasJson: _ => { biasReads++; return cachedBias; },
+                    productionSink: new ProductionCaptureSink(buffer));
+
+                await connector.HandleCaptureAsync(descriptor, new CaptureCommandMessage
+                {
+                    TargetAgentId = "cam0",
+                    StorageRootUnc = storage,
+                    ProductNumber = "P1",
+                    ConditionFolder = "RPP40",
+                    BlackBodyFolder = "cold",
+                    FilePrefix = "BB20",
+                    ShotCount = 1,
+                    WriteBiasJson = true
+                });
+
+                Assert.True(Assert.Single(results).IsSuccess);
+                Assert.Equal(1, biasReads);
+                Assert.Null(cachedBias);
+                Assert.Equal(ValidBiasJson, File.ReadAllText(Path.Combine(storage, "S1_P1", "RPP40", "bias.json")));
+                Assert.True(File.Exists(Path.Combine(storage, "S1_P1", "RPP40", "cold", "BB20_000.raw")));
+                Assert.Single(store.Query());
+            }
+            finally
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+            }
+        }
+
+        [Theory]
+        [InlineData(null, false)]
+        [InlineData(null, true)]
+        [InlineData("", true)]
+        [InlineData(" \r\n", true)]
+        [InlineData("{invalid", true)]
+        [InlineData("null", true)]
+        [InlineData("[]", true)]
+        public async Task HandleCapture_ColdWithoutValidBias_SkipsJsonWithWarningAndCaptureSucceeds(string? cachedBias, bool hasHistoricalJson)
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "hcs_coldwarning_" + Guid.NewGuid().ToString("N"));
+            string buffer = Path.Combine(dir, "buffer");
+            string storage = Path.Combine(dir, "storage");
+            string bufferCondition = Path.Combine(buffer, "S1_P1", "RPP40");
+            string storageCondition = Path.Combine(storage, "S1_P1", "RPP40");
+            Directory.CreateDirectory(Path.Combine(bufferCondition, "cold"));
+            Directory.CreateDirectory(Path.Combine(storageCondition, "cold"));
+            string bufferedRaw = Path.Combine(bufferCondition, "cold", "BB20_099.raw");
+            string historicRaw = Path.Combine(storageCondition, "cold", "BB20_000.raw");
+            string bufferedBias = Path.Combine(bufferCondition, "bias.json");
+            string historicBias = Path.Combine(storageCondition, "bias.json");
+            File.WriteAllBytes(bufferedRaw, new byte[] { 7, 0 });
+            File.WriteAllBytes(historicRaw, new byte[] { 8, 0 });
+            const string bufferedOldBias = "{\"GSK_LSB\":\"55\"}";
+            if (hasHistoricalJson)
+            {
+                File.WriteAllText(bufferedBias, bufferedOldBias);
+                File.WriteAllText(historicBias, ValidBiasJson);
+            }
+            try
+            {
+                var natsMock = new Mock<INatsCommunicationService>();
+                var results = new List<CaptureResultMessage>();
+                natsMock.Setup(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()))
+                        .Callback<CaptureResultMessage>(results.Add)
+                        .Returns(Task.CompletedTask);
+                var runtime = new Mock<ICameraRuntime>();
+                runtime.Setup(r => r.StopAsync()).Returns(Task.CompletedTask);
+                runtime.Setup(r => r.CaptureSnapshotAsync(It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+                       .ReturnsAsync(GradientFrame());
+                using var manager = new CameraRuntimeManager(_ => runtime.Object);
+                var descriptor = new CameraDescriptor("cam0", 0, "Camera 0", CameraSerialNumber: "S1");
+                manager.Add(descriptor);
+                using var index = new LiteDbCaptureIndex(Path.Combine(dir, "idx.db"));
+                using var store = new CaptureStore(dir, index);
+                var sink = new ProductionCaptureSink(buffer);
+                var warnings = new List<string>();
+                await using var connector = new CameraNatsConnector(
+                    natsMock.Object, manager, store, new[] { descriptor },
+                    readBiasJson: _ => cachedBias,
+                    productionSink: sink,
+                    reportCaptureWarning: (camera, warning) =>
+                    {
+                        Assert.Equal(descriptor.AgentId, camera.AgentId);
+                        warnings.Add(warning);
+                    });
+
+                await connector.HandleCaptureAsync(descriptor, new CaptureCommandMessage
+                {
+                    TargetAgentId = "cam0",
+                    RecipeStepId = "cold-step",
+                    StorageRootUnc = storage,
+                    ProductNumber = "P1",
+                    ConditionFolder = "RPP40",
+                    BlackBodyFolder = "cold",
+                    FilePrefix = "BB20",
+                    ShotCount = 3,
+                    WriteBiasJson = true
+                });
+
+                CaptureResultMessage result = Assert.Single(results);
+                Assert.True(result.IsSuccess);
+                Assert.Equal("cold-step", result.RecipeStepId);
+                Assert.False(string.IsNullOrWhiteSpace(result.ImagePath));
+                Assert.NotNull(result.ImageBytes);
+                Assert.Single(store.Query());
+                runtime.Verify(r => r.CaptureSnapshotAsync(It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
+                string warning = Assert.Single(warnings);
+                Assert.Contains("bias.json 저장 건너뜀", warning);
+                Assert.Contains("촬영은 계속합니다", warning);
+                Assert.Equal(0, sink.PendingFiles);
+                Assert.False(File.Exists(bufferedRaw));
+                Assert.Equal(new byte[] { 7, 0 }, File.ReadAllBytes(Path.Combine(storageCondition, "cold", "BB20_099.raw")));
+                Assert.True(File.Exists(historicRaw));
+                Assert.True(File.Exists(Path.Combine(storageCondition, "cold", "BB20_002.raw")));
+                if (hasHistoricalJson)
+                {
+                    Assert.Equal(bufferedOldBias, File.ReadAllText(bufferedBias));
+                    Assert.Equal(ValidBiasJson, File.ReadAllText(historicBias)); // Old buffered JSON was not transferred.
+                }
+                else
+                {
+                    Assert.False(File.Exists(bufferedBias));
+                    Assert.False(File.Exists(historicBias));
+                }
+            }
+            finally
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+            }
+        }
+
+        [Theory]
+        [InlineData(17, 18)]
+        [InlineData(-9, 1)]
+        public async Task HandleCapture_ProductionRaw_FailedWritePublishesLastAttemptedShotPath(
+            int offset, int expectedShotNumber)
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "hcs_prodraw_failed_" + Guid.NewGuid().ToString("N"));
+            string storage = Path.Combine(dir, "storage");
+            Directory.CreateDirectory(dir);
+            try
+            {
+                var natsMock = new Mock<INatsCommunicationService>();
+                CaptureResultMessage? published = null;
+                natsMock.Setup(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()))
+                    .Callback<CaptureResultMessage>(m => published = m)
+                    .Returns(Task.CompletedTask);
+
+                ThermalFrame nonRadiometric = GradientFrame() with { Bgr24 = new byte[64 * 64 * 3] };
+                var runtime = new Mock<ICameraRuntime>();
+                runtime.SetupSequence(r => r.CaptureSnapshotAsync(
+                        It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(nonRadiometric)
+                    .ReturnsAsync(nonRadiometric)
+                    .ReturnsAsync((ThermalFrame?)null);
+                using var manager = new CameraRuntimeManager(_ => runtime.Object);
+                var descriptor = new CameraDescriptor("cam7", 7, "Camera 7", CameraSerialNumber: "S17");
+                manager.Add(descriptor);
+                using var index = new LiteDbCaptureIndex(Path.Combine(dir, "idx.db"));
+                using var store = new CaptureStore(dir, index);
+                await using var connector = new CameraNatsConnector(
+                    natsMock.Object, manager, store, new[] { descriptor },
+                    productionSink: new ProductionCaptureSink(Path.Combine(dir, "buffer")));
+
+                await connector.HandleCaptureAsync(descriptor, new CaptureCommandMessage
+                {
+                    TargetAgentId = "cam7",
+                    StorageRootUnc = storage,
+                    ProductNumber = "P42",
+                    ConditionFolder = "RPP40",
+                    BlackBodyFolder = "hot",
+                    FilePrefix = "BB20",
+                    ShotCount = 3,
+                    ShotNumberOffset = offset
+                });
+
+                Assert.NotNull(published);
+                Assert.False(published.IsSuccess);
+                Assert.Equal(Path.Combine(storage, "S17_P42", "RPP40", "hot",
+                    $"BB20_{expectedShotNumber:000}.raw"), published.ProductionRawPath);
+                Assert.False(File.Exists(published.ProductionRawPath));
+                Assert.True(File.Exists(published.ImagePath));
+                Assert.Single(store.Query());
+                natsMock.Verify(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()), Times.Once);
             }
             finally
             {

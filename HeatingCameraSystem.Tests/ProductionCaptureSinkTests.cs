@@ -123,6 +123,51 @@ namespace HeatingCameraSystem.Tests
             Assert.True(ProductionCaptureSink.IsEnabled(Command("RPP40", "cold", "BB20")));
         }
 
+        [Fact]
+        public async Task SameFolderReshoot_OverwritesNumberZeroButKeepsOldTailAfterRealRobocopy()
+        {
+            string master = Path.Combine(Path.GetTempPath(), "prodsink_master_" + Guid.NewGuid().ToString("N"));
+            var sink = new ProductionCaptureSink(_buffer);
+            CaptureCommandMessage cmd = Command("RPP40", "hot", "BB80");
+            cmd.StorageRootUnc = master;
+            try
+            {
+                sink.WriteShot(Camera, cmd, Frame(), null, 0);
+                sink.WriteShot(Camera, cmd, Frame(), null, 1);
+                await sink.SyncFolderAsync(Camera, cmd);
+                string destination = Path.Combine(master, ProductionCaptureSink.RelativeDirectory(Camera, cmd));
+                Assert.Equal(2, Directory.GetFiles(destination, "*.raw").Length);
+                // Different byte length also makes robocopy's changed-file decision deterministic.
+                var replacement = new ThermalFrame(new ushort[] { 99, 100 }, 2, 1, DateTimeOffset.Now);
+                sink.WriteShot(Camera, cmd, replacement, null, 0);
+                await sink.SyncFolderAsync(Camera, cmd);
+                Assert.Equal(2, Directory.GetFiles(destination, "*.raw").Length);
+                Assert.Equal(new byte[] { 99, 0, 100, 0 }, File.ReadAllBytes(Path.Combine(destination, "BB80_000.raw")));
+                Assert.Equal(new byte[] { 1, 0, 2, 0, 3, 0, 4, 0 }, File.ReadAllBytes(Path.Combine(destination, "BB80_001.raw")));
+            }
+            finally
+            {
+                if (Directory.Exists(master)) Directory.Delete(master, true);
+            }
+        }
+
+        [Theory]
+        [InlineData(0, 0, "BB80_000.raw")]
+        [InlineData(100, 0, "BB80_100.raw")]
+        [InlineData(100, 99, "BB80_199.raw")]
+        [InlineData(-5, 2, "BB80_002.raw")]
+        public void WriteShot_AppliesShotNumberOffset(int offset, int shotIndex, string expectedName)
+        {
+            var sink = new ProductionCaptureSink(_buffer);
+            CaptureCommandMessage cmd = Command("RPP40", "hot", "BB80");
+            cmd.ShotNumberOffset = offset;
+
+            string path = sink.WriteShot(Camera, cmd, Frame(), fpaRaw: null, shotIndex: shotIndex);
+
+            Assert.Equal(expectedName, Path.GetFileName(path));
+            Assert.Equal(1, sink.PendingFiles);
+        }
+
         public void Dispose()
         {
             if (Directory.Exists(_buffer)) Directory.Delete(_buffer, recursive: true);

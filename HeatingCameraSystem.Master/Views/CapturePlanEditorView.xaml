@@ -1,0 +1,53 @@
+<UserControl x:Class="HeatingCameraSystem.Master.Views.CapturePlanEditorView"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Background="{DynamicResource BgSurface}" Foreground="{DynamicResource TextOnSurface}" MinHeight="420">
+ <UserControl.Resources>
+  <SolidColorBrush x:Key="BgSurface" Color="#0e1321"/>
+  <SolidColorBrush x:Key="BgSurfaceContainer" Color="#1a1f2e"/>
+  <SolidColorBrush x:Key="BgSurfaceVariant" Color="#2f3444"/>
+  <SolidColorBrush x:Key="OutlineVariant" Color="#3b4949"/>
+  <SolidColorBrush x:Key="TextOnSurface" Color="#dee2f7"/>
+  <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource TextOnSurface}"/><Setter Property="FontSize" Value="13"/></Style>
+  <Style TargetType="CheckBox"><Setter Property="Foreground" Value="{StaticResource TextOnSurface}"/></Style>
+  <Style TargetType="ListBox"><Setter Property="Foreground" Value="{StaticResource TextOnSurface}"/></Style>
+  <Style TargetType="Button"><Setter Property="Background" Value="{StaticResource BgSurfaceVariant}"/><Setter Property="Foreground" Value="{StaticResource TextOnSurface}"/><Setter Property="BorderThickness" Value="0"/></Style>
+ </UserControl.Resources>
+ <Grid Margin="16">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel>
+   <TextBlock Text="연결 레시피 촬영 계획" FontSize="20" FontWeight="SemiBold"/>
+   <TextBlock Text="항목 순서대로, 선택한 카메라마다 템플릿의 모든 스텝을 그대로 실행합니다. 템플릿을 저장하면 모든 연결 계획에 바로 반영됩니다." TextWrapping="Wrap" Margin="0,8,0,12"/>
+  </StackPanel>
+  <WrapPanel Grid.Row="1" Margin="0,0,0,12">
+   <Button Content="템플릿 항목 추가" Command="{Binding AddEntryCommand}" Padding="14,8" Margin="0,0,8,0"/>
+   <Button Content="항목 삭제" Command="{Binding DeleteEntryCommand}" Padding="14,8" Margin="0,0,8,0"/>
+   <Button Content="위로" Command="{Binding MoveEntryUpCommand}" Padding="14,8" Margin="0,0,8,0"/>
+   <Button Content="아래로" Command="{Binding MoveEntryDownCommand}" Padding="14,8" Margin="0,0,8,0"/>
+   <Button Content="카메라·위치·템플릿 새로고침" Command="{Binding RefreshCommand}" Padding="14,8"/>
+  </WrapPanel>
+  <Grid Grid.Row="2">
+   <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="3*"/></Grid.ColumnDefinitions>
+   <ListBox ItemsSource="{Binding Entries}" SelectedItem="{Binding SelectedEntry}" Background="{DynamicResource BgSurfaceContainer}" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+    <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="12"/></Style></ListBox.ItemContainerStyle>
+    <ListBox.ItemTemplate><DataTemplate>
+     <StackPanel>
+      <TextBlock Text="템플릿 레시피" FontWeight="SemiBold" Margin="0,0,0,6"/>
+      <ComboBox ItemsSource="{Binding DataContext.Templates, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedValuePath="Id" SelectedValue="{Binding TemplateRecipeId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MinHeight="32"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+      <TextBlock Text="셀 카메라 / 셀 위치 슬롯은 원본 스텝 편집기에서 지정합니다." TextWrapping="Wrap" Margin="0,8,0,8"/>
+      <TextBlock Text="연결된 카메라 (저장된 오프라인 대상은 유지)" FontWeight="SemiBold" TextWrapping="Wrap"/>
+      <ItemsControl ItemsSource="{Binding Cameras}"><ItemsControl.ItemTemplate><DataTemplate>
+       <CheckBox IsChecked="{Binding IsSelected}" Margin="0,6,0,0" ToolTip="{Binding Label}"><TextBlock Text="{Binding Label}"/></CheckBox>
+      </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      <TextBlock Text="{Binding Summary}" Margin="0,10,0,0"/>
+     </StackPanel>
+    </DataTemplate></ListBox.ItemTemplate>
+   </ListBox>
+   <Grid Grid.Column="1" Margin="16,0,0,0">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <TextBlock Text="실행 스텝 미리보기 (읽기 전용)" FontWeight="SemiBold" Margin="0,0,0,8"/>
+    <ListBox Grid.Row="1" ItemsSource="{Binding GeneratedSteps}" Background="{DynamicResource BgSurfaceContainer}" BorderThickness="0" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"><ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" TextWrapping="Wrap" Margin="6"/></DataTemplate></ListBox.ItemTemplate></ListBox>
+   </Grid>
+  </Grid>
+  <Border Grid.Row="3" Background="{DynamicResource BgSurfaceVariant}" Padding="12" Margin="0,12,0,0"><TextBlock Text="{Binding ValidationMessage}" TextWrapping="Wrap"/></Border>
+ </Grid>
+</UserControl>

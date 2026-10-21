@@ -69,7 +69,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             // 방사 측정 데이터가 없어도 JPEG으로 되돌리지 않는다 — Raw 런은 RawCaptureWriter가
             // 거부해 실패로 보고돼야 한다. 조용한 대체는 못 쓰는 8비트를 성공으로 보이게 한다.
             ProductionCaptureFormat format = cmd.SaveFormat;
-            string fileName = CaptureNamingRule.FileName(cmd.FilePrefix, shotIndex, format);
+            string fileName = CaptureNamingRule.FileName(cmd.FilePrefix, Math.Max(0, cmd.ShotNumberOffset) + shotIndex, format);
 
             if (format == ProductionCaptureFormat.Jpeg)
             {
@@ -114,7 +114,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             return path;
         }
 
-        public async Task SyncFolderAsync(CameraDescriptor cam, CaptureCommandMessage cmd, CancellationToken ct = default)
+        public async Task SyncFolderAsync(CameraDescriptor cam, CaptureCommandMessage cmd, CancellationToken ct = default, bool syncBiasJson = true)
         {
             string relative = RelativeDirectory(cam, cmd);
             await SyncAsync(
@@ -122,6 +122,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 Path.Combine(cmd.StorageRootUnc, relative),
                 "*.raw *.jpg *.json",
                 ct).ConfigureAwait(false);
+
+            // 이번 캡처에 유효한 BIAS가 없으면 이전 전송 실패로 남은 JSON도 전송하지 않는다.
+            if (!syncBiasJson) return;
 
             // 조건 폴더는 형제 흑체 폴더가 아직 촬영 중일 수 있으므로 bias.json만 따로 올린다.
             string conditionRelative = ConditionRelativeDirectory(cam, cmd);

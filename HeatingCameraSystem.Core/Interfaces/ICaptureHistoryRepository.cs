@@ -13,6 +13,9 @@ namespace HeatingCameraSystem.Core.Interfaces
         /// <summary>한 건의 촬영 이력을 저장한다.</summary>
         Task InsertAsync(CaptureHistoryRecord record);
 
+        /// <summary>검증된 운영자 연결(빈 경로면 해제)과 확인한 프레임 크기를 저장한다.</summary>
+        Task SetRawLinkAsync(string id, string path, int width, int height);
+
         /// <summary>지정 기간의 촬영 이력을 페이지 단위로 조회한다.</summary>
         Task<IEnumerable<CaptureHistoryRecord>> QueryAsync(
             DateTime from,

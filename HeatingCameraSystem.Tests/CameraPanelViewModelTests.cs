@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using HeatingCameraSystem.AgentUI.Services;
 using HeatingCameraSystem.AgentUI.ViewModels;
 using HeatingCameraSystem.Core.Interfaces;
+using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Protocols.Cameras;
 using HeatingCameraSystem.Protocols.Simulation;
 using Moq;
@@ -19,16 +20,122 @@ namespace HeatingCameraSystem.Tests
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public async Task FindBiasAsync_MonotonicResponse_SelectsTargetRange(bool increasing)
+        public async Task FindBiasInRangeAsync_MonotonicResponse_SelectsTargetRange(bool increasing)
         {
-            const double target = 4000;
             Task<double> Measure(byte value) => Task.FromResult(
                 increasing ? 3000 + value * 8.0 : 5000 - value * 8.0);
 
-            (byte value, double error) = await CameraPanelViewModel.FindBiasAsync(target, Measure);
+            var result = await CameraPanelViewModel.FindBiasInRangeAsync(3900, 4100, Measure);
 
-            Assert.InRange(error, 0, 100);
-            Assert.InRange(value, (byte)110, (byte)140);
+            Assert.True(result.Success);
+            Assert.Equal(0, result.Error);
+            Assert.InRange(result.Level, 3900, 4100);
+            Assert.InRange(result.Value, (byte)110, (byte)140);
+        }
+
+        [Fact]
+        public async Task FindBiasInRangeAsync_UnreachableTarget_ReportsBoundaryErrorAndMeasuredLevel()
+        {
+            var result = await CameraPanelViewModel.FindBiasInRangeAsync(
+                4900, 5100, _ => Task.FromResult(7000.0));
+
+            Assert.False(result.Success);
+            Assert.Equal(7000, result.Level);
+            Assert.Equal(1900, result.Error);
+        }
+
+        [Fact]
+        public async Task BiasCommand_DiscardsOldFrames_ThenFailureClearsPreviousJsonAndAppliesBest()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "hcs_bias_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                byte written = 0;
+                int pendingOldFrames = 0, discarded = 0;
+                bool reachable = true;
+                DateTimeOffset writtenAt = DateTimeOffset.MinValue;
+                var serial = new Mock<ICameraSerialClient>();
+                serial.Setup(s => s.SetBiasAsync(It.IsAny<byte>(), It.IsAny<CancellationToken>()))
+                    .Callback<byte, CancellationToken>((value, _) =>
+                    {
+                        written = value;
+                        writtenAt = DateTimeOffset.Now;
+                        pendingOldFrames = 8;
+                    })
+                    .Returns(Task.CompletedTask);
+                var runtime = new Mock<ICameraRuntime>();
+                runtime.Setup(r => r.CaptureSnapshotAsync(
+                    It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+                    .Returns(() =>
+                    {
+                        Assert.True(DateTimeOffset.Now - writtenAt >= TimeSpan.FromMilliseconds(90));
+                        // Buffered frames keep their pre-write timestamp and incorrect old level.
+                        bool old = pendingOldFrames-- > 0;
+                        if (old) discarded++;
+                        ushort level = old ? (ushort)16000
+                            : reachable ? (ushort)(3000 + written * 20) : (ushort)7000;
+                        ThermalFrame? frame = new ThermalFrame(new[] { level }, 1, 1,
+                            old ? writtenAt.AddSeconds(-1) : DateTimeOffset.Now);
+                        return Task.FromResult<ThermalFrame?>(frame);
+                    });
+                using var index = new LiteDbCaptureIndex(Path.Combine(dir, "idx.db"));
+                using var store = new CaptureStore(dir, index);
+                using var panel = new CameraPanelViewModel("cam", "Agent_1", runtime.Object,
+                    Dispatcher.CurrentDispatcher, new ThermalNucCorrector(), store, serial: serial.Object);
+
+                await panel.RunBiasMidCommand.ExecuteAsync(null);
+
+                Assert.True(panel.LastBiasSucceeded);
+                Assert.NotNull(panel.LastBiasJson);
+                Assert.Contains("BIAS 완료:", panel.SerialStatus);
+                Assert.InRange(written, (byte)95, (byte)105);
+                Assert.True(discarded >= 8);
+
+                reachable = false;
+                await panel.RunBiasMidCommand.ExecuteAsync(null);
+
+                Assert.False(panel.LastBiasSucceeded);
+                Assert.Null(panel.LastBiasJson);
+                Assert.Equal("BIAS 실패: 0x00 (측정 7000, 목표 5000±100)", panel.SerialStatus);
+                Assert.Equal((byte)0, written); // Best applied, not the final probed LSB.
+            }
+            finally
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Fact]
+        public async Task BiasCommand_OnlyStaleFallbackFrames_ReportsFailureWithoutJson()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "hcs_bias_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                var runtime = new Mock<ICameraRuntime>();
+                runtime.Setup(r => r.CaptureSnapshotAsync(
+                    It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new ThermalFrame(new ushort[] { 5000 }, 1, 1, DateTimeOffset.MinValue));
+                var serial = new Mock<ICameraSerialClient>();
+                serial.Setup(s => s.SetBiasAsync(It.IsAny<byte>(), It.IsAny<CancellationToken>()))
+                    .Returns(Task.CompletedTask);
+                using var index = new LiteDbCaptureIndex(Path.Combine(dir, "idx.db"));
+                using var store = new CaptureStore(dir, index);
+                using var panel = new CameraPanelViewModel("cam", "Agent_1", runtime.Object,
+                    Dispatcher.CurrentDispatcher, new ThermalNucCorrector(), store, serial: serial.Object);
+
+                await panel.RunBiasMidCommand.ExecuteAsync(null);
+
+                Assert.False(panel.LastBiasSucceeded);
+                Assert.Null(panel.LastBiasJson);
+                Assert.Contains("BIAS 실패:", panel.SerialStatus);
+                Assert.Contains("최신 프레임", panel.SerialStatus);
+            }
+            finally
+            {
+                Directory.Delete(dir, recursive: true);
+            }
         }
 
         [Fact]

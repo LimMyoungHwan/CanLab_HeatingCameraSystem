@@ -461,10 +461,12 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private const byte GfidValue = 0xAE;
 
         /// <summary>
-        /// 마지막 BIAS 보정 결과를 고객 규칙의 bias.json 형식으로 담아 둔다. cold 조건 캡처가
-        /// 이 문자열을 그대로 파일로 남긴다. 아직 보정한 적이 없으면 null이다.
+        /// 마지막으로 성공한 BIAS 보정 결과. 새 탐색 시작 때 무효화하며, 실패하면 null을 유지한다.
+        /// cold 조건 캡처는 유효한 결과가 없으면 경고를 남기고 bias.json만 생략한다.
         /// </summary>
         public string? LastBiasJson { get; private set; }
+
+        public bool LastBiasSucceeded { get; private set; }
 
         [RelayCommand(CanExecute = nameof(HasSerialControl))]
         private Task RunBiasLowAsync(double? targetOverride) => RunAutoBiasAsync("LOW", targetOverride ?? CameraBiasDefaults.Low, 0x93);
@@ -482,21 +484,46 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         /// </summary>
         private async Task RunAutoBiasAsync(string mode, double target, byte cint)
         {
-            double targetMin = target - BiasTargetTolerance;
-            double targetMax = target + BiasTargetTolerance;
+            // 이전 성공값은 이번 탐색이 실패하거나 중단되면 재사용할 수 없다.
+            LastBiasJson = null;
+            LastBiasSucceeded = false;
+            if (_serial is null)
+            {
+                SerialStatus = "BIAS 실패: 시리얼 제어가 없습니다.";
+                return;
+            }
 
-            if (_serial is null) return;
-
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintMsb, TintMsbValue);
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintLsb, TintLsbValue);
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.Cint, cint);
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.GskMsb, GskMsbValue);
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.Gfid, GfidValue);
-            SerialStatus = $"BIAS: {target:F0} 탐색 중";
-            (byte best, double bestError) = await FindBiasInRangeAsync(targetMin, targetMax, MeasureBiasAsync);
-            await _serial.SetBiasAsync(best);
-            LastBiasJson = BuildBiasJson(cint, best);
-            SerialStatus = $"BIAS 완료: 0x{best:X2} (오차 {bestError:F0})";
+            try
+            {
+                await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintMsb, TintMsbValue);
+                await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintLsb, TintLsbValue);
+                await _serial.SetBiasRegisterAsync(CameraBiasRegister.Cint, cint);
+                await _serial.SetBiasRegisterAsync(CameraBiasRegister.GskMsb, GskMsbValue);
+                await _serial.SetBiasRegisterAsync(CameraBiasRegister.Gfid, GfidValue);
+                SerialStatus = $"BIAS: {target:F0} 탐색 중";
+                BiasSearchResult result = await FindBiasInRangeAsync(
+                    target - BiasTargetTolerance, target + BiasTargetTolerance, MeasureBiasAsync);
+                // 미수렴이어도 가장 가까운 값을 적용하되 성공 결과/JSON으로 내보내지는 않는다.
+                double finalLevel = await MeasureBiasAsync(result.Value);
+                double finalError = Math.Max(0, Math.Abs(finalLevel - target) - BiasTargetTolerance);
+                result = result with { Level = finalLevel, Error = finalError };
+                LastBiasSucceeded = result.Success;
+                if (result.Success) LastBiasJson = BuildBiasJson(cint, result.Value);
+                SerialStatus = result.Success
+                    ? $"BIAS 완료: 0x{result.Value:X2} (오차 {result.Error:F0})"
+                    : $"BIAS 실패: 0x{result.Value:X2} (측정 {result.Level:F0}, 목표 {target:F0}±100)";
+                AgentUiLog.Logger.Information(
+                    "[{AgentId}] BIAS {Mode}: target={Target}, best=0x{Lsb:X2}, level={Level}, error={Error}, success={Success}",
+                    _agentId, mode, target, result.Value, result.Level, result.Error, result.Success);
+            }
+            catch (Exception ex)
+            {
+                LastBiasSucceeded = false;
+                LastBiasJson = null;
+                SerialStatus = $"BIAS 실패: {ex.Message}";
+                AgentUiLog.Logger.Warning(ex, "[{AgentId}] BIAS {Mode}: target={Target}, success=false",
+                    _agentId, mode, target);
+            }
         }
 
         // 키 이름과 값 표기(GSK_MSB만 정수, 나머지는 대문자 hex 문자열)는 후처리 툴이 파싱하는
@@ -513,7 +540,12 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 },
                 new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
 
-        private static async Task<(byte Value, double Error)> FindBiasInRangeAsync(
+        internal readonly record struct BiasSearchResult(byte Value, double Level, double Error)
+        {
+            public bool Success => Error == 0;
+        }
+
+        internal static async Task<BiasSearchResult> FindBiasInRangeAsync(
             double targetMin, double targetMax, Func<byte, Task<double>> measure)
         {
             var readings = new Dictionary<byte, double>();
@@ -556,65 +588,44 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 if (tooLow == increasing) low = value + 1;
                 else high = value - 1;
             }
-            return (best, bestError);
-        }
-
-        internal static async Task<(byte Value, double Error)> FindBiasAsync(
-            double target,
-            Func<byte, Task<double>> measure)
-        {
-            byte best = 0;
-            double bestError = double.MaxValue;
-            double atZero = await measure(0);
-            double atFull = await measure(byte.MaxValue);
-            bool increasing = atFull >= atZero;
-            int low = 0;
-            int high = byte.MaxValue;
-
-            while (low <= high)
-            {
-                byte value = (byte)((low + high) / 2);
-                double level = await measure(value);
-                double error = Math.Abs(level - target);
-                if (error < bestError)
-                {
-                    best = value;
-                    bestError = error;
-                }
-                if (error <= 100) break;
-
-                bool tooLow = level < target;
-                if (tooLow == increasing) low = value + 1;
-                else high = value - 1;
-            }
-
-            return (best, bestError);
+            return new BiasSearchResult(best, readings[best], bestError);
         }
 
         private async Task<double> MeasureBiasAsync(byte value)
         {
-            await _serial!.SetBiasAsync(value);
-            ThermalFrame frame = await _runtime.CaptureSnapshotAsync(
-                maxAge: TimeSpan.Zero,
-                nextFrameTimeout: TimeSpan.FromSeconds(2))
-                ?? throw new InvalidOperationException("BIAS 측정 프레임이 없습니다.");
+            ICameraSerialClient serial = _serial
+                ?? throw new InvalidOperationException("시리얼 제어가 없습니다.");
+            await serial.SetBiasAsync(value);
+            await Task.Delay(100);
+            // snapshot의 타임아웃 폴백과 write 이전/안정화 중 프레임을 측정에서 제외한다.
+            DateTimeOffset after = DateTimeOffset.Now;
             var measurements = new double[5];
             for (int sample = 0; sample < measurements.Length; sample++)
             {
-                if (sample > 0)
+                long started = System.Diagnostics.Stopwatch.GetTimestamp();
+                ThermalFrame? frame;
+                do
                 {
                     frame = await _runtime.CaptureSnapshotAsync(
                         maxAge: TimeSpan.Zero,
-                        nextFrameTimeout: TimeSpan.FromSeconds(2))
-                        ?? throw new InvalidOperationException("BIAS measurement frame is missing.");
-                }
+                        nextFrameTimeout: TimeSpan.FromSeconds(2));
+                    if (frame is not null && frame.Timestamp > after) break;
+                    if (System.Diagnostics.Stopwatch.GetElapsedTime(started) >= TimeSpan.FromSeconds(2))
+                        throw new InvalidOperationException("BIAS 측정용 최신 프레임이 없습니다.");
+                    await Task.Delay(1);
+                } while (true);
+
+                after = frame.Timestamp;
                 long sum = 0;
                 foreach (ushort pixel in frame.Pixels) sum += pixel & 0x3FFF;
                 measurements[sample] = (double)sum / frame.Pixels.Length;
                 await Task.Delay(30);
             }
             Array.Sort(measurements);
-            return measurements[2];
+            double level = measurements[2];
+            AgentUiLog.Logger.Information("[{AgentId}] BIAS LSB 0x{Lsb:X2} → {Level}",
+                _agentId, value, level);
+            return level;
         }
 
         /// <summary>라이브 프레임을 frameCount장 누적 평균해(14비트 마스킹) NUC 평면필드용 프레임을 만든다.</summary>

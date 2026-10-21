@@ -47,6 +47,19 @@ namespace HeatingCameraSystem.Core.Models
         /// </summary>
         public bool KeepChamberRunning { get; set; }
 
+        /// <summary>
+        /// true면 같은 생산 폴더에 다시 찍을 때 항상 000부터 덮어쓴다(계획 컴파일 offset 0, 실행 시 엔진은 스텝에 저장된 ShotNumberOffset도 무시하고 0을 보내며 반복 회차도 잇지 않음).
+        /// false(기본)면 실행 안에서 같은 실제 생산 목적지의 번호를 스텝·반복 회차에 걸쳐 잇는다. 새 실행은 제품 회차 폴더와 함께 번호 할당을 초기화한다.
+        /// 계획 레시피는 템플릿이 아니라 계획 자신의 값을 쓴다.
+        /// </summary>
+        public bool OverwriteDuplicateShots { get; set; }
+
+        /// <summary>null이면 기존 스텝 레시피. 값이 있으면 연결 템플릿을 카메라마다 컴파일한다.</summary>
+        public CapturePlan? Plan { get; set; }
+
+        /// <summary>저장 시 Plan 검증 실패 이유. 초안은 Steps를 비우고 원인을 함께 보존한다.</summary>
+        public string? PlanValidationError { get; set; }
+
         /// <summary>순차적으로 실행될 스텝 목록.</summary>
         public List<RecipeStep> Steps { get; set; } = new();
     }
@@ -128,6 +141,13 @@ namespace HeatingCameraSystem.Core.Models
     public class RecipeStep
     {
         public string StepId { get; set; } = Guid.NewGuid().ToString();
+        /// <summary>계획 항목/실제 카메라의 안정 키. 독립 스텝 레시피는 null.</summary>
+        public string? PlanCellKey { get; set; }
+        /// <summary>계획에서만 대상 카메라를 셀 카메라로 바꾼다. 독립 실행 대상은 그대로다.</summary>
+        public bool UseCellCamera { get; set; }
+        /// <summary>계획에서만 이 역할의 공유 위치로 이동한다. null이면 저장된 위치 그대로다.</summary>
+        public BlackBodyRole? CellPositionRole { get; set; }
+
 
         /// <summary>실행할 장치·동작 종류. 저장된 기존 레시피는 <see cref="LegacyCapture"/>로 실행된다.</summary>
         public RecipeStepKind Kind { get; set; } = RecipeStepKind.LegacyCapture;
@@ -174,6 +194,17 @@ namespace HeatingCameraSystem.Core.Models
         /// 각 회차는 스텝 시작 시각 기준 절대 시각에 맞춰 실행되므로 지연이 누적되지 않는다.
         /// </summary>
         public int CaptureDurationSeconds { get; set; }
+
+        /// <summary>
+        /// 캡처 스텝의 파일 번호 시작 오프셋 하한. 0이면 <c>_000</c>, 100이면 <c>_100</c>보다 앞에서 쓰지 않는다.
+        /// 생산 저장에서는 엔진이 실제 목적지(Agent·카메라·조건 폴더·흑체 폴더·파일 접두사)별로
+        /// max(이 값 + 회차(0부터) × ShotCount, 이번 실행의 다음 빈 번호)를 배정한다.
+        /// 미리 컴파일한 계획(재개·실패 재촬영 포함)의 offset은 이중 누적하지 않으며 새 실행은 할당 상태를 초기화한다.
+        /// 생산 저장을 하지 않으면 이 값 + 회차 × ShotCount만 쓴다.
+        /// <see cref="Recipe.OverwriteDuplicateShots"/>가 켜지면 위 계산을 모두 무시하고 항상 0을 보낸다.
+        /// CameraCommand의 Capture에서만 의미가 있다.
+        /// </summary>
+        public int ShotNumberOffset { get; set; }
 
         /// <summary>
         /// BIAS 자동 탐색이 맞출 목표 레벨. 0이면 Agent의 모드별 기본 목표를 쓴다.
@@ -250,5 +281,19 @@ namespace HeatingCameraSystem.Core.Models
         /// <see cref="RecipeStepKind.CaptureJoin"/> 스텝의 대기 한도(초). 0이면 전역 설정을 쓴다.
         /// </summary>
         public int CaptureJoinTimeoutSeconds { get; set; }
+
+        /// <summary>편집/컴파일 시 원본과 대상 목록을 공유하지 않는 복사본.</summary>
+        public RecipeStep Copy()
+        {
+            var copy = (RecipeStep)MemberwiseClone();
+            copy.CameraTargets = CameraTargets.Select(target => new RecipeCameraTarget
+            {
+                AgentId = target.AgentId,
+                CameraIndex = target.CameraIndex,
+                TargetChamber = target.TargetChamber,
+                TargetBlackBody = target.TargetBlackBody
+            }).ToList();
+            return copy;
+        }
     }
 }

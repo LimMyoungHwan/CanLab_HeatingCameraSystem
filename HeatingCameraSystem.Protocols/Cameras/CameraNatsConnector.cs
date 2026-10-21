@@ -38,6 +38,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly Func<CameraDescriptor, Task<double?>>? _readCameraTemperature;
         private readonly Func<CameraDescriptor, Task<short?>>? _readFpaRaw;
         private readonly Func<CameraDescriptor, string?>? _readBiasJson;
+        private readonly Action<CameraDescriptor, string>? _reportCaptureWarning;
         private readonly ProductionCaptureSink? _productionSink;
 
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, CancellationTokenSource> _captureAborts = new(StringComparer.Ordinal);
@@ -62,7 +63,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
             Func<CameraDescriptor, Task<double?>>? readCameraTemperature = null,
             Func<CameraDescriptor, Task<short?>>? readFpaRaw = null,
             Func<CameraDescriptor, string?>? readBiasJson = null,
-            ProductionCaptureSink? productionSink = null)
+            ProductionCaptureSink? productionSink = null,
+            Action<CameraDescriptor, string>? reportCaptureWarning = null)
         {
             _nats = nats ?? throw new ArgumentNullException(nameof(nats));
             _manager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -78,6 +80,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _readCameraTemperature = readCameraTemperature;
             _readFpaRaw = readFpaRaw;
             _readBiasJson = readBiasJson;
+            _reportCaptureWarning = reportCaptureWarning;
             _productionSink = productionSink;
         }
 
@@ -222,14 +225,34 @@ namespace HeatingCameraSystem.Protocols.Cameras
             int shots = cmd.ShotCount > 0 ? cmd.ShotCount : _captureBurstCount;
             if (shots < 1) shots = 1;
 
+            bool production = _productionSink is not null && ProductionCaptureSink.IsEnabled(cmd);
+            string? biasJson = null;
+            if (production && cmd.WriteBiasJson)
+            {
+                try
+                {
+                    // 이번 촬영의 BIAS 결과를 고정한다. 실패 후 비워진 캐시 대신 과거 파일을 쓰면 안 된다.
+                    biasJson = _readBiasJson?.Invoke(descriptor);
+                    if (string.IsNullOrWhiteSpace(biasJson))
+                        throw new InvalidOperationException("no successful BIAS result available");
+                    using JsonDocument bias = JsonDocument.Parse(biasJson);
+                    if (bias.RootElement.ValueKind != JsonValueKind.Object)
+                        throw new InvalidOperationException("BIAS result must be a JSON object");
+                }
+                catch (Exception ex)
+                {
+                    biasJson = null;
+                    _reportCaptureWarning?.Invoke(descriptor,
+                        $"bias.json 저장 건너뜀: 유효한 BIAS 결과가 없습니다. 촬영은 계속합니다. ({ex.Message})");
+                }
+            }
+
             double? cameraTemperature = null;
             if (_manager.TryGet(descriptor.AgentId, out ICameraRuntime runtime) && _readCameraTemperature is not null)
             {
                 try { cameraTemperature = await _readCameraTemperature(descriptor).ConfigureAwait(false); }
                 catch (Exception ex) { Debug.WriteLine($"[CameraNats] camera info read failed for {descriptor.AgentId}: {ex.Message}"); }
             }
-
-            bool production = _productionSink is not null && ProductionCaptureSink.IsEnabled(cmd);
 
             // FPA는 시리얼 왕복이라 장마다 읽으면 촬영이 멈춘다. AISEN 원본처럼 배치당 한 번만 읽어
             // 모든 장의 픽셀(0,0)에 같은 값을 심는다.
@@ -244,9 +267,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _captureAborts[descriptor.AgentId] = abort;
 
             // 규칙 저장에서는 .raw가 방사 측정 원본이므로 .y16을 장마다 또 쓰지 않는다. 결과 화면용으로
-            // 마지막 성공 프레임 한 장만 남기고, 결과도 배치당 1건만 발행한다(장마다 JPEG을 붙이면
+            // 마지막 시도 프레임 한 장만 남기고, 결과도 배치당 1건만 발행한다(장마다 JPEG을 붙이면
             // 100장 x 카메라수 만큼의 미리보기가 Master 메모리에 쌓인다).
             ThermalFrame? representative = null;
+            int representativeShotIndex = -1;
             int captured = 0;
 
             try
@@ -285,6 +309,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                                 // WriteShot보다 먼저 잡는다. Raw 런이 방사 측정 없는 프레임으로 실패해도
                                 // 아래에서 .y16과 .json이 남아 pixelFormat으로 원인을 볼 수 있어야 한다.
                                 representative = frame;
+                                representativeShotIndex = i;
 
                                 // 후처리 툴이 캘리브레이션을 직접 하므로 .raw는 NUC 미보정 원본(snap)이어야 한다.
                                 // .jpg는 육안 검사용이라 반대로 NUC 보정 프레임을 쓴다.
@@ -325,27 +350,31 @@ namespace HeatingCameraSystem.Protocols.Cameras
             {
                 string imagePath = string.Empty;
                 byte[]? bytes = null;
+                string productionRawPath = string.Empty;
                 if (representative is not null)
                 {
                     CaptureRecord record = _store.Save(representative, descriptor.AgentId, descriptor.OpenCvIndex, cmd.RecipeStepId);
                     imagePath = record.Y16Path;
                     bytes = ThermalPreviewEncoder.EncodeJpeg(representative);
+                    if (cmd.SaveFormat == ProductionCaptureFormat.Raw)
+                    {
+                        productionRawPath = Path.Combine(
+                            cmd.StorageRootUnc,
+                            ProductionCaptureSink.RelativeDirectory(descriptor, cmd),
+                            CaptureNamingRule.FileName(cmd.FilePrefix, Math.Max(0, cmd.ShotNumberOffset) + representativeShotIndex, ProductionCaptureFormat.Raw));
+                    }
                 }
 
-                await PublishCaptureResultAsync(descriptor, cmd, captured == shots, imagePath, bytes, cameraTemperature).ConfigureAwait(false);
+                await PublishCaptureResultAsync(descriptor, cmd, captured == shots, imagePath, bytes, cameraTemperature, productionRawPath).ConfigureAwait(false);
             }
 
-            if (production && cmd.WriteBiasJson)
-            {
-                string? biasJson = _readBiasJson?.Invoke(descriptor);
-                if (string.IsNullOrWhiteSpace(biasJson))
-                    Debug.WriteLine($"[CameraNats] bias.json skipped for {descriptor.AgentId}: no bias result yet");
-                else
-                    _productionSink!.WriteBiasJson(descriptor, cmd, biasJson!);
-            }
+            if (production && biasJson is not null)
+                _productionSink!.WriteBiasJson(descriptor, cmd, biasJson);
 
             // 폴더가 완성된 뒤에만 전송한다 — 파일 단위로 옮기면 후처리 툴이 복사 도중인 파일을 읽는다.
-            if (production) await _productionSink!.SyncFolderAsync(descriptor, cmd, _cts.Token).ConfigureAwait(false);
+            if (production)
+                await _productionSink!.SyncFolderAsync(descriptor, cmd, _cts.Token,
+                    syncBiasJson: biasJson is not null).ConfigureAwait(false);
         }
 
         private async Task PublishCaptureResultAsync(
@@ -354,7 +383,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
             bool success,
             string imagePath,
             byte[]? bytes,
-            double? cameraTemperature)
+            double? cameraTemperature,
+            string productionRawPath = "")
         {
             try
             {
@@ -370,6 +400,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     CaptureId = Guid.NewGuid().ToString(),
                     IsSuccess = success,
                     ImagePath = imagePath,
+                    ProductionRawPath = productionRawPath,
                     ImageBytes = bytes,
                     Timestamp = DateTime.UtcNow,
                     CameraTemperature = cameraTemperature

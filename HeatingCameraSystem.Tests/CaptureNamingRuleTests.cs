@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Text.Json;
 using System;
 using HeatingCameraSystem.Core.Models;
 using Xunit;
@@ -76,6 +78,40 @@ namespace HeatingCameraSystem.Tests
         public void FileName_PadsIndexToThreeDigits(string prefix, int index, string expected)
         {
             Assert.Equal(expected, CaptureNamingRule.FileName(prefix, index));
+        }
+
+        [Fact]
+        public void FileName_OffsetHundred_HundredShots_Is100To199()
+        {
+            string[] names = Enumerable.Range(0, 100)
+                .Select(i => CaptureNamingRule.FileName("BB80", 100 + i))
+                .ToArray();
+
+            Assert.Equal("BB80_100.raw", names[0]);
+            Assert.Equal("BB80_199.raw", names[99]);
+            Assert.Equal(100, names.Distinct().Count());
+        }
+
+        [Fact]
+        public void FileName_AtOrBeyond1000_GrowsToFourDigits()
+        {
+            // D3는 최소 폭이다. 1000 이상은 잘리지 않고 4자리가 된다(문자열 정렬 순서는 어긋남).
+            Assert.Equal("BB80_999.raw", CaptureNamingRule.FileName("BB80", 999));
+            Assert.Equal("BB80_1000.raw", CaptureNamingRule.FileName("BB80", 1000));
+        }
+
+        [Fact]
+        public void CaptureCommandMessage_ShotNumberOffset_RoundTripsAndDefaultsToZero()
+        {
+            var cmd = new CaptureCommandMessage { ShotCount = 100, ShotNumberOffset = 100 };
+
+            var back = JsonSerializer.Deserialize<CaptureCommandMessage>(JsonSerializer.Serialize(cmd));
+            Assert.NotNull(back);
+            Assert.Equal(100, back.ShotNumberOffset);
+
+            var old = JsonSerializer.Deserialize<CaptureCommandMessage>("{\"ShotCount\":5}");
+            Assert.NotNull(old);
+            Assert.Equal(0, old.ShotNumberOffset);
         }
     }
 }

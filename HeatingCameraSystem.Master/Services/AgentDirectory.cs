@@ -21,6 +21,15 @@ namespace HeatingCameraSystem.Master.Services
         private readonly ConcurrentDictionary<string, string> _byAlias = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, double> _cameraTemperatures = new(StringComparer.OrdinalIgnoreCase);
         private readonly ConcurrentDictionary<string, DateTime> _lastSeen = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, (CameraIdentity Camera, DateTime Seen)> _cameras = new(StringComparer.Ordinal);
+
+        public IReadOnlyList<CameraIdentity> OnlineCameras => _cameras.Values
+            .Where(item => DateTime.UtcNow - item.Seen <= OnlineThreshold)
+            .OrderBy(item => item.Camera.AgentId, StringComparer.Ordinal).ThenBy(item => item.Camera.CameraIndex)
+            .Select(item => item.Camera.Copy()).ToArray();
+
+        public bool IsCameraOnline(CameraIdentity camera) =>
+            _cameras.TryGetValue(camera.Key, out var item) && DateTime.UtcNow - item.Seen <= OnlineThreshold;
 
         /// <summary>하트비트 한 건에서 alias → AgentId 매핑과 카메라 온도를 갱신한다.</summary>
         public void Note(AgentStatusMessage message)
@@ -28,6 +37,8 @@ namespace HeatingCameraSystem.Master.Services
             if (message is null || string.IsNullOrWhiteSpace(message.AgentId)) return;
 
             _lastSeen[message.AgentId] = DateTime.UtcNow;
+            var camera = new CameraIdentity { AgentId = message.AgentId, CameraIndex = message.CameraIndex };
+            _cameras[camera.Key] = (camera, DateTime.UtcNow);
 
             // 온도는 alias가 없어도 AgentId만 있으면 기록한다. null이면 직전 값을 지우지 않는다.
             if (message.CameraTemperature.HasValue)

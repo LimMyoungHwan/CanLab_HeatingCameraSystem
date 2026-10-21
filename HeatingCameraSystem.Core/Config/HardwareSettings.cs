@@ -280,5 +280,10 @@ namespace HeatingCameraSystem.Core.Config
         /// 도달하지 않으면 알람을 올리고 레시피를 중단한다. 기본 300초(5분).
         /// </summary>
         public int MotorMoveTimeoutSeconds { get; set; } = 300;
+
+        /// <summary>
+        /// 수동(좌표) 모터 이동에서 목표 도달로 판정하는 축별 위치 허용오차(mm). 기본 0.5mm.
+        /// </summary>
+        public float PositionToleranceMm { get; set; } = 0.5f;
     }
 }

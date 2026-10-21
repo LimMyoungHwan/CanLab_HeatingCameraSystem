@@ -36,7 +36,7 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>Agent PC에 저장된 원본 이미지 경로.</summary>
         public string ImagePath { get; set; } = string.Empty;
 
-        /// <summary>연관된 레시피 스텝 식별자. 빈 문자열이면 레시피와 무관한 촬영.</summary>
+        /// <summary>레시피 캡처 요청 키(StepId:AgentId:CameraIndex:round), 또는 이전 기록의 StepId. 빈 값이면 비레시피 촬영.</summary>
         public string RecipeStepId { get; set; } = string.Empty;
 
         /// <summary>
@@ -45,6 +45,22 @@ namespace HeatingCameraSystem.Core.Models
         /// 이 경로는 Master 파일시스템에서 열 수 없으며, 해당 Agent에 요청해서 받아온다.
         /// </summary>
         public string AgentRawPath { get; set; } = string.Empty;
+
+        /// <summary>대표 프레임의 Master 생산 .raw 목적지. 전송 대기·실패로 아직 파일이 없을 수 있다.</summary>
+        public string ProductionRawPath { get; set; } = string.Empty;
+
+        /// <summary>운영자가 검증 후 연결한 Master .raw. 자동 기록 경로보다 우선하며 해제 시 비운다.</summary>
+        public string LinkedRawPath
+        {
+            get => _linkedRawPath;
+            // LiteDB's default mapper stores empty strings as null.
+            set => _linkedRawPath = value ?? string.Empty;
+        }
+        private string _linkedRawPath = string.Empty;
+
+        /// <summary>원본 프레임 크기. 이전 기록은 미상(0)이며 대표 이미지/Agent 응답에서 확인한다.</summary>
+        public int PixelWidth { get; set; }
+        public int PixelHeight { get; set; }
 
         /// <summary>
         /// 이 캡처를 남긴 레시피 실행 회차. 같은 회차의 측정 기록

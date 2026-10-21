@@ -92,7 +92,7 @@ namespace HeatingCameraSystem.Master.ViewModels
     /// 공용 PLC 상태 반영, 레시피 실행/정지, Agent·카메라 인벤토리 정리를 담당한다.
     /// NATS·PLC 콜백은 백그라운드 스레드로 오므로 바인딩 상태 갱신은 <see cref="RunOnUi"/>를 거친다.
     /// </summary>
-    public partial class DashboardViewModel : ObservableObject
+    public partial class DashboardViewModel : ObservableObject, IDisposable
     {
         [ObservableProperty]
         private float _currentTemperature;
@@ -170,6 +170,8 @@ namespace HeatingCameraSystem.Master.ViewModels
         // PLC 에러 엣지 후 Recipe Start 인터록: 에러 클리어 + 서보 원점(±0.5mm) 복귀 전까지 잠금 유지.
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(StartRecipeCommand))]
+        [NotifyCanExecuteChangedFor(nameof(ResumeRemainingCommand))]
+        [NotifyCanExecuteChangedFor(nameof(RetryFailedCellsCommand))]
         private bool _recoveryLockActive;
 
         [ObservableProperty]
@@ -188,6 +190,24 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty]
         private Recipe? _selectedRecipe;
 
+        [ObservableProperty]
+        [NotifyCanExecuteChangedFor(nameof(ResumeRemainingCommand))]
+        [NotifyCanExecuteChangedFor(nameof(RetryFailedCellsCommand))]
+        private CapturePlanBoard? _planBoard;
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(IsPlanBoardVisible))]
+        [NotifyPropertyChangedFor(nameof(IsCameraViewVisible))]
+        private bool _showPlanBoard = true;
+
+        public bool HasCapturePlan => SelectedRecipe?.Plan != null;
+        public bool IsPlanBoardVisible => HasCapturePlan && ShowPlanBoard;
+        public bool IsCameraViewVisible => !IsPlanBoardVisible;
+        public bool IsRecipeSelectionEnabled => !_recipeRunning && !_recipeStarting;
+
+        [ObservableProperty]
+        private int _selectedPlanEntryIndex;
+
         private readonly List<CameraNode?> _mode2Assignments = new();
         private readonly List<CameraNode?> _mode3Assignments = new();
         private readonly List<CameraNode?> _mode4Assignments = new();
@@ -199,9 +219,16 @@ namespace HeatingCameraSystem.Master.ViewModels
         private readonly IDashboardLayoutRepository? _dashboardLayoutRepo;
         private readonly IDialogService? _dialogService;
         private readonly Func<IEnumerable<Recipe>> _loadRecipes;
+        private readonly CapturePlanRunService? _planRunService;
+        private readonly RecipeEngine? _subscribedEngine;
+        private readonly PlcStatusService? _subscribedPlcStatus;
+        private bool _disposed;
         private readonly Dictionary<int, List<DashboardLayoutSlot>> _persistedLayout = new();
         private readonly Queue<(float Temperature, float Humidity)> _samples = new();
         private bool _recipeRunning;
+        private bool _recipeStarting;
+        private Recipe? _activeRecipe;
+        private int _boardLoadVersion;
         private bool _plcErrorLatched;
         private int _activeRecipeStepIndex = -1;
         private const float OriginToleranceMm = 0.5f;
@@ -220,8 +247,9 @@ namespace HeatingCameraSystem.Master.ViewModels
                 AppServices.DashboardLayoutRepo,
                 AppServices.DialogService)
         {
-            if (AppServices.RecipeEngine != null)
-                AppServices.RecipeEngine.EmergencyStopChanged += OnRecipeEngineEmergencyStopChanged;
+            _subscribedEngine = AppServices.RecipeEngine;
+            if (_subscribedEngine != null)
+                _subscribedEngine.EmergencyStopChanged += OnRecipeEngineEmergencyStopChanged;
         }
 
         /// <summary>
@@ -234,13 +262,17 @@ namespace HeatingCameraSystem.Master.ViewModels
             Func<IEnumerable<Recipe>>? loadRecipes,
             bool startTimers,
             IDashboardLayoutRepository? dashboardLayoutRepo = null,
-            IDialogService? dialogService = null)
+            IDialogService? dialogService = null,
+            CapturePlanRunService? planRunService = null)
         {
             _plcController = plcController;
             _natsService = natsService;
             _dashboardLayoutRepo = dashboardLayoutRepo;
             _dialogService = dialogService;
             _loadRecipes = loadRecipes ?? (() => Array.Empty<Recipe>());
+            _planRunService = planRunService ?? AppServices.PlanRuns;
+            if (_planRunService != null)
+                _planRunService.BoardChanged += OnPlanBoardChanged;
             CurrentTemperature = 0f;
             CurrentHumidity = 0f;
 
@@ -268,10 +300,11 @@ namespace HeatingCameraSystem.Master.ViewModels
                 _offlineCheckTimer.Tick += (_, _) => CheckOfflineAgents();
                 _offlineCheckTimer.Start();
 
-                if (AppServices.PlcStatus != null)
+                _subscribedPlcStatus = AppServices.PlcStatus;
+                if (_subscribedPlcStatus != null)
                 {
-                    AppServices.PlcStatus.Updated += OnSharedPlcStatus;
-                    AppServices.PlcStatus.BlackBodyUpdated += OnBlackBodyUpdated;
+                    _subscribedPlcStatus.Updated += OnSharedPlcStatus;
+                    _subscribedPlcStatus.BlackBodyUpdated += OnBlackBodyUpdated;
                 }
             }
 
@@ -306,6 +339,63 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// <summary>레시피 목록 새로고침. 대시보드 재진입 시 MainViewModel이 호출한다.</summary>
         [RelayCommand]
         private void RefreshRecipes() => LoadRecipes();
+
+        partial void OnSelectedRecipeChanged(Recipe? value)
+        {
+            PlanBoard = null;
+            SelectedPlanEntryIndex = 0;
+            OnPropertyChanged(nameof(HasCapturePlan));
+            OnPropertyChanged(nameof(IsPlanBoardVisible));
+            OnPropertyChanged(nameof(IsCameraViewVisible));
+            _ = ReloadPlanBoardAsync();
+        }
+
+        private void OnPlanBoardChanged(object? sender, EventArgs e) =>
+            RunOnUi(() => _ = ReloadPlanBoardAsync());
+
+        /// <summary>선택한 레시피의 영속 실행 체인을 읽는다. 늦게 끝난 이전 선택/조회는 무시한다.</summary>
+        public async Task ReloadPlanBoardAsync()
+        {
+            if (_disposed) return;
+            int version = Interlocked.Increment(ref _boardLoadVersion);
+            Recipe? recipe = SelectedRecipe;
+            if (recipe?.Plan == null || _planRunService == null)
+            {
+                RunOnUi(() => PlanBoard = null);
+                return;
+            }
+
+            try
+            {
+                CapturePlanBoard board = await _planRunService.LoadBoardAsync(recipe);
+                RunOnUi(() =>
+                {
+                    if (!_disposed && version == _boardLoadVersion && ReferenceEquals(recipe, SelectedRecipe))
+                    {
+                        int selectedIndex = SelectedPlanEntryIndex;
+                        PlanBoard = board;
+                        SelectedPlanEntryIndex = Math.Clamp(selectedIndex, 0, Math.Max(0, board.Entries.Count - 1));
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                RunOnUi(() =>
+                {
+                    if (_disposed || version != _boardLoadVersion || !ReferenceEquals(recipe, SelectedRecipe)) return;
+                    RecipeStatus = $"촬영 진행 현황을 불러오지 못했습니다: {ex.Message}";
+                    AlarmSink.Raise(AlarmSeverity.Error, "레시피", RecipeStatus);
+                });
+            }
+        }
+
+        private void NotifyRunCommands()
+        {
+            StartRecipeCommand.NotifyCanExecuteChanged();
+            ResumeRemainingCommand.NotifyCanExecuteChanged();
+            RetryFailedCellsCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(IsRecipeSelectionEnabled));
+        }
 
         /// <summary>
         /// 하트비트(<c>agent.status.{AgentId}</c>)를 구독해 Agent/카메라 트리를 만들고 호스트
@@ -701,7 +791,16 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
-        private bool CanStartRecipe => !RecoveryLockActive && !(AppServices.RecipeEngine?.IsEmergencyStopRequested ?? false);
+        private bool CanStartRecipe => !_disposed && !_recipeRunning && !_recipeStarting
+            && !(AppServices.RecipeEngine?.IsRunning ?? false)
+            && !RecoveryLockActive && !(AppServices.RecipeEngine?.IsEmergencyStopRequested ?? false);
+
+        private bool CanResumeRemaining => CanStartRecipe && HasCapturePlan && PlanBoard?.RootRunId != null
+            && PlanBoard.Cells
+                .Any(cell => cell.State is CapturePlanCellState.Pending or CapturePlanCellState.Failed or CapturePlanCellState.Skipped);
+
+        private bool CanRetryFailedCells => CanStartRecipe && HasCapturePlan && PlanBoard?.RootRunId != null
+            && PlanBoard.FailedCells > 0;
 
         // 복구 인터록 해제: 에러 비트 전부 클리어 + 서보 X/Y 모두 원점 ±0.5mm 이내일 때만. 에러 해제만으로는 열리지 않는다.
         /// <summary>
@@ -734,7 +833,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     _recipeCts?.Cancel();
                 }
 
-                StartRecipeCommand.NotifyCanExecuteChanged();
+                NotifyRunCommands();
             });
         }
 
@@ -851,12 +950,16 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 CameraFeeds.Clear();
                 CurrentPageInfo = _recipeRunning ? LocalizationManager.Instance["Dash_Mode1Active"] : LocalizationManager.Instance["Dash_Mode1Idle"];
-                if (!_recipeRunning || SelectedRecipe == null)
+                Recipe? recipe = _activeRecipe ?? SelectedRecipe;
+                if (!_recipeRunning || recipe == null)
                     return;
-                if (_activeRecipeStepIndex < 0 || _activeRecipeStepIndex >= SelectedRecipe.Steps.Count)
+                if (_activeRecipeStepIndex < 0 || _activeRecipeStepIndex >= recipe.Steps.Count)
                     return;
 
-                int cameraIndex = SelectedRecipe.Steps[_activeRecipeStepIndex].CameraIndex;
+                RecipeStep step = recipe.Steps[_activeRecipeStepIndex];
+                int cameraIndex = recipe.Plan != null
+                    ? step.CameraTargets.FirstOrDefault()?.CameraIndex ?? step.CameraIndex
+                    : step.CameraIndex;
                 string cameraId = $"CAM-{cameraIndex:D2}";
                 var camera = Agents.SelectMany(a => a.Cameras).FirstOrDefault(c => c.Id == cameraId);
                 if (camera != null)
@@ -906,6 +1009,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void SetViewMode(string mode)
         {
             CurrentViewMode = int.Parse(mode);
+            ShowPlanBoard = false;
             LoadCameraFeeds();
         }
 
@@ -914,53 +1018,108 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// 진행률 콜백으로 활성 스텝을 추적해 모드 1 화면의 자동 카메라 전환을 구동한다.
         /// </summary>
         [RelayCommand(CanExecute = nameof(CanStartRecipe))]
-        private async Task StartRecipeAsync()
+        private Task StartRecipeAsync() => RunSelectedRecipeAsync(CapturePlanRunMode.New);
+
+        [RelayCommand(CanExecute = nameof(CanResumeRemaining))]
+        private Task ResumeRemainingAsync() => RunSelectedRecipeAsync(CapturePlanRunMode.Remaining);
+
+        [RelayCommand(CanExecute = nameof(CanRetryFailedCells))]
+        private Task RetryFailedCellsAsync() => RunSelectedRecipeAsync(CapturePlanRunMode.FailedOnly);
+
+        private async Task RunSelectedRecipeAsync(CapturePlanRunMode mode)
         {
-            if (AppServices.RecipeEngine == null) { RecipeStatus = LocalizationManager.Instance["Dash_ServiceNotInit"]; return; }
-            if (SelectedRecipe == null) { RecipeStatus = LocalizationManager.Instance["Dash_SelectRecipeNeeded"]; return; }
-            if (AppServices.RecipeEngine.IsEmergencyStopRequested) { RecipeStatus = "비상정지 상태에서는 레시피를 시작할 수 없습니다."; return; }
+            // RelayCommand CanExecute is not a synchronization primitive: guard direct/reentrant callers too.
+            if (_disposed || _recipeRunning || _recipeStarting || (AppServices.RecipeEngine?.IsRunning ?? false) || RecoveryLockActive) return;
+            RecipeEngine? engine = AppServices.RecipeEngine;
+            if (engine == null) { RecipeStatus = LocalizationManager.Instance["Dash_ServiceNotInit"]; return; }
+            if (engine.IsEmergencyStopRequested) { RecipeStatus = "비상정지 상태에서는 레시피를 시작할 수 없습니다."; return; }
+            Recipe? recipe = SelectedRecipe;
+            if (recipe == null) { RecipeStatus = LocalizationManager.Instance["Dash_SelectRecipeNeeded"]; return; }
 
-            // 입력값을 레시피에 되저장해 다음 실행의 기본값이 되게 한다.
-            if (_dialogService is not null)
-            {
-                ProductionRunInput? input = _dialogService.PromptProductionRun(SelectedRecipe.SaveRootPath, SelectedRecipe.ProductNumber, SelectedRecipe.SaveFormat, SelectedRecipe.KeepChamberRunning);
-                if (input is null) { RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopped"]; return; }
-
-                SelectedRecipe.SaveRootPath = input.SaveRootPath;
-                SelectedRecipe.ProductNumber = input.ProductNumber;
-                SelectedRecipe.SaveFormat = input.SaveFormat;
-                SelectedRecipe.KeepChamberRunning = input.KeepChamberRunning;
-                if (AppServices.RecipeRepo is not null) await AppServices.RecipeRepo.SaveAsync(SelectedRecipe);
-                AppServices.RecipeEngine.AbortDecisionRequested = agentId => Task.FromResult(_dialogService.AskCaptureAbortDecision(agentId));
-            }
-
-            _recipeCts?.Cancel();
+            _recipeStarting = true;
+            NotifyRunCommands();
             _recipeCts = new CancellationTokenSource();
-            AlarmSink.Raise(AlarmSeverity.Info, "레시피", $"수동 시작: {SelectedRecipe?.Name}");
-            RecipeStatus = Localize("Dash_RecipeRunning", SelectedRecipe.Name);
-            RecipeProgressValue = 0;
-            RecipePhaseText = string.Empty;
-            _recipeRunning = true;
-            _activeRecipeStepIndex = 0;
-            if (CurrentViewMode == 1)
-                RunOnUi(LoadCameraFeeds);
-
-            var progress = new Progress<RecipeProgress>(p =>
-            {
-                RecipeProgressValue = p.TotalSteps > 0
-                    ? (double)p.CurrentStep / p.TotalSteps * 100
-                    : 0;
-                RecipePhaseText = p.CurrentPhase;
-                _activeRecipeStepIndex = p.CurrentStep;
-                if (CurrentViewMode == 1)
-                    RunOnUi(LoadCameraFeeds);
-            });
-
+            CancellationToken token = _recipeCts.Token;
             try
             {
-                await AppServices.RecipeEngine.ExecuteRecipeAsync(SelectedRecipe, _recipeCts.Token, progress, WaitForResumeAsync);
-                await WaitForCaptureSyncAsync(_recipeCts.Token);
-                RecipeStatus = LocalizationManager.Instance["Dash_RecipeDone"];
+                // Plan rows may have been edited since the Dashboard was opened.
+                if (recipe.Plan != null && AppServices.RecipeRepo is { } repository)
+                    recipe = await repository.GetByIdAsync(recipe.Id)
+                        ?? throw new InvalidOperationException("선택한 레시피가 더 이상 존재하지 않습니다.");
+
+                ProductionRunInput? input = null;
+                if (_dialogService != null)
+                {
+                    input = _dialogService.PromptProductionRun(recipe.SaveRootPath, recipe.ProductNumber, recipe.SaveFormat, recipe.KeepChamberRunning);
+                    if (input == null) { RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopped"]; return; }
+                    recipe.SaveRootPath = input.SaveRootPath;
+                    recipe.ProductNumber = input.ProductNumber;
+                    recipe.SaveFormat = input.SaveFormat;
+                    recipe.KeepChamberRunning = input.KeepChamberRunning;
+                    engine.AbortDecisionRequested = agentId => Task.FromResult(_dialogService.AskCaptureAbortDecision(agentId));
+                }
+
+                PreparedCapturePlanRun? prepared = null;
+                if (recipe.Plan != null)
+                {
+                    if (_planRunService == null)
+                        throw new InvalidOperationException("촬영 계획 실행 서비스가 초기화되지 않았습니다.");
+                    prepared = await _planRunService.PrepareAsync(recipe, mode, token);
+                    if (prepared.CellCount == 0)
+                    {
+                        RecipeStatus = "실행할 촬영 셀이 없습니다.";
+                        return;
+                    }
+                    if (mode != CapturePlanRunMode.New)
+                    {
+                        string action = mode == CapturePlanRunMode.Remaining ? "이어서 실행" : "실패 칸만 재촬영";
+                        if (_dialogService?.ConfirmCapturePlanRun($"{prepared.Warning}\n{action}: {prepared.CellCount}개 카메라 절차를 처음부터 실행하시겠습니까?") != true)
+                        {
+                            RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopped"];
+                            return;
+                        }
+                    }
+                    // FullRecipe is the complete fresh compilation, never the selected retry subset.
+                    recipe = prepared.FullRecipe;
+                }
+
+                token.ThrowIfCancellationRequested();
+                if (engine.IsEmergencyStopRequested || RecoveryLockActive) return;
+                if (input != null && AppServices.RecipeRepo is { } recipeRepository)
+                    await recipeRepository.SaveAsync(recipe);
+
+                SelectedRecipe = recipe;
+                _activeRecipe = prepared?.Recipe ?? recipe;
+                AlarmSink.Raise(AlarmSeverity.Info, "레시피", $"수동 시작: {recipe.Name}");
+                RecipeStatus = Localize("Dash_RecipeRunning", recipe.Name);
+                RecipeProgressValue = 0;
+                RecipePhaseText = string.Empty;
+                _recipeRunning = true;
+                _recipeStarting = false;
+                _activeRecipeStepIndex = 0;
+                if (prepared != null) ShowPlanBoard = true;
+                NotifyRunCommands();
+                if (CurrentViewMode == 1) RunOnUi(LoadCameraFeeds);
+
+                var progress = new Progress<RecipeProgress>(p => RunOnUi(() =>
+                {
+                    RecipeProgressValue = p.TotalSteps > 0 ? (double)p.CurrentStep / p.TotalSteps * 100 : 0;
+                    RecipePhaseText = p.CurrentPhase;
+                    _activeRecipeStepIndex = p.CurrentStep;
+                    if (CurrentViewMode == 1) LoadCameraFeeds();
+                }));
+
+                if (prepared != null && _planRunService != null)
+                    await _planRunService.ExecuteAsync(prepared, engine, token, progress, WaitForResumeAsync);
+                else
+                    await engine.ExecuteRecipeAsync(recipe, token, progress, WaitForResumeAsync);
+                await WaitForCaptureSyncAsync(token);
+                RecipeStatus = prepared?.Run.Outcome switch
+                {
+                    CapturePlanRunOutcome.CompletedWithFailures => "촬영 계획이 종료되었습니다. 실패 셀을 확인하세요.",
+                    CapturePlanRunOutcome.Failed => "촬영 계획을 완료하지 못했습니다. 미완료 셀을 확인하세요.",
+                    _ => LocalizationManager.Instance["Dash_RecipeDone"]
+                };
             }
             catch (OperationCanceledException)
             {
@@ -968,14 +1127,22 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
             catch (Exception ex)
             {
-                RecipeStatus = Localize("Dash_RecipeError", ex.Message);
+                string reason = recipe.Plan is { } plan ? CapturePlanLabels.ValidationReason(plan, ex.Message) : ex.Message;
+                RecipeStatus = Localize("Dash_RecipeError", reason);
+                if (recipe.Plan != null)
+                    AlarmSink.Raise(AlarmSeverity.Error, "레시피", RecipeStatus);
             }
             finally
             {
                 _recipeRunning = false;
+                _recipeStarting = false;
+                _activeRecipe = null;
                 _activeRecipeStepIndex = -1;
-                if (CurrentViewMode == 1)
-                    RunOnUi(LoadCameraFeeds);
+                _recipeCts?.Dispose();
+                _recipeCts = null;
+                NotifyRunCommands();
+                if (CurrentViewMode == 1) RunOnUi(LoadCameraFeeds);
+                await ReloadPlanBoardAsync();
             }
         }
 
@@ -1131,6 +1298,30 @@ namespace HeatingCameraSystem.Master.ViewModels
             if (camera == null || !camera.Id.StartsWith("CAM-", StringComparison.Ordinal))
                 return null;
             return int.TryParse(camera.Id.Substring(4), out int index) ? index : null;
+        }
+
+        /// <summary>VM이 소유한 구독/타이머와 실행 취소만 해제한다. 공유 서비스는 종료하지 않는다.</summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            Interlocked.Increment(ref _boardLoadVersion);
+            if (_planRunService != null)
+                _planRunService.BoardChanged -= OnPlanBoardChanged;
+            if (_subscribedEngine != null)
+                _subscribedEngine.EmergencyStopChanged -= OnRecipeEngineEmergencyStopChanged;
+            if (_subscribedPlcStatus != null)
+            {
+                _subscribedPlcStatus.Updated -= OnSharedPlcStatus;
+                _subscribedPlcStatus.BlackBodyUpdated -= OnBlackBodyUpdated;
+            }
+            LivePreviewColorMode.Changed -= OnColorModeChanged;
+            RunOnUi(() =>
+            {
+                _offlineCheckTimer?.Stop();
+                _recipeCts?.Cancel();
+                NotifyRunCommands();
+            });
         }
     }
 }

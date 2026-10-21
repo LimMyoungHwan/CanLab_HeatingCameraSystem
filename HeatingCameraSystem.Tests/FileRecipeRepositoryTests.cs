@@ -14,6 +14,29 @@ namespace HeatingCameraSystem.Tests
             => Path.Combine(Path.GetTempPath(), "HcsRecipeTests_" + Guid.NewGuid().ToString("N"));
 
         [Fact]
+        public async Task OverwriteDuplicateShots_RoundTrips_AndMissingJsonFieldLoadsFalse()
+        {
+            string baseDir = NewTempDir();
+            try
+            {
+                var repo = new FileRecipeRepository(baseDir);
+                var recipe = new Recipe { Name = "덮어쓰기", OverwriteDuplicateShots = true };
+                await repo.SaveAsync(recipe);
+                Assert.True(Assert.Single(await repo.GetAllAsync()).OverwriteDuplicateShots);
+
+                string file = Directory.GetFiles(baseDir, recipe.Id + ".json", SearchOption.AllDirectories).Single();
+                string json = File.ReadAllText(file);
+                Assert.Contains("\"OverwriteDuplicateShots\": true", json);
+                File.WriteAllText(file, json.Replace("\"OverwriteDuplicateShots\": true", "\"Unrelated\": 1"));
+                Assert.False(Assert.Single(await new FileRecipeRepository(baseDir).GetAllAsync()).OverwriteDuplicateShots);
+            }
+            finally
+            {
+                if (Directory.Exists(baseDir)) Directory.Delete(baseDir, recursive: true);
+            }
+        }
+
+        [Fact]
         public async Task SaveThenGetAll_RoundTrips()
         {
             string baseDir = NewTempDir();

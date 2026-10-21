@@ -47,6 +47,13 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private bool _isBusy;
         [ObservableProperty] private DateTime _fromDate = DateTime.Today.AddDays(-6);
         [ObservableProperty] private DateTime _toDate = DateTime.Today;
+        [ObservableProperty] private string _histogramSource = string.Empty;
+        [ObservableProperty] private string _histogramNote = string.Empty;
+        [ObservableProperty] private string _histogramStatistics = string.Empty;
+        public ObservableCollection<LegacyRawCandidate> RawCandidates { get; } = new();
+        [ObservableProperty] private LegacyRawCandidate? _selectedRawCandidate;
+        [ObservableProperty] private string _rawDiscoveryNote = string.Empty;
+        private LegacyRawDiscovery? _rawDiscovery;
 
         /// <summary>차트가 구독한다. 선택 회차의 측정이 다시 로드될 때마다 발생.</summary>
         public event EventHandler<IReadOnlyList<RecipeMeasurementRecord>>? MeasurementsLoaded;
@@ -68,17 +75,135 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand]
         private async Task RefreshAsync() => await LoadRunsAsync();
 
-        partial void OnSelectedCaptureChanged(CaptureHistoryRecord? value) => HistogramLoaded?.Invoke(this, Array.Empty<int>());
+        partial void OnSelectedCaptureChanged(CaptureHistoryRecord? value)
+        {
+            HistogramLoaded?.Invoke(this, Array.Empty<int>());
+            HistogramSource = HistogramNote = HistogramStatistics = string.Empty;
+            RawCandidates.Clear();
+            RawDiscoveryNote = string.Empty;
+            _rawDiscovery = null;
+            SelectedRawCandidate = null;
+        }
 
-        /// <summary>선택 캡처의 원본을 Agent에서 받아 히스토그램을 그린다.</summary>
+        /// <summary>생산 .raw를 우선 읽고, 없는 경우에만 대표 .y16을 사용한다.</summary>
         [RelayCommand]
         private async Task LoadHistogramAsync()
         {
-            var (pixels, ok) = await FetchRawAsync();
-            if (!ok || pixels == null) { HistogramLoaded?.Invoke(this, Array.Empty<int>()); return; }
+            var capture = SelectedCapture;
+            if (capture is null) { StatusMessage = "캡처를 먼저 선택하세요."; return; }
+            HistogramLoaded?.Invoke(this, Array.Empty<int>());
+            HistogramSource = HistogramNote = HistogramStatistics = string.Empty;
+            try
+            {
+                await DiscoverRawAsync(capture);
+                if (capture != SelectedCapture) return;
+                ReadImageDimensions(capture);
+                var result = await CaptureHistogramSource.LoadAsync(capture, async () =>
+                {
+                    var (pixels, ok) = await FetchRawAsync(capture);
+                    return ok ? pixels : null;
+                }, _rawDiscovery);
+                if (capture != SelectedCapture || result is null) return;
+                HistogramSource = result.Source;
+                HistogramNote = result.Note;
+                var analysis = result.Analysis;
+                HistogramStatistics = $"평균 (Mean): {analysis.Mean:F2} · 표준편차 (std): {analysis.StandardDeviation:F2} · 중앙값 (Median): {analysis.Median:F2} · {analysis.PixelCount:N0} 픽셀";
+                HistogramLoaded?.Invoke(this, analysis.Bins);
+                StatusMessage = "히스토그램 생성 완료";
+            }
+            catch (Exception ex)
+            {
+                if (capture == SelectedCapture) StatusMessage = $"히스토그램 읽기 실패 (.raw가 있으면 .y16으로 대체하지 않습니다): {ex.Message}";
+            }
+        }
 
-            HistogramLoaded?.Invoke(this, RawHistogram.Compute(pixels));
-            StatusMessage = $"히스토그램 생성 완료 ({pixels.Length / 2:N0} 픽셀)";
+        private async Task DiscoverRawAsync(CaptureHistoryRecord capture)
+        {
+            if (!string.IsNullOrWhiteSpace(capture.ProductionRawPath) || !string.IsNullOrWhiteSpace(capture.LinkedRawPath)) return;
+            LegacyRawContext? context = null;
+            if (AppServices.RecipeRepo is not null)
+            {
+                var recipes = (await AppServices.RecipeRepo.GetAllAsync()).ToArray();
+                string? recipeId = _rawMeasurements.FirstOrDefault(m => m.RunId == capture.RunId)?.RecipeId;
+                var matches = recipes.Where(r => r.Id == recipeId).ToArray();
+                if (matches.Length == 0)
+                    matches = recipes.Where(r =>
+                    {
+                        string? stepId = RecipeCaptureRequestKey.GetStepId(capture.RecipeStepId, r.Steps);
+                        return r.Steps.Any(s => s.StepId == stepId);
+                    }).ToArray();
+                if (matches.Length == 1) context = LegacyRawAssociation.FromRecipe(capture, matches[0]);
+            }
+            var discovery = await Task.Run(() => LegacyRawAssociation.Discover(capture, context));
+            if (capture != SelectedCapture) return;
+            _rawDiscovery = discovery;
+            RawCandidates.Clear();
+            foreach (var candidate in discovery.Candidates) RawCandidates.Add(candidate);
+            SelectedRawCandidate = RawCandidates.FirstOrDefault();
+            RawDiscoveryNote = discovery.Note;
+        }
+
+        private static void ReadImageDimensions(CaptureHistoryRecord capture)
+        {
+            if (capture.PixelWidth > 0 && capture.PixelHeight > 0) return;
+            if (!System.IO.File.Exists(capture.ImagePath)) return;
+            try
+            {
+                using var stream = System.IO.File.OpenRead(capture.ImagePath);
+                var image = System.Windows.Media.Imaging.BitmapDecoder.Create(stream,
+                    System.Windows.Media.Imaging.BitmapCreateOptions.DelayCreation,
+                    System.Windows.Media.Imaging.BitmapCacheOption.OnLoad).Frames[0];
+                capture.PixelWidth = image.PixelWidth;
+                capture.PixelHeight = image.PixelHeight;
+            }
+            catch (Exception ex) when (ex is System.IO.IOException or NotSupportedException or ArgumentException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RecipeResult] representative dimensions unavailable: {ex.Message}");
+            }
+        }
+
+        [RelayCommand]
+        private async Task SelectProductionRawAsync()
+        {
+            var capture = SelectedCapture;
+            if (capture is null) { StatusMessage = "캡처를 먼저 선택하세요."; return; }
+            try
+            {
+                await DiscoverRawAsync(capture);
+                if (capture != SelectedCapture) return;
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "원본 .raw 선택 (운영자 지정으로 저장)",
+                    Filter = "원본 RAW (*.raw)|*.raw",
+                    CheckFileExists = true,
+                    InitialDirectory = SelectedRawCandidate is not null
+                        ? System.IO.Path.GetDirectoryName(SelectedRawCandidate.Path) ?? string.Empty
+                        : _rawDiscovery?.InitialDirectory ?? System.IO.Path.GetDirectoryName(
+                            string.IsNullOrWhiteSpace(capture.LinkedRawPath) ? capture.ProductionRawPath : capture.LinkedRawPath) ?? string.Empty,
+                    FileName = SelectedRawCandidate?.Path ?? capture.LinkedRawPath
+                };
+                if (dialog.ShowDialog() != true) return;
+                ReadImageDimensions(capture);
+                if (capture.PixelWidth <= 0 || capture.PixelHeight <= 0) await RequestRawAsync(capture);
+                await LegacyRawAssociation.SetOperatorLinkAsync(AppServices.HistoryRepo, capture,
+                    dialog.FileName, capture.PixelWidth, capture.PixelHeight);
+                if (capture == SelectedCapture) await LoadHistogramAsync();
+            }
+            catch (Exception ex) { StatusMessage = $"원본 .raw 연결 실패: {ex.Message}"; }
+        }
+
+        [RelayCommand]
+        private async Task ClearProductionRawLinkAsync()
+        {
+            var capture = SelectedCapture;
+            if (capture is null) { StatusMessage = "캡처를 먼저 선택하세요."; return; }
+            try
+            {
+                await LegacyRawAssociation.SetOperatorLinkAsync(AppServices.HistoryRepo, capture,
+                    string.Empty, capture.PixelWidth, capture.PixelHeight);
+                if (capture == SelectedCapture) await LoadHistogramAsync();
+            }
+            catch (Exception ex) { StatusMessage = $"원본 .raw 연결 해제 실패: {ex.Message}"; }
         }
 
         /// <summary>선택 캡처의 원본을 Agent에서 받아 .y16 파일로 저장한다.</summary>
@@ -91,7 +216,7 @@ namespace HeatingCameraSystem.Master.ViewModels
             var dialog = new Microsoft.Win32.SaveFileDialog
             {
                 Filter = "Raw 16bit (*.y16)|*.y16",
-                FileName = $"{SelectedCapture!.CameraId}_{SelectedCapture.Timestamp.ToLocalTime():yyyyMMdd_HHmmss}.y16"
+                FileName = $"{SelectedCapture?.CameraId}_{SelectedCapture?.Timestamp.ToLocalTime():yyyyMMdd_HHmmss}.y16"
             };
             if (dialog.ShowDialog() != true) return;
 
@@ -140,18 +265,19 @@ namespace HeatingCameraSystem.Master.ViewModels
         }
 
         /// <summary>선택 캡처의 원본. 로컬에 받아 둔 파일이 있으면 Agent에 묻지 않는다.</summary>
-        private async Task<(byte[]? Pixels, bool Ok)> FetchRawAsync()
+        private async Task<(byte[]? Pixels, bool Ok)> FetchRawAsync(CaptureHistoryRecord? capture = null)
         {
-            if (SelectedCapture == null) { StatusMessage = "캡처를 먼저 선택하세요."; return (null, false); }
+            capture ??= SelectedCapture;
+            if (capture == null) { StatusMessage = "캡처를 먼저 선택하세요."; return (null, false); }
 
-            string path = RawCachePath(SelectedCapture);
+            string path = RawCachePath(capture);
             if (path.Length > 0 && System.IO.File.Exists(path))
             {
                 try { return (await System.IO.File.ReadAllBytesAsync(path), true); }
                 catch (Exception ex) { StatusMessage = $"로컬 원본 읽기 실패: {ex.Message}"; return (null, false); }
             }
 
-            return await RequestRawAsync(SelectedCapture);
+            return await RequestRawAsync(capture);
         }
 
         /// <summary>Agent에 원본을 요청하고 성공하면 로컬 캐시에 저장한다.</summary>
@@ -171,6 +297,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                     return (null, false);
                 }
 
+                capture.PixelWidth = response.Width;
+                capture.PixelHeight = response.Height;
                 SaveRawCache(capture, response.Pixels);
                 return (response.Pixels, true);
             }
@@ -198,7 +326,9 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             try
             {
-                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+                string? directory = System.IO.Path.GetDirectoryName(path);
+                if (directory is null) return;
+                System.IO.Directory.CreateDirectory(directory);
                 System.IO.File.WriteAllBytes(path, pixels);
             }
             catch (Exception ex)

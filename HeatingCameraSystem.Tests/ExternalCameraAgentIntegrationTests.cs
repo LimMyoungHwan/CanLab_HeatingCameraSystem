@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
 using HeatingCameraSystem.Simulator.Cameras;
@@ -118,9 +119,9 @@ public class ExternalCameraAgentIntegrationTests
     {
         private readonly Dictionary<string, Action<CaptureCommandMessage>> _captures = new(StringComparer.Ordinal);
         private readonly List<Action<CaptureCommandMessage>> _broadcasts = new();
-        public List<AgentStatusMessage> Statuses { get; } = new();
-        public List<LiveFrameMessage> LiveFrames { get; } = new();
-        public List<CaptureResultMessage> Results { get; } = new();
+        public ConcurrentQueue<AgentStatusMessage> Statuses { get; } = new();
+        public ConcurrentQueue<LiveFrameMessage> LiveFrames { get; } = new();
+        public ConcurrentQueue<CaptureResultMessage> Results { get; } = new();
 
         public async Task SendCaptureAsync(string agentId, string stepId)
         {
@@ -145,11 +146,11 @@ public class ExternalCameraAgentIntegrationTests
             _broadcasts.Add(onMessageReceived);
             return Task.CompletedTask;
         }
-        public Task PublishAgentStatusAsync(AgentStatusMessage message) { Statuses.Add(message); return Task.CompletedTask; }
+        public Task PublishAgentStatusAsync(AgentStatusMessage message) { Statuses.Enqueue(message); return Task.CompletedTask; }
         public Task SubscribeAgentStatusAsync(Action<AgentStatusMessage> onMessageReceived) => Task.CompletedTask;
-        public Task PublishCaptureResultAsync(CaptureResultMessage message) { Results.Add(message); return Task.CompletedTask; }
+        public Task PublishCaptureResultAsync(CaptureResultMessage message) { Results.Enqueue(message); return Task.CompletedTask; }
         public Task SubscribeCaptureResultAsync(Action<CaptureResultMessage> onMessageReceived) => Task.CompletedTask;
-        public Task PublishLiveFrameAsync(LiveFrameMessage message) { LiveFrames.Add(message); return Task.CompletedTask; }
+        public Task PublishLiveFrameAsync(LiveFrameMessage message) { LiveFrames.Enqueue(message); return Task.CompletedTask; }
         public Task SubscribeLiveFrameAsync(Action<LiveFrameMessage> onMessageReceived) => Task.CompletedTask;
         public Task PublishSerialConfigAsync(SerialConfigMessage message) => Task.CompletedTask;
         public Task SubscribeSerialConfigAsync(string agentId, Action<SerialConfigMessage> onMessageReceived) => Task.CompletedTask;

@@ -23,6 +23,15 @@ namespace HeatingCameraSystem.Master.ViewModels
     public partial class RecipeStepModel : ObservableObject
     {
         [ObservableProperty] private int _stepNumber;
+        public string? PlanCellKey { get; set; }
+        public string StepId { get; set; } = Guid.NewGuid().ToString();
+        [ObservableProperty] private bool _useCellCamera;
+        [ObservableProperty] private int _shotNumberOffset;
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(UsesCellPosition))]
+        private BlackBodyRole? _cellPositionRole;
+        public bool UsesCellPosition => CellPositionRole.HasValue;
+        public static BlackBodyRole[] PositionRoles { get; } = Enum.GetValues<BlackBodyRole>();
         [ObservableProperty] private string _nodeAssignment = string.Empty;
         [ObservableProperty] private float _blackbodyRef;
         [ObservableProperty] private int _blackBodyIndex;
@@ -53,6 +62,11 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private int _waitSeconds;
         [ObservableProperty] private RecipeStepKind _kind = RecipeStepKind.LegacyCapture;
         [ObservableProperty] private MotorMoveType _motorMoveType = MotorMoveType.Manual;
+        /// <summary>
+        /// Point(Automatic)로 저장된 모터 스텝은 수동(좌표) 전환을 막는다.
+        /// 스텝에 예전 좌표(대부분 0,0)가 남아 있어 되돌리면 엉뚱한 위치로 구동되기 때문이다.
+        /// </summary>
+        [ObservableProperty] private bool _isPointLocked;
         [ObservableProperty] private string _cameraOperation = CameraControlOps.Capture;
 
         public RecipeStepModel()
@@ -63,6 +77,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         public int CameraIndex { get; set; }
         public int TargetPositionIndex { get; set; }
         public bool ShowsAutomaticPoint => Kind == RecipeStepKind.MotorMove && MotorMoveType == MotorMoveType.Automatic;
+        public bool CanChangeMotorMoveType => !IsPointLocked;
         public bool ShowsManualCoordinates => Kind == RecipeStepKind.MotorMove && MotorMoveType == MotorMoveType.Manual;
         public ObservableCollection<CameraTargetModel> CameraTargets { get; } = new();
 
@@ -140,8 +155,16 @@ namespace HeatingCameraSystem.Master.ViewModels
             if (CameraBiasDefaults.For(value) is double target) BiasTargetLevel = target;
         }
 
+        partial void OnIsPointLockedChanged(bool value) => OnPropertyChanged(nameof(CanChangeMotorMoveType));
+
         partial void OnMotorMoveTypeChanged(MotorMoveType value)
         {
+            if (IsPointLocked && value == MotorMoveType.Manual)
+            {
+                MotorMoveType = MotorMoveType.Automatic;
+                return;
+            }
+
             OnPropertyChanged(nameof(ShowsAutomaticPoint));
             OnPropertyChanged(nameof(ShowsManualCoordinates));
         }
@@ -226,12 +249,30 @@ namespace HeatingCameraSystem.Master.ViewModels
     public partial class RecipeModel : ObservableObject
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(IsPlanRecipe))]
+        [NotifyPropertyChangedFor(nameof(IsLegacyRecipe))]
+        [NotifyPropertyChangedFor(nameof(TypeLabel))]
+        private CapturePlan? _plan;
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasPlanValidationError))]
+        [NotifyPropertyChangedFor(nameof(PlanValidationLabel))]
+        private string? _planValidationError;
+
+        public bool IsPlanRecipe => Plan != null;
+        public bool IsLegacyRecipe => Plan == null;
+        public string TypeLabel => IsPlanRecipe ? "계획" : "스텝";
+        public bool HasPlanValidationError => !string.IsNullOrEmpty(PlanValidationError);
+        public string PlanValidationLabel => PlanValidationError is { Length: > 0 } error
+            ? error.StartsWith("실행 불가:", StringComparison.Ordinal) ? error : $"실행 불가: {error}"
+            : string.Empty;
 
         [ObservableProperty] private string _name = string.Empty;
         [ObservableProperty] private bool _isSelected;
         [ObservableProperty] private string _lastModified = string.Empty;
         [ObservableProperty] private int _rampMinutes;
         [ObservableProperty] private float _recordOnTemperatureDelta;
+        [ObservableProperty] private bool _overwriteDuplicateShots;
         [ObservableProperty] private float _recordOnHumidityDelta;
         [ObservableProperty] private int _recordIntervalSeconds;
 
@@ -272,21 +313,12 @@ namespace HeatingCameraSystem.Master.ViewModels
             new() { Value = BlackBodyRole.Cold, Label = "cold" },
             new() { Value = BlackBodyRole.Room, Label = "room (흑체 없음)" }
         };
-        public CameraOperationOption[] CameraOperationOptions { get; } =
+        public CameraOperationOption[] CameraOperationOptions { get; } = new[]
         {
-            new() { Value = CameraControlOps.Capture, Label = "캡처" },
-            new() { Value = CameraControlOps.ShutterOpen, Label = "셔터 열기" },
-            new() { Value = CameraControlOps.ShutterClose, Label = "셔터 닫기" },
-            new() { Value = CameraControlOps.Bias, Label = "BIAS (카메라 대역 따름)" },
-            new() { Value = CameraControlOps.BiasLow, Label = "BIAS LOW" },
-            new() { Value = CameraControlOps.BiasMid, Label = "BIAS MID" },
-            new() { Value = CameraControlOps.BiasHigh, Label = "BIAS HIGH" },
-            new() { Value = CameraControlOps.Nuc, Label = "NUC 실행" },
-            new() { Value = CameraControlOps.Run, Label = "카메라 RUN" },
-            new() { Value = CameraControlOps.Stop, Label = "카메라 STOP" },
-            new() { Value = CameraControlOps.SaveConfig, Label = "설정 저장" },
-            new() { Value = CameraControlOps.RefreshInfo, Label = "정보 갱신" }
-        };
+            CameraControlOps.Capture, CameraControlOps.ShutterOpen, CameraControlOps.ShutterClose,
+            CameraControlOps.Bias, CameraControlOps.BiasLow, CameraControlOps.BiasMid, CameraControlOps.BiasHigh,
+            CameraControlOps.Nuc, CameraControlOps.Run, CameraControlOps.Stop, CameraControlOps.SaveConfig, CameraControlOps.RefreshInfo
+        }.Select(operation => new CameraOperationOption { Value = operation, Label = CapturePlanLabels.Operation(operation) }).ToArray();
 
         public int[] BlackBodyIndexOptions { get; } = { 0, 1 };
         public MotorMoveTypeOption[] MotorMoveTypeOptions { get; } =
@@ -302,15 +334,122 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty]
         private string _ioStatusMessage = string.Empty;
 
-        public RecipeEditorViewModel()
+        [ObservableProperty] private CapturePlanEditorViewModel? _planEditor;
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(HasOperationError))]
+        private string _operationError = string.Empty;
+        public bool HasOperationError => !string.IsNullOrEmpty(OperationError);
+        public string TemplateUsage => SelectedRecipe == null ? string.Empty : "사용 중인 계획: " +
+            string.Join(", ", _recipeRepository.GetAllAsync().GetAwaiter().GetResult()
+                .Where(r => r.Plan?.Entries?.Any(e => e.TemplateRecipeId == SelectedRecipe.Id) == true).Select(r => r.Name).DefaultIfEmpty("없음"));
+        private readonly IRecipeRepository _recipeRepository;
+        private readonly ICameraPositionRepository? _positionRepository;
+        private bool _disposed;
+
+        public RecipeEditorViewModel() : this(AppServices.RecipeRepo, AppServices.CameraPositions) { }
+
+        public RecipeEditorViewModel(IRecipeRepository recipeRepository, ICameraPositionRepository? positionRepository = null)
         {
+            _recipeRepository = recipeRepository;
+            _positionRepository = positionRepository;
             SubscribeCameraServices();
 
-            foreach (var r in AppServices.RecipeRepo.GetAllAsync().GetAwaiter().GetResult())
+            foreach (var r in _recipeRepository.GetAllAsync().GetAwaiter().GetResult())
                 Recipes.Add(FromDomain(r));
 
             if (Recipes.Count > 0)
                 SelectRecipe(Recipes[0]);
+        }
+
+        partial void OnSelectedRecipeChanging(RecipeModel? oldValue, RecipeModel? newValue)
+        {
+            if (oldValue != null) SnapshotRecipe(oldValue);
+        }
+
+        /// <summary>현재 계획 편집값을 메모리에 반영한다. 저장소에는 쓰지 않는다.</summary>
+        internal Recipe SnapshotRecipe(RecipeModel model)
+        {
+            if (ReferenceEquals(model, SelectedRecipe) && PlanEditor is { } editor)
+            {
+                bool valid = editor.TryCompile(out var steps);
+                Recipe snapshot = ToDomain(model);
+                snapshot.Plan = CapturePlanRecipeCopies.ClonePlan(editor.Plan);
+                snapshot.Steps = valid ? steps.Select(step => step.Copy()).ToList() : new List<RecipeStep>();
+                snapshot.PlanValidationError = valid ? null : editor.ValidationMessage;
+                model.Plan = CapturePlanRecipeCopies.ClonePlan(editor.Plan);
+                model.PlanValidationError = snapshot.PlanValidationError;
+                model.Steps.Clear();
+                foreach (RecipeStepModel step in FromDomain(snapshot).Steps)
+                    model.Steps.Add(step);
+                return snapshot;
+            }
+            return ToDomain(model);
+        }
+
+        partial void OnSelectedRecipeChanged(RecipeModel? oldValue, RecipeModel? newValue)
+        {
+            if (oldValue != null) oldValue.PropertyChanged -= OnSelectedRecipeModelPropertyChanged;
+            if (newValue != null) newValue.PropertyChanged += OnSelectedRecipeModelPropertyChanged;
+        }
+
+        private void OnSelectedRecipeModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(RecipeModel.OverwriteDuplicateShots) && sender is RecipeModel model && ReferenceEquals(model, SelectedRecipe) && PlanEditor is { } editor)
+                editor.OverwriteDuplicateShots = model.OverwriteDuplicateShots;
+        }
+
+        private void OnPlanEditorPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (ReferenceEquals(sender, PlanEditor) && SelectedRecipe is { } selected && PlanEditor is { } editor
+                && e.PropertyName is nameof(CapturePlanEditorViewModel.ValidationMessage) or nameof(CapturePlanEditorViewModel.IsValid))
+            {
+                selected.PlanValidationError = editor.IsValid ? null : editor.ValidationMessage;
+            }
+        }
+
+        partial void OnSelectedRecipeChanged(RecipeModel? value)
+        {
+            if (PlanEditor is { } previous)
+            {
+                previous.PropertyChanged -= OnPlanEditorPropertyChanged;
+                previous.Dispose();
+            }
+            PlanEditor = value?.IsPlanRecipe == true
+                ? new CapturePlanEditorViewModel(ToDomain(value), _positionRepository, _recipeRepository)
+                : null;
+            SelectedStep = null;
+            OperationError = string.Empty;
+            OnPropertyChanged(nameof(TemplateUsage));
+            if (PlanEditor is { } editor)
+            {
+                editor.PropertyChanged += OnPlanEditorPropertyChanged;
+                if (value != null) value.PlanValidationError = editor.IsValid ? null : editor.ValidationMessage;
+                _ = LoadPlanPositionsAsync(editor);
+            }
+        }
+
+        public System.Threading.Tasks.Task ReloadPlanPositionsAsync()
+            => PlanEditor is { } editor ? LoadPlanPositionsAsync(editor) : System.Threading.Tasks.Task.CompletedTask;
+
+        private async System.Threading.Tasks.Task LoadPlanPositionsAsync(CapturePlanEditorViewModel editor)
+        {
+            try
+            {
+                await editor.LoadPositionsAsync();
+            }
+            catch (Exception ex)
+            {
+                void ShowError()
+                {
+                    if (!_disposed && ReferenceEquals(PlanEditor, editor))
+                        OperationError = $"위치표를 불러오지 못했습니다: {ex.Message}";
+                }
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher != null && !dispatcher.CheckAccess())
+                    await dispatcher.InvokeAsync(ShowError);
+                else
+                    ShowError();
+            }
         }
 
         /// <summary>레시피를 선택하고 목록의 선택 하이라이트를 옮긴다.</summary>
@@ -330,9 +469,62 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             var vm = new RecipeModel { Name = "새 레시피", LastModified = DateTime.Now.ToString("g"), RampMinutes = 0 };
             Recipes.Add(vm);
-            AppServices.RecipeRepo.SaveAsync(ToDomain(vm)).GetAwaiter().GetResult();
+            _recipeRepository.SaveAsync(ToDomain(vm)).GetAwaiter().GetResult();
             SelectRecipe(vm);
             RecipeAdded?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>촬영 셀을 아직 선택하지 않은 새 계획을 초안으로 저장한다.</summary>
+        [RelayCommand]
+        private void AddPlanRecipe()
+        {
+            var recipe = new RecipeModel
+            {
+                Name = "새 촬영 계획",
+                Plan = new CapturePlan { Entries = new() }
+            };
+            Recipes.Add(recipe);
+            SelectRecipe(recipe);
+            SaveRecipe();
+            RecipeAdded?.Invoke(this, EventArgs.Empty);
+        }
+
+        [RelayCommand]
+        private void ConvertToPlan()
+        {
+            if (SelectedRecipe == null || !SelectedRecipe.IsLegacyRecipe) return;
+            SaveRecipe();
+            AddCopy(CapturePlanConverter.CreateFromTemplate(ToDomain(SelectedRecipe)));
+        }
+
+        [RelayCommand]
+        private void FlattenPlan()
+        {
+            if (SelectedRecipe == null || PlanEditor is not { } editor) return;
+            if (!editor.TryCompile(out var steps))
+            {
+                IoStatusMessage = "실행 가능한 계획을 완성한 후 스텝 목록으로 만들 수 있습니다.";
+                return;
+            }
+            Recipe current = ToDomain(SelectedRecipe);
+            current.Plan = CapturePlanRecipeCopies.ClonePlan(editor.Plan);
+            current.Steps = steps.Select(step => step.Copy()).ToList();
+            try
+            {
+                AddCopy(CapturePlanRecipeCopies.ToLegacyCopy(current, editor.PositionSnapshot, editor.TemplateSnapshot));
+            }
+            catch (ArgumentException ex)
+            {
+                OperationError = $"스텝 목록으로 만들 수 없습니다. {CapturePlanLabels.ValidationReason(editor.Plan, ex.Message)}";
+            }
+        }
+
+        private void AddCopy(Recipe recipe)
+        {
+            _recipeRepository.SaveAsync(recipe).GetAwaiter().GetResult();
+            var model = FromDomain(recipe);
+            Recipes.Add(model);
+            SelectRecipe(model);
         }
 
         /// <summary>선택 레시피를 새 Id로 복제해 저장·선택한다. 이름에는 "(복사)"가 붙는다.</summary>
@@ -341,8 +533,20 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             if (SelectedRecipe == null) return;
 
-            var clone = CloneRecipe(ToDomain(SelectedRecipe));
-            AppServices.RecipeRepo.SaveAsync(clone).GetAwaiter().GetResult();
+            var clone = CloneRecipe(SnapshotRecipe(SelectedRecipe));
+            if (clone.Plan != null && clone.PlanValidationError == null && PlanEditor is { } editor)
+            {
+                try
+                {
+                    clone.Steps = CapturePlanCompiler.Compile(clone, editor.PositionSnapshot, editor.TemplateSnapshot);
+                }
+                catch (ArgumentException ex)
+                {
+                    clone.Steps.Clear();
+                    clone.PlanValidationError = $"실행 불가: {ex.Message}";
+                }
+            }
+            _recipeRepository.SaveAsync(clone).GetAwaiter().GetResult();
 
             var vm = FromDomain(clone);
             Recipes.Add(vm);
@@ -354,8 +558,24 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void SaveRecipe()
         {
             if (SelectedRecipe == null) return;
+            OperationError = string.Empty;
+            Recipe draft = SnapshotRecipe(SelectedRecipe);
+            _recipeRepository.SaveAsync(draft).GetAwaiter().GetResult();
+            IoStatusMessage = draft.PlanValidationError is { Length: > 0 }
+                ? "초안을 저장했습니다. 실행 스텝은 비워 두었습니다."
+                : "레시피를 저장했습니다.";
             SelectedRecipe.LastModified = DateTime.Now.ToString("g");
-            AppServices.RecipeRepo.SaveAsync(ToDomain(SelectedRecipe)).GetAwaiter().GetResult();
+            LockPointSteps(SelectedRecipe);
+        }
+
+        /// <summary>저장 완료 후 Point(Automatic) 스텝을 잠가 좌표 모드로 되돌리지 못하게 한다.</summary>
+        public static void LockPointSteps(RecipeModel recipe)
+        {
+            foreach (var step in recipe.Steps)
+            {
+                if (step.MotorMoveType == MotorMoveType.Automatic)
+                    step.IsPointLocked = true;
+            }
         }
 
         /// <summary>레시피를 삭제한다. 선택 중이던 레시피였다면 남은 첫 레시피를 선택한다.</summary>
@@ -363,10 +583,24 @@ namespace HeatingCameraSystem.Master.ViewModels
         private void DeleteRecipe(RecipeModel recipe)
         {
             if (recipe == null) return;
-            AppServices.RecipeRepo.DeleteAsync(recipe.Id).GetAwaiter().GetResult();
+            var users = _recipeRepository.GetAllAsync().GetAwaiter().GetResult()
+                .Where(r => r.Plan?.Entries?.Any(e => e.TemplateRecipeId == recipe.Id) == true).Select(r => r.Name).ToArray();
+            if (users.Length > 0) { OperationError = "이 템플릿을 사용하는 계획이 있어 삭제할 수 없습니다: " + string.Join(", ", users); return; }
+            try { _recipeRepository.DeleteAsync(recipe.Id).GetAwaiter().GetResult(); }
+            catch (InvalidOperationException error) { OperationError = error.Message; return; }
             Recipes.Remove(recipe);
             if (SelectedRecipe == recipe)
                 SelectedRecipe = Recipes.FirstOrDefault();
+        }
+
+        [RelayCommand]
+        private void TogglePositionSlot(RecipeStepModel step)
+        {
+            if (SelectedRecipe == null || step.Kind != RecipeStepKind.MotorMove) return;
+            if (step.CellPositionRole.HasValue) { step.CellPositionRole = null; return; }
+            int index = SelectedRecipe.Steps.IndexOf(step);
+            var next = SelectedRecipe.Steps.Skip(index + 1).FirstOrDefault(s => s.Kind == RecipeStepKind.CameraCommand && s.CameraOperation == CameraControlOps.Capture);
+            step.CellPositionRole = next?.CameraTargets.FirstOrDefault(t => t.IsSelected)?.TargetBlackBody ?? BlackBodyRole.Cold;
         }
 
         [RelayCommand]
@@ -449,7 +683,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             try
             {
-                var recipe = ToDomain(SelectedRecipe);
+                var recipe = SnapshotRecipe(SelectedRecipe);
                 RecipeCsvSerializer.WriteFile(dlg.FileName, recipe);
                 IoStatusMessage = $"내보냈습니다: {Path.GetFileName(dlg.FileName)}";
             }
@@ -493,7 +727,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 }
 
                 recipe.Id = Guid.NewGuid().ToString();
-                AppServices.RecipeRepo.SaveAsync(recipe).GetAwaiter().GetResult();
+                _recipeRepository.SaveAsync(recipe).GetAwaiter().GetResult();
 
                 var vm = FromDomain(recipe);
                 Recipes.Add(vm);
@@ -509,59 +743,10 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// <summary>레시피 깊은 복사본을 새 Id와 "(복사)" 이름으로 만든다. 스텝 목록까지 복제한다.</summary>
         public static Recipe CloneRecipe(Recipe source)
         {
-            return new Recipe
-            {
-                Id = Guid.NewGuid().ToString(),
-                Name = source.Name + " (복사)",
-                TemperatureRampMinutes = source.TemperatureRampMinutes,
-                RecordOnTemperatureDelta = source.RecordOnTemperatureDelta,
-                RecordOnHumidityDelta = source.RecordOnHumidityDelta,
-                RecordIntervalSeconds = source.RecordIntervalSeconds,
-                Steps = source.Steps.Select(s => new RecipeStep
-                {
-                    StepId = s.StepId,
-                    CameraIndex = s.CameraIndex,
-                    CameraAlias = s.CameraAlias,
-                    Kind = s.Kind,
-                    CameraOperation = s.CameraOperation,
-                    CameraTargets = s.CameraTargets.Select(target => new RecipeCameraTarget
-                    {
-                        AgentId = target.AgentId,
-                        CameraIndex = target.CameraIndex,
-                        TargetChamber = target.TargetChamber,
-                        TargetBlackBody = target.TargetBlackBody
-                    }).ToList(),
-                    WaitForCaptureResult = s.WaitForCaptureResult,
-                    CaptureJoinTimeoutSeconds = s.CaptureJoinTimeoutSeconds,
-                    TargetPositionIndex = s.TargetPositionIndex,
-                    TargetBlackBodyTemperature = s.TargetBlackBodyTemperature,
-                    BlackBodyIndex = s.BlackBodyIndex,
-                    TargetBlackBodyTemperature1 = s.TargetBlackBodyTemperature1,
-                    MotorMoveType = s.MotorMoveType,
-                    WaitForStabilization = s.WaitForStabilization,
-                    WaitForChamberStabilization = s.WaitForChamberStabilization,
-                    UseSafetyTemperature = s.UseSafetyTemperature,
-                    SafetyTempMin = s.SafetyTempMin,
-                    SafetyTempMax = s.SafetyTempMax,
-                    UseSafetyHumidity = s.UseSafetyHumidity,
-                    SafetyHumidityMin = s.SafetyHumidityMin,
-                    SafetyHumidityMax = s.SafetyHumidityMax,
-                    ShotCount = s.ShotCount,
-                    CaptureIntervalSeconds = s.CaptureIntervalSeconds,
-                    CaptureDurationSeconds = s.CaptureDurationSeconds,
-                    PositionX = s.PositionX,
-                    PositionY = s.PositionY,
-                    TargetChamberTemperature = s.TargetChamberTemperature,
-                    TargetChamberHumidity = s.TargetChamberHumidity,
-                    TargetFanSpeedHz = s.TargetFanSpeedHz,
-                    StabilizationToleranceC = s.StabilizationToleranceC,
-                    StabilizationToleranceRh = s.StabilizationToleranceRh,
-                    SoakMinutes = s.SoakMinutes,
-                    BiasTargetLevel = s.BiasTargetLevel,
-                    DisableHumidityControl = s.DisableHumidityControl,
-                    WaitDurationSeconds = s.WaitDurationSeconds
-                }).ToList()
-            };
+            var copy = CapturePlanRecipeCopies.Clone(source);
+            copy.Id = Guid.NewGuid().ToString();
+            copy.Name = source.Name + " (복사)";
+            return copy;
         }
 
         /// <summary>
@@ -574,8 +759,11 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 Id = vm.Id,
                 Name = vm.Name,
+                Plan = vm.Plan is { } editorPlan ? CapturePlanRecipeCopies.ClonePlan(editorPlan) : null,
+                PlanValidationError = vm.PlanValidationError,
                 TemperatureRampMinutes = vm.RampMinutes,
                 RecordOnTemperatureDelta = vm.RecordOnTemperatureDelta,
+                OverwriteDuplicateShots = vm.OverwriteDuplicateShots,
                 RecordOnHumidityDelta = vm.RecordOnHumidityDelta,
                 RecordIntervalSeconds = vm.RecordIntervalSeconds
             };
@@ -593,6 +781,10 @@ namespace HeatingCameraSystem.Master.ViewModels
                     .ToList();
                 r.Steps.Add(new RecipeStep
                 {
+                    StepId = s.StepId,
+                    PlanCellKey = s.PlanCellKey,
+                    UseCellCamera = s.UseCellCamera, CellPositionRole = s.CellPositionRole,
+                    ShotNumberOffset = s.ShotNumberOffset,
                     CameraIndex = targets.FirstOrDefault()?.CameraIndex ?? (s.CameraIndex > 0 ? s.CameraIndex : ParseCameraIndex(s.NodeAssignment)),
                     TargetPositionIndex = s.TargetPositionIndex > 0 ? s.TargetPositionIndex : ParsePositionIndex(s.NodeAssignment),
                     Kind = s.Kind,
@@ -638,8 +830,11 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 Id = r.Id,
                 Name = r.Name,
+                Plan = r.Plan is { } domainPlan ? CapturePlanRecipeCopies.ClonePlan(domainPlan) : null,
+                PlanValidationError = r.Plan is { Entries: null } ? CapturePlanCompiler.OldFormatMessage : r.PlanValidationError,
                 RampMinutes = r.TemperatureRampMinutes,
                 RecordOnTemperatureDelta = r.RecordOnTemperatureDelta,
+                OverwriteDuplicateShots = r.OverwriteDuplicateShots,
                 RecordOnHumidityDelta = r.RecordOnHumidityDelta,
                 RecordIntervalSeconds = r.RecordIntervalSeconds,
                 LastModified = DateTime.Now.ToString("g")
@@ -650,6 +845,10 @@ namespace HeatingCameraSystem.Master.ViewModels
                 var step = new RecipeStepModel
                 {
                     StepNumber = n++,
+                    StepId = s.StepId,
+                    PlanCellKey = s.PlanCellKey,
+                    UseCellCamera = s.UseCellCamera, CellPositionRole = s.CellPositionRole,
+                    ShotNumberOffset = s.ShotNumberOffset,
                     NodeAssignment = $"Position {s.TargetPositionIndex:D2} -> CAM-{s.CameraIndex:D2}",
                     CameraIndex = s.CameraIndex,
                     TargetPositionIndex = s.TargetPositionIndex,
@@ -659,6 +858,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     BlackBodyIndex = s.BlackBodyIndex,
                     BlackbodyRef1 = s.TargetBlackBodyTemperature1,
                     MotorMoveType = s.MotorMoveType,
+                    IsPointLocked = s.MotorMoveType == MotorMoveType.Automatic,
                     WaitForStabilization = s.WaitForStabilization,
                     WaitForChamberStabilization = s.WaitForChamberStabilization,
                     UseSafetyTemperature = s.UseSafetyTemperature,
@@ -934,6 +1134,13 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public void Dispose()
         {
+            _disposed = true;
+            if (PlanEditor is { } editor)
+            {
+                editor.PropertyChanged -= OnPlanEditorPropertyChanged;
+                editor.Dispose();
+            }
+            PlanEditor = null;
             // ponytail: NatsCommunicationService에는 구독 해제 API가 없다(fire-and-forget 루프).
             // ManualControlViewModel과 같은 상황이므로 여기서 해제할 것이 없다.
         }

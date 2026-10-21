@@ -27,6 +27,9 @@ namespace HeatingCameraSystem.Master.Services
         /// 재시작이 일어나지 않는다.
         /// </summary>
         bool ConfirmRestart(string message) => false;
+
+        /// <summary>재개 또는 실패 셀 재촬영의 대상 셀 수를 확인한다. 취소/아니오는 실행하지 않는다.</summary>
+        bool ConfirmCapturePlanRun(string message);
     }
 
     /// <summary>WPF MessageBox 구현. UI 스레드에서 표시하되 호출자(PLC 폴링 스레드)를 막지 않도록 BeginInvoke로 큐잉.</summary>
@@ -82,6 +85,14 @@ namespace HeatingCameraSystem.Master.Services
                 MessageBoxButton.OKCancel,
                 MessageBoxImage.Information,
                 MessageBoxResult.Cancel) == MessageBoxResult.OK);
+
+        public bool ConfirmCapturePlanRun(string message)
+            => OnUi(() => MessageBox.Show(
+                message,
+                "촬영 계획 실행 확인",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question,
+                MessageBoxResult.No) == MessageBoxResult.Yes);
 
         // 레시피 엔진은 UI가 아닌 스레드에서 돈다. 결과를 돌려줘야 하므로 BeginInvoke가 아니라 Invoke다.
         private static T OnUi<T>(Func<T> action)

@@ -90,6 +90,22 @@ public class RecipeCopyTests
     }
 
     [Fact]
+    public void OverwriteDuplicateShots_SurvivesVmRoundTripAndCloneAndDefaultsFalse()
+    {
+        var fromDomain = typeof(RecipeEditorViewModel).GetMethod("FromDomain", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var toDomain   = typeof(RecipeEditorViewModel).GetMethod("ToDomain", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        Assert.False(new Recipe().OverwriteDuplicateShots);
+        var recipe = new Recipe { OverwriteDuplicateShots = true };
+
+        var vm = Assert.IsType<RecipeModel>(fromDomain.Invoke(null, new object[] { recipe }));
+        Assert.True(vm.OverwriteDuplicateShots);
+        Assert.True(((Recipe)toDomain.Invoke(null, new object[] { vm })!).OverwriteDuplicateShots);
+        Assert.True(RecipeEditorViewModel.CloneRecipe(recipe).OverwriteDuplicateShots);
+        Assert.True(CapturePlanRecipeCopies.Clone(recipe).OverwriteDuplicateShots);
+    }
+
+    [Fact]
     public void VmRoundTripPreservesSafetyBand()
     {
         var fromDomain = typeof(RecipeEditorViewModel).GetMethod("FromDomain", BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -145,5 +161,46 @@ public class RecipeCopyTests
 
         Recipe clone = RecipeEditorViewModel.CloneRecipe(back);
         Assert.Equal(42.5f, clone.Steps[0].TargetFanSpeedHz);
+    }
+
+    [Fact]
+    public void PointMotorStep_LoadedOrSaved_LocksRevertToManual()
+    {
+        var fromDomain = typeof(RecipeEditorViewModel).GetMethod("FromDomain", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(fromDomain);
+
+        var recipe = new Recipe
+        {
+            Steps =
+            {
+                new RecipeStep { Kind = RecipeStepKind.MotorMove, MotorMoveType = MotorMoveType.Automatic, TargetPositionIndex = 3 },
+                new RecipeStep { Kind = RecipeStepKind.MotorMove, MotorMoveType = MotorMoveType.Manual, PositionX = 10, PositionY = 20 }
+            }
+        };
+
+        var vm = Assert.IsType<RecipeModel>(fromDomain.Invoke(null, new object[] { recipe }));
+
+        // 저장소에서 Automatic으로 불러온 스텝은 잠겨 있어 Manual로 바꿀 수 없고, 포인트 번호 변경은 허용된다.
+        RecipeStepModel autoStep = vm.Steps[0];
+        Assert.True(autoStep.IsPointLocked);
+        Assert.False(autoStep.CanChangeMotorMoveType);
+        autoStep.MotorMoveType = MotorMoveType.Manual;
+        Assert.Equal(MotorMoveType.Automatic, autoStep.MotorMoveType);
+        autoStep.TargetPositionIndex = 7;
+        Assert.Equal(7, autoStep.TargetPositionIndex);
+
+        // Manual로 불러온 스텝은 잠기지 않아 Automatic으로 전환할 수 있고, 저장(LockPointSteps) 후에는 잠긴다.
+        RecipeStepModel manualStep = vm.Steps[1];
+        Assert.False(manualStep.IsPointLocked);
+        Assert.True(manualStep.CanChangeMotorMoveType);
+        manualStep.MotorMoveType = MotorMoveType.Automatic;
+        Assert.Equal(MotorMoveType.Automatic, manualStep.MotorMoveType);
+        Assert.False(manualStep.IsPointLocked);
+
+        RecipeEditorViewModel.LockPointSteps(vm);
+        Assert.True(manualStep.IsPointLocked);
+        Assert.False(manualStep.CanChangeMotorMoveType);
+        manualStep.MotorMoveType = MotorMoveType.Manual;
+        Assert.Equal(MotorMoveType.Automatic, manualStep.MotorMoveType);
     }
 }

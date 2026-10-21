@@ -145,6 +145,39 @@
                 </MultiDataTrigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="PlanRunButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource BgSurfaceVariant}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextOnSurface}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource OutlineVariant}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter x:Name="ButtonLabel" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="{StaticResource Primary}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="{StaticResource BgSurfaceContainer}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="{StaticResource Primary}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="{StaticResource BgSurfaceContainer}"/>
+                                <Setter TargetName="ButtonLabel" Property="TextElement.Foreground" Value="{StaticResource TextOnSurfaceVariant}"/>
+                                <Setter TargetName="ButtonSurface" Property="Opacity" Value="0.65"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -516,14 +549,17 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <WrapPanel Grid.Column="0" Grid.ColumnSpan="3" Margin="0,0,0,36">
                             <Button Content="Mode 1 (Auto 8)" Style="{StaticResource ModeButtonStyle}" Tag="1" Command="{Binding SetViewModeCommand}" CommandParameter="1"/>
                             <Button Content="Mode 2 (8)" Style="{StaticResource ModeButtonStyle}" Tag="2" Command="{Binding SetViewModeCommand}" CommandParameter="2"/>
                             <Button Content="Mode 3 (4)" Style="{StaticResource ModeButtonStyle}" Tag="3" Command="{Binding SetViewModeCommand}" CommandParameter="3"/>
                             <Button Content="Mode 4 (2)" Style="{StaticResource ModeButtonStyle}" Tag="4" Command="{Binding SetViewModeCommand}" CommandParameter="4"/>
                             <Button Content="Mode 5 (1)" Style="{StaticResource ModeButtonStyle}" Tag="5" Command="{Binding SetViewModeCommand}" CommandParameter="5"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,16,0">
+                            <CheckBox Content="촬영 진행 현황" IsChecked="{Binding ShowPlanBoard}" VerticalAlignment="Center" Margin="8,0,0,0"
+                                      Foreground="{StaticResource TextOnSurface}"
+                                      Visibility="{Binding HasCapturePlan, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        </WrapPanel>
+                        <StackPanel Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="0,8,16,0">
                             <TextBlock Text="{loc:Loc Dash_ColorMap}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox MinWidth="120" SelectedIndex="{Binding ColorMapIndex, Mode=TwoWay}"
                                       Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}">
@@ -531,7 +567,7 @@
                                 <ComboBoxItem Content="{loc:Loc Dash_Grayscale}"/>
                             </ComboBox>
                         </StackPanel>
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,8,0,0">
                             <Ellipse Width="8" Height="8" Fill="{StaticResource Secondary}" Margin="0,0,8,0"/>
                             <TextBlock Text="LIVE" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" FontWeight="Bold" Margin="0,0,16,0" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding CurrentPageInfo}" Foreground="{StaticResource TextOnSurface}" FontSize="11" VerticalAlignment="Center"/>
@@ -539,7 +575,8 @@
                     </Grid>
                 </Border>
 
-                <ItemsControl Grid.Row="1" ItemsSource="{Binding CameraFeeds}" Margin="12,0,12,12">
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding CameraFeeds}" Margin="12,0,12,12"
+                              Visibility="{Binding IsCameraViewVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <UniformGrid />
@@ -636,6 +673,9 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                <local:CapturePlanBoardView Grid.Row="1" Margin="12,0,12,12" DataContext="{Binding PlanBoard}"
+                                           SelectedEntryIndex="{Binding DataContext.SelectedPlanEntryIndex, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}"
+                                           Visibility="{Binding DataContext.IsPlanBoardVisible, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
             </Grid>
 
             <!-- ─── COL 2 : AGENTS + RECIPE ─── -->
@@ -766,15 +806,22 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="RECIPE" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                 <ComboBox Grid.Column="1" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}"
-                                          ItemsSource="{Binding Recipes}" SelectedItem="{Binding SelectedRecipe}" DisplayMemberPath="Name"/>
-                                <Button Grid.Column="2" Content="&#8635;" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="10,4" Margin="8,0,0,0" Command="{Binding RefreshRecipesCommand}" ToolTip="{loc:Loc Dash_RefreshRecipesTooltip}"/>
+                                          ItemsSource="{Binding Recipes}" SelectedItem="{Binding SelectedRecipe}"
+                                          IsEnabled="{Binding IsRecipeSelectionEnabled}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+                                <Button Grid.Column="2" Content="&#8635;" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderBrush="{StaticResource OutlineVariant}" BorderThickness="1" Padding="10,4" Margin="8,0,0,0" Command="{Binding RefreshRecipesCommand}" IsEnabled="{Binding IsRecipeSelectionEnabled}" ToolTip="{loc:Loc Dash_RefreshRecipesTooltip}"/>
                             </Grid>
-                            <TextBlock Text="{Binding RecipeStatus}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding RecipeStatus}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"/>
                             <Button Content="START" Background="{StaticResource Secondary}" Foreground="#00210c" FontSize="20" FontWeight="Bold" Padding="0,12" Margin="0,0,0,8" BorderThickness="0" Command="{Binding StartRecipeCommand}">
                                 <Button.Effect>
                                     <DropShadowEffect Color="#4ae183" BlurRadius="16" ShadowDepth="0" Opacity="0.45"/>
                                 </Button.Effect>
                             </Button>
+                            <StackPanel Visibility="{Binding HasCapturePlan, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,0,8">
+                                <TextBlock Text="{Binding PlanBoard.Summary}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                <Button Content="이어서 실행" Command="{Binding ResumeRemainingCommand}" Style="{StaticResource PlanRunButtonStyle}" Margin="0,0,0,8"/>
+                                <Button Content="실패 칸만 재촬영" Command="{Binding RetryFailedCellsCommand}" Style="{StaticResource PlanRunButtonStyle}"
+                                        Foreground="{StaticResource Error}"/>
+                            </StackPanel>
                             <ProgressBar Value="{Binding RecipeProgressValue}" Height="6" Foreground="{StaticResource Secondary}" Background="{StaticResource BgSurface}" BorderThickness="0" Margin="0,0,0,4"/>
                             <TextBlock Text="{Binding RecipePhaseText}" Foreground="{StaticResource TextOnSurfaceVariant}" FontSize="11" Margin="0,0,0,8"/>
                             <Border Background="{StaticResource BgSurfaceVariant}" BorderBrush="{StaticResource Error}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,8"

@@ -15,11 +15,19 @@ namespace HeatingCameraSystem.Master.Views
     public partial class RecipeEditorView : UserControl
     {
         private Point _dragStartPoint;
+        private readonly CameraPositionsViewModel _positionsViewModel = new();
 
         public RecipeEditorView()
         {
             InitializeComponent();
             this.DataContextChanged += RecipeEditorView_DataContextChanged;
+            PositionsEditor.DataContext = _positionsViewModel;
+            Loaded += (_, _) =>
+            {
+                _positionsViewModel.PositionsChanged -= CameraPositionsChanged;
+                _positionsViewModel.PositionsChanged += CameraPositionsChanged;
+            };
+            Unloaded += (_, _) => _positionsViewModel.PositionsChanged -= CameraPositionsChanged;
         }
 
         /// <summary>ViewModel이 바뀔 때 RecipeAdded 이벤트 구독을 이전 VM에서 새 VM으로 옮긴다.</summary>
@@ -33,6 +41,12 @@ namespace HeatingCameraSystem.Master.Views
             {
                 newVm.RecipeAdded += Vm_RecipeAdded;
             }
+        }
+
+        private async void CameraPositionsChanged(object? sender, EventArgs e)
+        {
+            if (DataContext is RecipeEditorViewModel vm)
+                await vm.ReloadPlanPositionsAsync();
         }
 
         /// <summary>새 레시피가 추가되면 렌더링이 끝난 뒤 이름 입력란에 포커스를 준다.</summary>
@@ -144,6 +158,12 @@ namespace HeatingCameraSystem.Master.Views
                     vm.SelectedStep = step;
                 }
             }
+        }
+
+        /// <summary>체크박스가 선택 상태를 대신하므로, 항목 클릭으로 생긴 선택이 요약 글자를 가리지 않게 되돌린다.</summary>
+        private void CameraTargetCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox combo && combo.SelectedIndex != -1) combo.SelectedIndex = -1;
         }
 
         private void CameraTargetCheckBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
