@@ -1,3 +1,4 @@
+using System.Globalization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -41,19 +42,28 @@ namespace HeatingCameraSystem.Master.Views
             _boundViewModel = null;
         }
 
-        private void OnHistogramLoaded(object? sender, int[] bins)
+        private void OnHistogramLoaded(object? sender, HistogramPlotData data)
         {
             Histogram.Plot.Clear();
+            Histogram.Plot.HideLegend();
+            // 참조 도구와 비교하기 쉽도록 히스토그램 축과 Center/std 범례는 영문 표기를 유지한다.
 
+            int[] bins = data.Bins;
             if (bins.Length > 0)
             {
                 double binWidth = (RawHistogram.MaxPixelValue + 1) / (double)bins.Length;
                 double[] xs = Enumerable.Range(0, bins.Length).Select(i => (i + 0.5) * binWidth).ToArray();
 
-                var bars = Histogram.Plot.Add.Bars(xs, bins.Select(b => (double)b).ToArray());
-                bars.LegendText = "화소 수";
-                Histogram.Plot.Axes.Bottom.Label.Text = "화소값 (14bit)";
-                Histogram.Plot.Axes.Left.Label.Text = "빈도";
+                Histogram.Plot.Add.Bars(xs, bins.Select(b => (double)b).ToArray());
+                Histogram.Plot.Axes.Bottom.Label.Text = "Pixel Intensity";
+                Histogram.Plot.Axes.Left.Label.Text = "Count";
+
+                var center = Histogram.Plot.Add.VerticalLine(data.Mean);
+                center.Color = ScottPlot.Colors.Red;
+                center.LineWidth = 2;
+                center.LinePattern = ScottPlot.LinePattern.Dashed;
+                center.LegendText = string.Create(CultureInfo.InvariantCulture, $"Center: {data.Mean:F0}, std:{data.StandardDeviation:F4}");
+                Histogram.Plot.ShowLegend();
                 Histogram.Plot.Axes.AutoScale();
             }
 

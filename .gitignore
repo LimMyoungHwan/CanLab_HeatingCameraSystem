@@ -34,8 +34,14 @@ desktop.ini
 # Agent/IDE tool state
 .bkit/
 .council/
+.banyancode/
+.opencode/
 .omo/run-continuation/
 .omo/boulder.json
+
+# Local verification output and archived checkout
+/tmp/
+/AnotherDevice/
 
 # Vendor SDK docs (kept locally, not in repo)
 docs/EnetClient.zip

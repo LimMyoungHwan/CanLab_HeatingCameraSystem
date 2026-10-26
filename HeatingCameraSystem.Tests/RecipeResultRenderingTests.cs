@@ -79,7 +79,7 @@ public class RecipeResultRenderingTests
             vm.Captures.Add(capture);
             vm.SelectedCapture = capture;
             int[] bins = Array.Empty<int>();
-            vm.HistogramLoaded += (_, loaded) => bins = loaded;
+            vm.HistogramLoaded += (_, loaded) => bins = loaded.Bins;
             Layout(view);
             var tabs = Assert.Single(Descendants<TabControl>(view));
             tabs.SelectedItem = Assert.Single(tabs.Items.OfType<TabItem>(), tab => Equals(tab.Header, "히스토그램"));
@@ -103,6 +103,38 @@ public class RecipeResultRenderingTests
             string plotPath = Path.Combine(output, "recipe-result-raw-plot.png");
             histogram.Plot.SavePng(plotPath, (int)histogram.ActualWidth, (int)histogram.ActualHeight);
 
+            // Center line: red dashed vertical at the mean, with the reference-tool legend text.
+            var centerLine = Assert.Single(histogram.Plot.GetPlottables().OfType<ScottPlot.Plottables.VerticalLine>());
+            Assert.Equal(250.0, centerLine.X);
+            Assert.Equal(ScottPlot.Colors.Red, centerLine.Color);
+            Assert.Equal(ScottPlot.LinePattern.Dashed, centerLine.LinePattern);
+            string expectedLegend = "Center: 250, std:" + Math.Sqrt(12500).ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
+            Assert.Equal(expectedLegend, Assert.Single(histogram.Plot.Legend.GetItems()).LabelText);
+            Assert.True(histogram.Plot.Legend.IsVisible);
+            Assert.Equal("Pixel Intensity", histogram.Plot.Axes.Bottom.Label.Text);
+            Assert.Equal("Count", histogram.Plot.Axes.Left.Label.Text);
+            string centerDir = Path.Combine(Path.GetTempPath(), "HeatingCameraSystem-hist-center");
+            Directory.CreateDirectory(centerDir);
+            string centerPng = Path.Combine(centerDir, "histogram-center.png");
+            histogram.Plot.SavePng(centerPng, (int)histogram.ActualWidth, (int)histogram.ActualHeight);
+            var centerBitmap = new BitmapImage();
+            centerBitmap.BeginInit();
+            centerBitmap.CacheOption = BitmapCacheOption.OnLoad;
+            centerBitmap.UriSource = new Uri(centerPng, UriKind.Absolute);
+            centerBitmap.EndInit();
+            var centerPixels = new FormatConvertedBitmap(centerBitmap, PixelFormats.Bgra32, null, 0);
+            int stride = centerPixels.PixelWidth * 4;
+            var pixelData = new byte[stride * centerPixels.PixelHeight];
+            centerPixels.CopyPixels(pixelData, stride, 0);
+            int lineX = (int)Math.Round(histogram.Plot.GetPixel(new ScottPlot.Coordinates(250, 0)).X);
+            int redRows = 0;
+            for (int y = 0; y < centerPixels.PixelHeight; y++)
+                for (int x = Math.Max(0, lineX - 1); x <= Math.Min(centerPixels.PixelWidth - 1, lineX + 1); x++)
+                {
+                    int o = y * stride + x * 4;
+                    if (pixelData[o + 2] > 200 && pixelData[o + 1] < 60 && pixelData[o] < 60) { redRows++; break; }
+                }
+            Assert.True(redRows > centerPixels.PixelHeight / 4, $"red dashed line missing at x={lineX}: {redRows} rows");
             var plotBitmap = new BitmapImage();
             plotBitmap.BeginInit();
             plotBitmap.CacheOption = BitmapCacheOption.OnLoad;
@@ -145,6 +177,8 @@ public class RecipeResultRenderingTests
             Assert.Empty(vm.HistogramStatistics);
             Assert.Contains("히스토그램 읽기 실패", vm.StatusMessage);
             Assert.Empty(histogram.Plot.GetPlottables());
+            Assert.Empty(histogram.Plot.Legend.GetItems());
+            Assert.False(histogram.Plot.Legend.IsVisible);
         }
         finally
         {

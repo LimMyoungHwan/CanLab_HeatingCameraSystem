@@ -1,4 +1,4 @@
-# FoxMainPC Bias 수정 통합 및 검증 기록
+# FoxMainPC Bias·결과 화면 수정 통합 및 검증 기록
 
 ## 적용 대상
 
@@ -29,6 +29,8 @@
 | 최초 실패 항목 집중 재검증 | 13개 통과 |
 | 최종 전체 자동 테스트 | 803개 통과, 실패 0개, 건너뜀 0개 |
 | 최종 전체 테스트 표시 시간 | 2분 30초 |
+| 결과 화면 후속 빌드 | 성공, 오류 0개, 경고 0개 |
+| 결과 화면 후속 집중 테스트 | `RecipeResultRenderingTests` 5개 통과, 실패 0개, 건너뜀 0개 |
 | 실제 챔버·카메라 운전 | 실행하지 않음 |
 
 최종 전체 테스트는 아래 명령으로 실행했다.
@@ -41,17 +43,22 @@ dotnet test HeatingCameraSystem.slnx --no-build --logger "trx;LogFileName=bias-i
 
 - `tmp/foxmain-bias-integration-20261026/bias-integration-focused.trx`
 - `tmp/foxmain-bias-integration-20261026/bias-integration-full-final.trx`
+- `tmp/foxmain-korean-publish-20261026/korean-histogram.trx`
 
-## 기존 작업 보존
+## 한글·히스토그램 작업 반영
 
-작업 전 수정돼 있던 아래 4개 파일은 별도 보존 후 복원했다. 이 수정은 통합 커밋과 분리해 기존 미커밋 상태로 유지한다. 위 테스트는 이 기존 수정도 포함한 FoxMainPC 작업 트리에서 실행했다.
+작업 전 수정돼 있던 아래 4개 파일을 별도 보존 후 복원했다. 최초 통합 때 미커밋으로 남겼던 수정도 사용자의 추가 요청에 따라 검토·보완해 같은 통합 브랜치에 커밋한다. 위 전체 테스트 803개는 기존 수정이 포함된 작업 트리에서 통과했다. 이후에는 설명 주석과 범례 숨김 검증을 보완하고 전체 빌드 및 결과 화면 테스트 5개를 다시 실행했다.
 
 - `.gitignore`
 - `HeatingCameraSystem.Master/ViewModels/RecipeResultViewModel.cs`
 - `HeatingCameraSystem.Master/Views/RecipeResultView.xaml.cs`
 - `HeatingCameraSystem.Tests/RecipeResultRenderingTests.cs`
 
-복원 결과를 보존본과 비교했으며, 결과 View에는 가져온 한글 차트 글꼴 설정 4줄만 추가됐다. 기존 미추적 폴더도 유지했다. 보존본은 stash `4b3ceb71d976be6bed4639e171f2e6dbef8272e1`에 남아 있다.
+결과 차트의 `Malgun Gothic` 직접 지정으로 한글 글꼴 설정을 유지하고, 히스토그램 분석 결과에 평균·표준편차를 함께 전달한다. 평균을 빨간 점선으로 표시하고 `Center`·`std` 범례를 제공한다. RAW를 읽지 못하면 이전 데이터·평균선·범례를 비우고 범례 표시도 해제한다. 참조 도구와 비교하기 위한 히스토그램의 영문 축·범례 표기는 유지한다.
+
+렌더링 테스트는 평균선의 위치·색·점선, 통계 범례, 실제 렌더링 이미지의 빨간 픽셀, RAW 읽기 실패 시 화면 초기화를 검증한다. 기존 프로젝트 인계 문서 8개도 함께 추적하며 과거 RAW 저장 정책의 설명을 현행 동작과 구분했다.
+
+로컬 도구 상태(`.banyancode/`, `.opencode/`), 임시 검증·배포 산출물(`tmp/`), 이전 별도 체크아웃(`AnotherDevice/`)은 `.gitignore`로 제외하고 실제 파일은 유지한다. 최초 보존본은 stash `4b3ceb71d976be6bed4639e171f2e6dbef8272e1`에 남아 있다.
 
 ## 운용 안내
 

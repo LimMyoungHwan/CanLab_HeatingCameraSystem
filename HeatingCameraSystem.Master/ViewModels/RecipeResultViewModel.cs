@@ -10,6 +10,12 @@ using HeatingCameraSystem.Master.Services;
 
 namespace HeatingCameraSystem.Master.ViewModels
 {
+    /// <summary>히스토그램 차트 입력. Bins가 비면 표시할 히스토그램이 없다는 뜻이다.</summary>
+    public sealed record HistogramPlotData(int[] Bins, double Mean, double StandardDeviation)
+    {
+        public static HistogramPlotData Empty { get; } = new(Array.Empty<int>(), 0, 0);
+    }
+
     /// <summary>결과 화면 좌측 목록의 실행 회차 1건.</summary>
     public partial class RecipeRunModel : ObservableObject
     {
@@ -59,7 +65,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         public event EventHandler<IReadOnlyList<RecipeMeasurementRecord>>? MeasurementsLoaded;
 
         /// <summary>히스토그램 차트가 구독한다. 도수 배열이 비면 "데이터 없음"을 뜻한다.</summary>
-        public event EventHandler<int[]>? HistogramLoaded;
+        public event EventHandler<HistogramPlotData>? HistogramLoaded;
 
         private List<RecipeMeasurementRecord> _rawMeasurements = new();
         private readonly RawImageClient? _rawClient =
@@ -77,7 +83,7 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         partial void OnSelectedCaptureChanged(CaptureHistoryRecord? value)
         {
-            HistogramLoaded?.Invoke(this, Array.Empty<int>());
+            HistogramLoaded?.Invoke(this, HistogramPlotData.Empty);
             HistogramSource = HistogramNote = HistogramStatistics = string.Empty;
             RawCandidates.Clear();
             RawDiscoveryNote = string.Empty;
@@ -91,7 +97,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             var capture = SelectedCapture;
             if (capture is null) { StatusMessage = "캡처를 먼저 선택하세요."; return; }
-            HistogramLoaded?.Invoke(this, Array.Empty<int>());
+            HistogramLoaded?.Invoke(this, HistogramPlotData.Empty);
             HistogramSource = HistogramNote = HistogramStatistics = string.Empty;
             try
             {
@@ -108,7 +114,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                 HistogramNote = result.Note;
                 var analysis = result.Analysis;
                 HistogramStatistics = $"평균 (Mean): {analysis.Mean:F2} · 표준편차 (std): {analysis.StandardDeviation:F2} · 중앙값 (Median): {analysis.Median:F2} · {analysis.PixelCount:N0} 픽셀";
-                HistogramLoaded?.Invoke(this, analysis.Bins);
+                HistogramLoaded?.Invoke(this, new HistogramPlotData(analysis.Bins, analysis.Mean, analysis.StandardDeviation));
                 StatusMessage = "히스토그램 생성 완료";
             }
             catch (Exception ex)
