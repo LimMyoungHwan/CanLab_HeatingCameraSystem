@@ -121,7 +121,10 @@ namespace HeatingCameraSystem.Tests
             await File.WriteAllTextAsync(path, previous);
             using var lockedFile = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-            await Assert.ThrowsAnyAsync<IOException>(() => sink.WriteAndVerifyBiasJsonAsync(Camera, cmd, ValidBiasJson));
+            Exception? error = await Record.ExceptionAsync(() => sink.WriteAndVerifyBiasJsonAsync(Camera, cmd, ValidBiasJson));
+            // Windows는 잠긴 파일의 교체를 접근 거부로도 보고한다. 저장 실패를 전파해야 한다.
+            Assert.True(error is IOException or UnauthorizedAccessException,
+                $"파일 잠금 오류가 필요합니다. 실제: {error?.GetType().Name ?? "예외 없음"}");
 
             Assert.Equal(previous, await File.ReadAllTextAsync(path));
             Assert.Equal(1, sink.PendingFiles);
