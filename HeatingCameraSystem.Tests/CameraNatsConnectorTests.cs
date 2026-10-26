@@ -252,11 +252,18 @@ namespace HeatingCameraSystem.Tests
                 var natsMock = new Mock<INatsCommunicationService>();
                 CaptureResultMessage? published = null;
                 bool? rawExistedWhenPublished = null;
+                byte[]? rawBytesWhenPublished = null;
+                string? biasJsonWhenPublished = null;
+                string biasPath = Path.Combine(storage, "S1_P1", "RPP40", "bias.json");
                 natsMock.Setup(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()))
                         .Callback<CaptureResultMessage>(m =>
                         {
                             published = m;
                             rawExistedWhenPublished = File.Exists(m.ProductionRawPath);
+                            if (rawExistedWhenPublished == true)
+                                rawBytesWhenPublished = File.ReadAllBytes(m.ProductionRawPath);
+                            if (File.Exists(biasPath))
+                                biasJsonWhenPublished = File.ReadAllText(biasPath);
                         })
                         .Returns(Task.CompletedTask);
 
@@ -297,14 +304,22 @@ namespace HeatingCameraSystem.Tests
                 Assert.NotNull(published);
                 Assert.True(published.IsSuccess);
                 Assert.Equal(raw, published.ProductionRawPath);
-                Assert.Equal(false, rawExistedWhenPublished);
+                // 생산 결과는 최종 폴더 동기화가 끝난 뒤 발행한다. 그 시점의 원본도 이미 읽을 수 있어야 한다.
+                Assert.Equal(true, rawExistedWhenPublished);
                 natsMock.Verify(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()), Times.Once);
                 Assert.Single(store.Query());
 
                 var expected = new byte[source.Pixels.Length * sizeof(ushort)];
                 Buffer.BlockCopy(source.Pixels, 0, expected, 0, expected.Length);
                 Assert.Equal(expected, File.ReadAllBytes(raw));
-                Assert.Equal(ValidBiasJson, File.ReadAllText(Path.Combine(storage, "S1_P1", "RPP40", "bias.json")));
+                Assert.NotNull(rawBytesWhenPublished);
+                Assert.Equal(expected, rawBytesWhenPublished);
+                string rawDirectory = Path.Combine(storage, "S1_P1", "RPP40", "cold");
+                Assert.Equal(3, Directory.GetFiles(rawDirectory, "*.raw").Length);
+                for (int shotNumber = 17; shotNumber <= 19; shotNumber++)
+                    Assert.Equal(expected, File.ReadAllBytes(Path.Combine(rawDirectory, $"BB20_{shotNumber:000}.raw")));
+                Assert.Equal(ValidBiasJson, biasJsonWhenPublished);
+                Assert.Equal(ValidBiasJson, File.ReadAllText(biasPath));
 
                 await manager.StopAllAsync();
             }
@@ -451,9 +466,9 @@ namespace HeatingCameraSystem.Tests
         [InlineData("{invalid", true)]
         [InlineData("null", true)]
         [InlineData("[]", true)]
-        public async Task HandleCapture_ColdWithoutValidBias_SkipsJsonWithWarningAndCaptureSucceeds(string? cachedBias, bool hasHistoricalJson)
+        public async Task HandleCapture_ColdWithoutValidBias_ReportsNgBeforeCaptureAndPreservesExistingFiles(string? cachedBias, bool hasHistoricalJson)
         {
-            string dir = Path.Combine(Path.GetTempPath(), "hcs_coldwarning_" + Guid.NewGuid().ToString("N"));
+            string dir = Path.Combine(Path.GetTempPath(), "hcs_coldng_" + Guid.NewGuid().ToString("N"));
             string buffer = Path.Combine(dir, "buffer");
             string storage = Path.Combine(dir, "storage");
             string bufferCondition = Path.Combine(buffer, "S1_P1", "RPP40");
@@ -467,17 +482,16 @@ namespace HeatingCameraSystem.Tests
             File.WriteAllBytes(bufferedRaw, new byte[] { 7, 0 });
             File.WriteAllBytes(historicRaw, new byte[] { 8, 0 });
             const string bufferedOldBias = "{\"GSK_LSB\":\"55\"}";
-            if (hasHistoricalJson)
-            {
-                File.WriteAllText(bufferedBias, bufferedOldBias);
-                File.WriteAllText(historicBias, ValidBiasJson);
-            }
             try
             {
                 var natsMock = new Mock<INatsCommunicationService>();
                 var results = new List<CaptureResultMessage>();
                 natsMock.Setup(n => n.PublishCaptureResultAsync(It.IsAny<CaptureResultMessage>()))
                         .Callback<CaptureResultMessage>(results.Add)
+                        .Returns(Task.CompletedTask);
+                CameraControlAckMessage? proofAck = null;
+                natsMock.Setup(n => n.PublishCameraControlAckAsync(It.IsAny<CameraControlAckMessage>()))
+                        .Callback<CameraControlAckMessage>(ack => proofAck = ack)
                         .Returns(Task.CompletedTask);
                 var runtime = new Mock<ICameraRuntime>();
                 runtime.Setup(r => r.StopAsync()).Returns(Task.CompletedTask);
@@ -490,44 +504,97 @@ namespace HeatingCameraSystem.Tests
                 using var store = new CaptureStore(dir, index);
                 var sink = new ProductionCaptureSink(buffer);
                 var warnings = new List<string>();
+                var diagnostics = new List<string>();
+                string? currentBias = ValidBiasJson;
+                int calibrationCalls = 0;
                 await using var connector = new CameraNatsConnector(
                     natsMock.Object, manager, store, new[] { descriptor },
-                    readBiasJson: _ => cachedBias,
+                    readBiasJson: _ => currentBias,
                     productionSink: sink,
                     reportCaptureWarning: (camera, warning) =>
                     {
                         Assert.Equal(descriptor.AgentId, camera.AgentId);
                         warnings.Add(warning);
-                    });
+                    },
+                    biasControlHandler: (_, _, _) => { calibrationCalls++; return Task.CompletedTask; },
+                    diagnosticLog: diagnostics.Add);
+
+                // 요청 식별자 누락만으로 실패시키지 않는다. 실제 성공 증빙을 만든 뒤 현재 결과를
+                // 무효화하여 같은 레시피 요청의 과거 파일도 재사용/전송하지 않는지 확인한다.
+                const string biasRequestId = "cold-bias-proof";
+                await connector.HandleCameraControlAsync(descriptor, new CameraControlMessage
+                {
+                    AgentId = descriptor.AgentId,
+                    Op = CameraControlOps.BiasLow,
+                    RequestId = biasRequestId,
+                    RequireBiasFile = true,
+                    BiasAttemptTimeoutSeconds = 10,
+                    BiasStorage = new CaptureCommandMessage
+                    {
+                        StorageRootUnc = storage,
+                        ProductNumber = "P1",
+                        ConditionFolder = "RPP40",
+                        BlackBodyFolder = "cold",
+                        FilePrefix = "BB20"
+                    }
+                });
+                CameraControlAckMessage proof = Assert.IsType<CameraControlAckMessage>(proofAck);
+                Assert.True(proof.IsSuccess);
+                Assert.True(proof.BiasFileSaved);
+                Assert.Equal(biasRequestId, proof.RequestId);
+                Assert.Equal(historicBias, proof.BiasFilePath);
+                Assert.Equal(ValidBiasJson, File.ReadAllText(historicBias));
+                if (hasHistoricalJson)
+                {
+                    File.WriteAllText(bufferedBias, bufferedOldBias);
+                }
+                else
+                {
+                    File.Delete(historicBias);
+                }
+                currentBias = cachedBias;
+                diagnostics.Clear();
 
                 await connector.HandleCaptureAsync(descriptor, new CaptureCommandMessage
                 {
                     TargetAgentId = "cam0",
                     RecipeStepId = "cold-step",
+                    Source = CaptureSource.Recipe,
                     StorageRootUnc = storage,
                     ProductNumber = "P1",
                     ConditionFolder = "RPP40",
                     BlackBodyFolder = "cold",
                     FilePrefix = "BB20",
                     ShotCount = 3,
-                    WriteBiasJson = true
+                    WriteBiasJson = true,
+                    RequiredBiasRequestId = biasRequestId
                 });
 
                 CaptureResultMessage result = Assert.Single(results);
-                Assert.True(result.IsSuccess);
+                Assert.False(result.IsSuccess);
                 Assert.Equal("cold-step", result.RecipeStepId);
-                Assert.False(string.IsNullOrWhiteSpace(result.ImagePath));
-                Assert.NotNull(result.ImageBytes);
-                Assert.Single(store.Query());
-                runtime.Verify(r => r.CaptureSnapshotAsync(It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
+                Assert.Equal(CaptureSource.Recipe, result.Source);
+                Assert.Equal(BiasExecutionPolicy.FileFailureCode, result.FailureCode);
+                Assert.Contains("NG", result.Message);
+                Assert.Empty(result.ImagePath);
+                Assert.Empty(result.ProductionRawPath);
+                Assert.Null(result.ImageBytes);
+                Assert.Empty(store.Query());
+                runtime.Verify(r => r.CaptureSnapshotAsync(It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()), Times.Never);
+                Assert.Equal(BiasExecutionPolicy.MaxAttempts,
+                    diagnostics.FindAll(message => message.StartsWith("[BIAS] START", StringComparison.Ordinal)).Count);
+                Assert.Equal(1, calibrationCalls); // 촬영 실패 처리 중 보정을 다시 실행하지 않는다.
                 string warning = Assert.Single(warnings);
-                Assert.Contains("bias.json 저장 건너뜀", warning);
-                Assert.Contains("촬영은 계속합니다", warning);
-                Assert.Equal(0, sink.PendingFiles);
-                Assert.False(File.Exists(bufferedRaw));
-                Assert.Equal(new byte[] { 7, 0 }, File.ReadAllBytes(Path.Combine(storageCondition, "cold", "BB20_099.raw")));
-                Assert.True(File.Exists(historicRaw));
-                Assert.True(File.Exists(Path.Combine(storageCondition, "cold", "BB20_002.raw")));
+                Assert.Contains("NG", warning);
+                Assert.Equal(result.Message, warning);
+                Assert.Equal(hasHistoricalJson ? 2 : 1, sink.PendingFiles);
+                Assert.Equal(new byte[] { 7, 0 }, File.ReadAllBytes(bufferedRaw));
+                Assert.Equal(new byte[] { 8, 0 }, File.ReadAllBytes(historicRaw));
+                Assert.Equal(new[] { bufferedRaw }, Directory.GetFiles(bufferCondition, "*.raw", SearchOption.AllDirectories));
+                Assert.Equal(new[] { historicRaw }, Directory.GetFiles(storageCondition, "*.raw", SearchOption.AllDirectories));
+                Assert.False(File.Exists(Path.Combine(storageCondition, "cold", "BB20_099.raw")));
+                Assert.False(File.Exists(Path.Combine(storageCondition, "cold", "BB20_002.raw")));
+                Assert.Empty(Directory.GetFiles(dir, "*.y16", SearchOption.AllDirectories));
                 if (hasHistoricalJson)
                 {
                     Assert.Equal(bufferedOldBias, File.ReadAllText(bufferedBias));

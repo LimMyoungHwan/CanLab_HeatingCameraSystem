@@ -785,15 +785,18 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 BiasSearchResult result = await FindBiasInRangeAsync(targetMin, targetMax,
                     value => MeasureBiasAsync(serial, value, ct), ct);
                 byte best = result.Value;
-                double bestError = result.Error;
-                if (!double.IsFinite(bestError) || bestError > 0)
-                    throw new InvalidOperationException($"BIAS 목표 범위 미달: 목표 {target:F0}±{BiasTargetTolerance:F0}, 최선 0x{best:X2}, 범위 밖 오차 {bestError:F0}");
 
-                // 탐색에서 본 값만 믿지 않고 최종 레지스터 적용 이후의 새 프레임으로 다시 확인한다.
+                // 미수렴해도 마지막 탐색값 대신 최선값을 재적용한다. 성공 여부는 이 적용 이후의
+                // 새 프레임으로 다시 검증하며, 범위 밖이면 적용 기록과 JSON을 만들지 않는다.
                 double finalLevel = await MeasureBiasAsync(serial, best, ct);
                 ct.ThrowIfCancellationRequested();
                 if (!double.IsFinite(finalLevel) || finalLevel < targetMin || finalLevel > targetMax)
+                {
+                    AgentUiLog.Logger.Warning("[{AgentId}] BIAS 최종 검증 실패: 모드={Mode}, 목표={Target}, GSK_LSB={Bias}, 탐색측정={SearchMeasured}, 탐색범위밖오차={SearchError}, 최종측정={Measured}, 최종범위밖오차={Error}",
+                        _agentId, mode, target, best, result.Level, result.Error, finalLevel,
+                        Math.Max(0, Math.Abs(finalLevel - target) - BiasTargetTolerance));
                     throw new InvalidOperationException($"BIAS 최종 검증 실패: 목표 {target:F0}±{BiasTargetTolerance:F0}, 측정 {finalLevel:F0}, GSK_LSB=0x{best:X2}");
+                }
 
                 SetAppliedBias(new AppliedBiasResult(Guid.NewGuid().ToString("N"), operation, best,
                     BuildBiasJson(cint, best), BiasApplicationSource.Automatic, DateTimeOffset.UtcNow));

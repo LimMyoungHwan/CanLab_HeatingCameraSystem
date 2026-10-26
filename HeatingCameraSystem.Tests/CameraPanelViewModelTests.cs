@@ -53,6 +53,7 @@ namespace HeatingCameraSystem.Tests
             {
                 byte written = 0;
                 int pendingOldFrames = 0, discarded = 0;
+                int zeroWrites = 0, freshFramesAfterWrite = 0;
                 bool reachable = true;
                 DateTimeOffset writtenAt = DateTimeOffset.MinValue;
                 var serial = new Mock<ICameraSerialClient>();
@@ -62,6 +63,8 @@ namespace HeatingCameraSystem.Tests
                         written = value;
                         writtenAt = DateTimeOffset.Now;
                         pendingOldFrames = 8;
+                        freshFramesAfterWrite = 0;
+                        if (value == 0) zeroWrites++;
                     })
                     .Returns(Task.CompletedTask);
                 var runtime = new Mock<ICameraRuntime>();
@@ -73,6 +76,7 @@ namespace HeatingCameraSystem.Tests
                         // Buffered frames keep their pre-write timestamp and incorrect old level.
                         bool old = pendingOldFrames-- > 0;
                         if (old) discarded++;
+                        else freshFramesAfterWrite++;
                         ushort level = old ? (ushort)16000
                             : reachable ? (ushort)(3000 + written * 20) : (ushort)7000;
                         ThermalFrame? frame = new ThermalFrame(new[] { level }, 1, 1,
@@ -87,18 +91,24 @@ namespace HeatingCameraSystem.Tests
                 await panel.RunBiasMidCommand.ExecuteAsync(null);
 
                 Assert.True(panel.LastBiasSucceeded);
+                Assert.NotNull(panel.LastAppliedBias);
                 Assert.NotNull(panel.LastBiasJson);
                 Assert.Contains("BIAS 완료:", panel.SerialStatus);
                 Assert.InRange(written, (byte)95, (byte)105);
                 Assert.True(discarded >= 8);
 
                 reachable = false;
+                zeroWrites = 0;
                 await panel.RunBiasMidCommand.ExecuteAsync(null);
 
                 Assert.False(panel.LastBiasSucceeded);
+                Assert.Null(panel.LastAppliedBias);
                 Assert.Null(panel.LastBiasJson);
-                Assert.Equal("BIAS 실패: 0x00 (측정 7000, 목표 5000±100)", panel.SerialStatus);
+                Assert.False(panel.IsBiasBusy);
+                Assert.Equal("BIAS NG: BIAS 최종 검증 실패: 목표 5000±100, 측정 7000, GSK_LSB=0x00", panel.SerialStatus);
                 Assert.Equal((byte)0, written); // Best applied, not the final probed LSB.
+                Assert.Equal(2, zeroWrites); // Initial probe and final reapplication of the best value.
+                Assert.Equal(5, freshFramesAfterWrite); // The reapplied best value was measured again.
             }
             finally
             {
@@ -128,9 +138,13 @@ namespace HeatingCameraSystem.Tests
                 await panel.RunBiasMidCommand.ExecuteAsync(null);
 
                 Assert.False(panel.LastBiasSucceeded);
+                Assert.Null(panel.LastAppliedBias);
                 Assert.Null(panel.LastBiasJson);
-                Assert.Contains("BIAS 실패:", panel.SerialStatus);
-                Assert.Contains("최신 프레임", panel.SerialStatus);
+                Assert.False(panel.IsBiasBusy);
+                Assert.StartsWith("BIAS NG:", panel.SerialStatus);
+                Assert.Contains("새 프레임 대기 실패", panel.SerialStatus);
+                Assert.Contains("GSK_LSB=0x00", panel.SerialStatus);
+                serial.Verify(s => s.SetBiasAsync((byte)0, It.IsAny<CancellationToken>()), Times.Once);
             }
             finally
             {

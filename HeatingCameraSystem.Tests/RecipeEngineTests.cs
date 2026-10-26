@@ -360,7 +360,12 @@ namespace HeatingCameraSystem.Tests
             {
                 const string rejection = "BIAS 실패: 0x71 (측정 8501, 목표 8200±100)";
                 var mockNats = new Mock<INatsCommunicationService>();
+                var mockPlc = new Mock<IPlcController>();
                 var ackCallbacks = new Dictionary<string, Action<CameraControlAckMessage>>();
+                var requests = new List<CameraControlMessage>();
+                int biasAttempts = 0;
+                mockPlc.Setup(p => p.ReadStatusAsync())
+                    .ReturnsAsync(new PlcStatusSnapshot { TargetTemperature = 25 });
                 mockNats.Setup(n => n.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>()))
                     .Returns(Task.CompletedTask);
                 mockNats.Setup(n => n.SubscribeCameraControlAckAsync(It.IsAny<string>(), It.IsAny<Action<CameraControlAckMessage>>()))
@@ -377,8 +382,15 @@ namespace HeatingCameraSystem.Tests
                 var camera = new CameraDescriptor("Agent_1", 1, "Camera 1");
                 await using var connector = new CameraNatsConnector(
                     mockNats.Object, manager, store, new[] { camera },
-                    cameraControlHandler: (_, _) => Task.FromResult((Success: false, Message: rejection)));
+                    productionSink: new ProductionCaptureSink(System.IO.Path.Combine(dir, "buffer")),
+                    biasControlHandler: (_, _, cancellationToken) =>
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        biasAttempts++;
+                        return Task.FromException(new InvalidOperationException(rejection));
+                    });
                 mockNats.Setup(n => n.PublishCameraControlAsync(It.IsAny<CameraControlMessage>()))
+                    .Callback<CameraControlMessage>(message => requests.Add(message))
                     .Returns<CameraControlMessage>(message => connector.HandleCameraControlAsync(camera, message));
 
                 var step = new RecipeStep
@@ -388,23 +400,56 @@ namespace HeatingCameraSystem.Tests
                     BiasTargetLevel = 8200,
                     CameraTargets = new List<RecipeCameraTarget>
                     {
-                        new() { AgentId = camera.AgentId, CameraIndex = camera.OpenCvIndex }
+                        new() { AgentId = camera.AgentId, CameraIndex = camera.OpenCvIndex,
+                            TargetChamber = ChamberRange.Mid, TargetBlackBody = BlackBodyRole.Cold }
                     }
                 };
-                var recipe = new Recipe { Steps = new List<RecipeStep> { step } };
+                var recipe = new Recipe
+                {
+                    SaveRootPath = System.IO.Path.Combine(dir, "production"),
+                    Steps = new List<RecipeStep>
+                    {
+                        step,
+                        new()
+                        {
+                            Kind = RecipeStepKind.CameraCommand,
+                            CameraOperation = CameraControlOps.Capture,
+                            ShotCount = 1,
+                            CameraTargets = new List<RecipeCameraTarget>
+                            {
+                                new() { AgentId = camera.AgentId, CameraIndex = camera.OpenCvIndex,
+                                    TargetChamber = ChamberRange.Mid, TargetBlackBody = BlackBodyRole.Cold }
+                            }
+                        },
+                        new() { Kind = RecipeStepKind.MotorMove, MotorMoveType = MotorMoveType.Manual,
+                            PositionX = 10, PositionY = 20 }
+                    }
+                };
                 var engine = new RecipeEngine(
-                    new Mock<IPlcController>().Object, mockNats.Object, new Mock<ICaptureHistoryRepository>().Object);
+                    mockPlc.Object, mockNats.Object, new Mock<ICaptureHistoryRepository>().Object);
                 var receipts = new List<RecipeStepExecution>();
                 engine.StepExecutionChanged += (_, receipt) => receipts.Add(receipt);
 
                 AlarmSink.Entries.Clear();
-                await engine.ExecuteRecipeAsync(recipe, CancellationToken.None);
+                RecipeNgException error = await Assert.ThrowsAsync<RecipeNgException>(() =>
+                    engine.ExecuteRecipeAsync(recipe, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)));
 
+                Assert.Equal(AlarmCodes.BiasFailed, error.AlarmCode);
+                Assert.Contains(rejection, error.Message);
+                Assert.Equal(BiasExecutionPolicy.MaxAttempts, biasAttempts);
+                CameraControlMessage request = Assert.Single(requests);
+                Assert.Equal(CameraControlOps.BiasMid, request.Op);
+                Assert.True(request.RequireBiasFile);
                 mockNats.Verify(n => n.PublishCameraControlAckAsync(It.Is<CameraControlAckMessage>(ack =>
                     !ack.IsSuccess &&
-                    ack.RequestId == step.StepId + ":" + camera.AgentId + ":" + camera.OpenCvIndex &&
+                    !ack.BiasFileSaved &&
+                    ack.RequestId == request.RequestId &&
                     ack.Op == CameraControlOps.BiasMid &&
-                    ack.Message == rejection)), Times.Once);
+                    ack.Attempts == BiasExecutionPolicy.MaxAttempts &&
+                    ack.Message.Contains(rejection))), Times.Once);
+                mockNats.Verify(n => n.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Never);
+                mockPlc.Verify(p => p.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>()), Times.Never);
+                mockPlc.Verify(p => p.MoveServoToPositionAsync(It.IsAny<int>()), Times.Never);
                 Assert.Collection(receipts,
                     started => Assert.Equal(RecipeStepOutcome.Started, started.Outcome),
                     failed =>
@@ -416,9 +461,11 @@ namespace HeatingCameraSystem.Tests
                     });
                 Assert.DoesNotContain(receipts, receipt => receipt.Outcome == RecipeStepOutcome.Succeeded);
                 Assert.Contains(AlarmSink.Entries, alarm =>
-                    alarm.Code == AlarmCodes.AgentTimeout &&
-                    alarm.Severity == AlarmSeverity.Warning &&
+                    alarm.Code == AlarmCodes.BiasFailed &&
+                    alarm.Severity == AlarmSeverity.Error &&
+                    alarm.Message.Contains("NG") &&
                     alarm.Message.Contains(rejection));
+                Assert.DoesNotContain(AlarmSink.Entries, alarm => alarm.Code == AlarmCodes.PlcCommFailed);
             }
             finally
             {
@@ -1699,8 +1746,18 @@ namespace HeatingCameraSystem.Tests
             var nats = new Mock<INatsCommunicationService>();
             var history = new Mock<ICaptureHistoryRepository>();
             var controls = new List<CameraControlMessage>();
-            plc.Setup(service => service.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { TargetTemperature = -30 });
-            plc.Setup(service => service.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>())).Returns(Task.CompletedTask);
+            float currentX = 0;
+            float currentY = 0;
+            plc.Setup(service => service.ReadStatusAsync()).ReturnsAsync(() => new PlcStatusSnapshot
+            {
+                TargetTemperature = -30,
+                ServoXPosition = currentX,
+                ServoYPosition = currentY
+            });
+            // 완료된 이동은 실제 상태 조회에도 반영한다. idle만으로 도착으로 간주하지 않는다.
+            plc.Setup(service => service.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>()))
+                .Callback<float, float>((x, y) => { currentX = x; currentY = y; })
+                .Returns(Task.CompletedTask);
             history.Setup(service => service.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
             nats.Setup(service => service.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
             WireBiasAcknowledgements(nats, controls, changeAck, respond, onBias);

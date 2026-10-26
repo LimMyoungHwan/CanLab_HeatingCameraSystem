@@ -53,8 +53,12 @@ namespace HeatingCameraSystem.Tests
             var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 fixture.Panel.RunBiasOperationAsync(CameraControlOps.BiasLow, 8500, CancellationToken.None));
 
-            Assert.Contains("목표 범위 미달", error.Message);
+            Assert.Contains("최종 검증 실패", error.Message);
+            Assert.Contains("목표 8500±100", error.Message);
+            Assert.Contains("측정 1000", error.Message);
             Assert.Contains("NG", fixture.Panel.SerialStatus);
+            Assert.Null(fixture.Panel.LastAppliedBias);
+            Assert.False(fixture.Panel.LastBiasSucceeded);
             Assert.Null(fixture.Panel.LastBiasJson);
         }
 
