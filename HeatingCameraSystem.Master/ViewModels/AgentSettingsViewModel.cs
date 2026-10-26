@@ -6,6 +6,8 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HeatingCameraSystem.Core.Models;
+using HeatingCameraSystem.Core.Interfaces;
+using System.Threading;
 using HeatingCameraSystem.Master.Localization;
 using HeatingCameraSystem.Master.Services;
 
@@ -46,14 +48,25 @@ namespace HeatingCameraSystem.Master.ViewModels
     /// (agent.json 내용)을 NATS로 조회·수정·적용한다. NATS 콜백은 백그라운드 스레드로 오므로
     /// UI 상태 갱신은 항상 Dispatcher.Invoke로 마샬링한다.
     /// </summary>
-    public partial class AgentSettingsViewModel : ObservableObject
+    public partial class AgentSettingsViewModel : ObservableObject, IDisposable, IAsyncDisposable
     {
-        private readonly HashSet<string> _subscribedAgents = new();
+        private readonly HeatingCameraSystem.Core.Interfaces.INatsCommunicationService? _nats;
+        private readonly NatsSubscriptionLifetime _subscriptions = new();
+        private readonly Dictionary<string, Task> _subscriptionTasks = new(StringComparer.Ordinal);
+        private readonly TimeSpan _responseTimeout;
+        private string? _loadedAgentId;
+        private string? _loadRequestId;
+        private string? _applyRequestId;
+        private TaskCompletionSource<AgentConfigSnapshotMessage>? _loadResponse;
+        private TaskCompletionSource<AgentConfigAckMessage>? _applyResponse;
+        private CancellationTokenSource? _operationCancellation;
+        private bool _disposed;
 
         public ObservableCollection<string> OnlineAgents { get; } = new();
 
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(LoadCommand))]
+        [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
         private string? _selectedAgent;
 
         [ObservableProperty] private bool _simulationMode;
@@ -62,9 +75,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private int _heartbeatSeconds = 5;
         [ObservableProperty] private CaptureImageFormat _captureImageFormat;
         [ObservableProperty] private int _captureBurstCount = 1;
-
         public CaptureImageFormat[] ImageFormats { get; } = Enum.GetValues<CaptureImageFormat>();
-
         public ObservableCollection<AgentCameraRow> Cameras { get; } = new();
 
         [ObservableProperty]
@@ -73,127 +84,176 @@ namespace HeatingCameraSystem.Master.ViewModels
         [NotifyCanExecuteChangedFor(nameof(RemoveCameraCommand))]
         private bool _isLoaded;
 
+        [ObservableProperty]
+        [NotifyCanExecuteChangedFor(nameof(LoadCommand))]
+        [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
+        private bool _isBusy;
         [ObservableProperty] private string _statusMessage = LocalizationManager.Instance["Agent_SelectAndLoad"];
 
-        public AgentSettingsViewModel()
+        public AgentSettingsViewModel() : this(AppServices.NatsService) { }
+
+        public AgentSettingsViewModel(HeatingCameraSystem.Core.Interfaces.INatsCommunicationService? nats,
+            TimeSpan? responseTimeout = null)
         {
-            SubscribeStatus();
+            _nats = nats;
+            _responseTimeout = responseTimeout ?? TimeSpan.FromSeconds(20);
+            _ = SubscribeStatusAsync();
         }
 
-        /// <summary>
-        /// 하트비트(<c>agent.status.{AgentId}</c>)를 구독해 온라인 Agent 목록을 채운다.
-        /// 첫 Agent는 자동 선택하고, 설정 스냅샷/ACK 구독도 미리 걸어 둔다.
-        /// </summary>
-        private void SubscribeStatus()
+        partial void OnSelectedAgentChanged(string? value)
         {
-            if (AppServices.NatsService == null) return;
+            _operationCancellation?.Cancel();
+            _loadedAgentId = null;
+            IsLoaded = false;
+            Cameras.Clear();
+            StatusMessage = LocalizationManager.Instance["Agent_SelectAndLoad"];
+        }
 
-            AppServices.NatsService.SubscribeAgentStatusAsync(msg =>
+        private async Task SubscribeStatusAsync()
+        {
+            if (_nats is null) return;
+            try
             {
-                Application.Current?.Dispatcher.Invoke(() =>
+                await _subscriptions.AddAsync(ct => _nats.SubscribeAgentStatusScopedAsync(msg => RunOnUi(() =>
                 {
-                    if (!string.IsNullOrEmpty(msg.AgentId) && !OnlineAgents.Contains(msg.AgentId))
-                    {
-                        OnlineAgents.Add(msg.AgentId);
-                        SelectedAgent ??= msg.AgentId;
-                        EnsureConfigSubscriptions(msg.AgentId);
-                    }
-                });
-            });
+                    if (_disposed || string.IsNullOrWhiteSpace(msg.AgentId)) return;
+                    if (msg.HostAgentIds is { } ids && !ids.Contains(msg.AgentId)) return;
+                    if (msg.CameraStatus == CameraStatus.Offline) return;
+                    if (!OnlineAgents.Contains(msg.AgentId)) OnlineAgents.Add(msg.AgentId);
+                    SelectedAgent ??= msg.AgentId;
+                }), ct));
+            }
+            catch (Exception ex) { if (!_disposed) StatusMessage = ex.Message; }
         }
 
-        /// <summary>선택한 Agent에 설정 스냅샷 전송을 요청한다. 응답은 스냅샷 구독 콜백으로 돌아온다.</summary>
+        private Task EnsureConfigSubscriptionsAsync(string agentId)
+        {
+            if (_nats is null) return Task.CompletedTask;
+            if (_subscriptionTasks.TryGetValue(agentId, out Task? pending)) return pending;
+            Task task = SubscribeConfigAsync(agentId);
+            _subscriptionTasks.Add(agentId, task);
+            return task;
+        }
+
+        private async Task SubscribeConfigAsync(string agentId)
+        {
+            if (_nats is null) return;
+            await _subscriptions.AddAsync(ct => _nats.SubscribeAgentConfigSnapshotScopedAsync(agentId, msg =>
+            {
+                if (!_disposed && msg.AgentId == SelectedAgent && msg.AgentId == agentId
+                    && !string.IsNullOrEmpty(_loadRequestId) && msg.RequestId == _loadRequestId)
+                    _loadResponse?.TrySetResult(msg);
+            }, ct));
+            await _subscriptions.AddAsync(ct => _nats.SubscribeAgentConfigAckScopedAsync(agentId, ack =>
+            {
+                if (!_disposed && ack.AgentId == SelectedAgent && ack.AgentId == agentId
+                    && !string.IsNullOrEmpty(_applyRequestId) && ack.RequestId == _applyRequestId)
+                    _applyResponse?.TrySetResult(ack);
+            }, ct));
+        }
+
         [RelayCommand(CanExecute = nameof(HasSelection))]
         private async Task LoadAsync()
         {
-            if (SelectedAgent == null || AppServices.NatsService == null) return;
-
-            string agentId = SelectedAgent;
-            EnsureConfigSubscriptions(agentId);
-            StatusMessage = string.Format(LocalizationManager.Instance["Agent_Loading"], agentId);
-
-            await AppServices.NatsService.PublishAgentConfigRequestAsync(new AgentConfigRequestMessage
+            if (_disposed || _nats is null || SelectedAgent is not { } agentId || IsBusy) return;
+            IsBusy = true;
+            IsLoaded = false;
+            _loadedAgentId = null;
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_subscriptions.Token);
+            _operationCancellation = cancellation;
+            cancellation.CancelAfter(_responseTimeout);
+            _loadRequestId = Guid.NewGuid().ToString("N");
+            _loadResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            try
             {
-                AgentId = agentId,
-                Timestamp = DateTime.UtcNow
-            });
+                await EnsureConfigSubscriptionsAsync(agentId).WaitAsync(cancellation.Token);
+                StatusMessage = string.Format(LocalizationManager.Instance["Agent_Loading"], agentId);
+                await _nats.PublishAgentConfigRequestAsync(new AgentConfigRequestMessage
+                {
+                    AgentId = agentId, RequestId = _loadRequestId, Timestamp = DateTime.UtcNow
+                }).WaitAsync(cancellation.Token);
+                AgentConfigSnapshotMessage msg = await _loadResponse.Task.WaitAsync(cancellation.Token);
+                cancellation.Token.ThrowIfCancellationRequested();
+                if (_disposed || SelectedAgent != agentId) return;
+                ApplySnapshotToUi(msg);
+            }
+            catch (OperationCanceledException)
+            {
+                if (!_disposed && SelectedAgent == agentId)
+                    StatusMessage = "설정 조회가 취소되었거나 응답 시간이 초과되었습니다. Agent를 업데이트하고 다시 조회하세요.";
+            }
+            catch (Exception ex) { if (!_disposed && SelectedAgent == agentId) StatusMessage = $"설정 조회 실패: {ex.Message}"; }
+            finally
+            {
+                _loadRequestId = null; _loadResponse = null; _operationCancellation = null;
+                IsBusy = false;
+            }
         }
 
-        /// <summary>
-        /// Agent별 설정 스냅샷·적용 ACK 구독을 최초 한 번만 등록한다
-        /// (NATS 서비스에 해제 API가 없으므로 중복 구독을 막는 것이 중요하다).
-        /// </summary>
-        private void EnsureConfigSubscriptions(string agentId)
-        {
-            if (!_subscribedAgents.Add(agentId) || AppServices.NatsService == null) return;
-
-            AppServices.NatsService.SubscribeAgentConfigSnapshotAsync(agentId, msg =>
-                Application.Current?.Dispatcher.Invoke(() => ApplySnapshotToUi(msg)));
-
-            AppServices.NatsService.SubscribeAgentConfigAckAsync(agentId, ack =>
-                Application.Current?.Dispatcher.Invoke(() =>
-                    StatusMessage = ack.IsSuccess ? $"✔ {ack.Message}" : $"✘ {ack.Message}"));
-        }
-
-        /// <summary>수신한 설정 스냅샷을 화면에 반영하고 편집 가능 상태(<see cref="IsLoaded"/>)로 전환한다.</summary>
         private void ApplySnapshotToUi(AgentConfigSnapshotMessage msg)
         {
+            if (_disposed || msg.AgentId != SelectedAgent || msg.RequestId != _loadRequestId) return;
             AgentConfigSnapshot c = msg.Config;
-            SimulationMode = c.SimulationMode;
-            NatsUrl = c.NatsUrl;
-            StoragePath = c.StoragePath;
-            HeartbeatSeconds = c.HeartbeatSeconds;
-            CaptureImageFormat = c.CaptureImageFormat;
+            SimulationMode = c.SimulationMode; NatsUrl = c.NatsUrl; StoragePath = c.StoragePath;
+            HeartbeatSeconds = c.HeartbeatSeconds; CaptureImageFormat = c.CaptureImageFormat;
             CaptureBurstCount = c.CaptureBurstCount;
-
             Cameras.Clear();
-            foreach (CameraDescriptor cam in c.Cameras)
-                Cameras.Add(new AgentCameraRow(cam));
-
+            foreach (CameraDescriptor cam in c.Cameras) Cameras.Add(new AgentCameraRow(cam));
+            _loadedAgentId = msg.AgentId;
             IsLoaded = true;
-            StatusMessage = string.Format(LocalizationManager.Instance["Agent_Loaded"], msg.AgentId, Cameras.Count);
+            StatusMessage = string.Format(LocalizationManager.Instance["Agent_Loaded"], msg.AgentId, Cameras.Count)
+                + (c.RestartRequired ? " · 저장된 변경은 Agent 재시작 후 적용됩니다." : string.Empty);
         }
 
         [RelayCommand(CanExecute = nameof(IsLoaded))]
         private void AddCamera() => Cameras.Add(new AgentCameraRow { AgentId = SelectedAgent ?? "Agent" });
-
         [RelayCommand(CanExecute = nameof(IsLoaded))]
-        private void RemoveCamera(AgentCameraRow? row)
-        {
-            if (row != null) Cameras.Remove(row);
-        }
+        private void RemoveCamera(AgentCameraRow? row) { if (row is not null) Cameras.Remove(row); }
 
-        /// <summary>
-        /// 편집한 설정 전체를 스냅샷으로 묶어 Agent에 적용 요청한다.
-        /// 성공/실패는 ACK 구독 콜백이 <see cref="StatusMessage"/>로 보고한다.
-        /// </summary>
         [RelayCommand(CanExecute = nameof(CanApply))]
         private async Task ApplyAsync()
         {
-            if (SelectedAgent == null || AppServices.NatsService == null) return;
-
-            string agentId = SelectedAgent;
-            var snapshot = new AgentConfigSnapshot
+            if (!CanApply() || _nats is null || SelectedAgent is not { } agentId) return;
+            IsBusy = true;
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_subscriptions.Token);
+            _operationCancellation = cancellation;
+            cancellation.CancelAfter(_responseTimeout);
+            _applyRequestId = Guid.NewGuid().ToString("N");
+            _applyResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            try
             {
-                SimulationMode = SimulationMode,
-                NatsUrl = NatsUrl,
-                StoragePath = StoragePath,
-                HeartbeatSeconds = HeartbeatSeconds,
-                CaptureImageFormat = CaptureImageFormat,
-                CaptureBurstCount = CaptureBurstCount,
-                Cameras = Cameras.Select(r => r.ToDescriptor()).ToList()
-            };
-
-            StatusMessage = string.Format(LocalizationManager.Instance["Agent_Sending"], agentId);
-            await AppServices.NatsService.PublishAgentConfigApplyAsync(new AgentConfigApplyMessage
+                var snapshot = new AgentConfigSnapshot
+                {
+                    SimulationMode = SimulationMode, NatsUrl = NatsUrl, StoragePath = StoragePath,
+                    HeartbeatSeconds = HeartbeatSeconds, CaptureImageFormat = CaptureImageFormat,
+                    CaptureBurstCount = CaptureBurstCount, Cameras = Cameras.Select(row => row.ToDescriptor()).ToList()
+                };
+                StatusMessage = string.Format(LocalizationManager.Instance["Agent_Sending"], agentId);
+                await _nats.PublishAgentConfigApplyAsync(new AgentConfigApplyMessage
+                {
+                    AgentId = agentId, RequestId = _applyRequestId, Config = snapshot, Timestamp = DateTime.UtcNow
+                }).WaitAsync(cancellation.Token);
+                AgentConfigAckMessage ack = await _applyResponse.Task.WaitAsync(cancellation.Token);
+                cancellation.Token.ThrowIfCancellationRequested();
+                if (!_disposed && SelectedAgent == agentId)
+                    StatusMessage = ack.IsSuccess ? $"✔ {ack.Message}" : $"✘ {ack.Message}";
+            }
+            catch (OperationCanceledException)
             {
-                AgentId = agentId,
-                Config = snapshot,
-                Timestamp = DateTime.UtcNow
-            });
+                if (!_disposed && SelectedAgent == agentId) StatusMessage = "설정 적용 응답을 확인하지 못했습니다. 다시 조회해 적용 상태를 확인하세요.";
+            }
+            catch (Exception ex) { if (!_disposed && SelectedAgent == agentId) StatusMessage = $"설정 적용 실패: {ex.Message}"; }
+            finally { _applyRequestId = null; _applyResponse = null; _operationCancellation = null; IsBusy = false; }
         }
 
-        private bool HasSelection() => !string.IsNullOrEmpty(SelectedAgent);
-        private bool CanApply() => IsLoaded && !string.IsNullOrEmpty(SelectedAgent);
+        private bool HasSelection() => !_disposed && !IsBusy && !string.IsNullOrEmpty(SelectedAgent);
+        private bool CanApply() => !_disposed && !IsBusy && IsLoaded && SelectedAgent is not null && SelectedAgent == _loadedAgentId;
+        private static void RunOnUi(Action action)
+        {
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher is null || dispatcher.CheckAccess()) action(); else dispatcher.Invoke(action);
+        }
+        public void Dispose() { if (_disposed) return; _disposed = true; _operationCancellation?.Cancel(); _subscriptions.Dispose(); }
+        public async ValueTask DisposeAsync() { Dispose(); await _subscriptions.DisposeAsync(); }
     }
 }

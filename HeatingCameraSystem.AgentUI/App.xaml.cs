@@ -9,7 +9,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
-using CommunityToolkit.Mvvm.Input;
 using HeatingCameraSystem.AgentUI.Services;
 using HeatingCameraSystem.AgentUI.ViewModels;
 using HeatingCameraSystem.Core.Config;
@@ -48,6 +47,9 @@ namespace HeatingCameraSystem.AgentUI
         private IVideoDeviceEnumerator? _videoEnumerator;
         private int _rebuildInFlight;
         private int _rebuildDirty;
+        private readonly Dictionary<string, CameraDescriptor> _panelBindings = new(StringComparer.Ordinal);
+        private readonly CancellationTokenSource _appLifetime = new();
+        private IReadOnlyList<CameraComPair> _lastPairs = Array.Empty<CameraComPair>();
 
         /// <summary>온도 조회에서 패널을 못 찾은 AgentId. 하트비트마다 같은 경고를 반복하지 않으려고 기억한다.</summary>
         private readonly ConcurrentDictionary<string, byte> _temperaturePanelMisses = new(StringComparer.OrdinalIgnoreCase);
@@ -135,8 +137,8 @@ namespace HeatingCameraSystem.AgentUI
             if (!config.SimulationMode)
             {
                 IReadOnlyList<CameraComPair> pairs = GetPairsOrEmpty(pairing);
+                _lastPairs = pairs;
                 int deduped = CameraAutoRegistrar.DedupeByAgentId(config.Cameras);
-                PruneDisconnectedCameras(config, pairs);
                 AutoRegisterDetectedCameras(config, pairs);
                 AutoRegisterVideoOnlyCameras(config);
                 int serialChanged = ReconcileSerialPortsFromPairing(config, pairs);
@@ -154,86 +156,55 @@ namespace HeatingCameraSystem.AgentUI
 
             _nats = new NatsCommunicationService();
             _natsConnector = new CameraNatsConnector(_nats, _manager, _store, config.Cameras, config.HeartbeatSeconds, nucs, config.CaptureBurstCount,
-                getConfigSnapshot: () => new AgentConfigSnapshot
+                getConfigSnapshot: () => dispatcher.Invoke(() => CreateConfigSnapshot(config)),
+                applyConfigSnapshot: snap => dispatcher.Invoke(() =>
                 {
-                    SimulationMode = config.SimulationMode,
-                    NatsUrl = config.NatsUrl,
-                    StoragePath = config.StoragePath,
-                    HeartbeatSeconds = config.HeartbeatSeconds,
-                    CaptureImageFormat = config.CaptureImageFormat,
-                    CaptureBurstCount = config.CaptureBurstCount,
-                    Cameras = config.Cameras
-                },
-                applyConfigSnapshot: snap =>
-                {
-                    config.SimulationMode = snap.SimulationMode;
-                    config.NatsUrl = snap.NatsUrl;
-                    config.StoragePath = snap.StoragePath;
-                    config.HeartbeatSeconds = snap.HeartbeatSeconds;
-                    config.CaptureImageFormat = snap.CaptureImageFormat;
-                    config.CaptureBurstCount = snap.CaptureBurstCount;
-                    config.Cameras = snap.Cameras ?? new List<CameraDescriptor>();
-                    config.Save();
-                },
+                    config.SaveDraft(new AgentUiConfig
+                    {
+                        SimulationMode = snap.SimulationMode,
+                        NatsUrl = snap.NatsUrl,
+                        StoragePath = snap.StoragePath,
+                        HeartbeatSeconds = snap.HeartbeatSeconds,
+                        CaptureImageFormat = snap.CaptureImageFormat,
+                        CaptureBurstCount = snap.CaptureBurstCount,
+                        Cameras = snap.Cameras?.ToList() ?? new List<CameraDescriptor>()
+                    }, requireRestart: true);
+                    if (_mainViewModel?.Settings is { } settings)
+                        settings.StatusText = "원격 설정 저장됨. AgentUI 재시작 후 적용됩니다. 현재 실행 설정은 유지됩니다.";
+                }),
                 cameraControlHandler: async (descriptor, controlMessage) =>
                 {
                     string op = controlMessage.Op;
                     try
                     {
-                        // [S7] Manager발 카메라별 런타임 load/unload: 다른 카메라나 프로세스는
-                        // 건드리지 않고 카메라 한 대의 UVC 핸들만 해제/재획득한다.
-                        // runtimeLoad는 멱등 재적재다(낡은 것 제거, 재등록, 시작).
-                        if (op == CameraControlOps.RuntimeUnload)
+                        return await dispatcher.InvokeAsync(async () =>
                         {
-                            _manager!.Remove(descriptor.AgentId);
-                            RebindPanelRuntime(descriptor.AgentId, null);
-                            return (true, "runtime unloaded");
-                        }
-                        if (op == CameraControlOps.RuntimeLoad)
-                        {
-                            _manager!.Remove(descriptor.AgentId);
-                            ICameraRuntime runtime = _manager.Add(descriptor);
-                            await runtime.StartAsync();
-                            RebindPanelRuntime(descriptor.AgentId, runtime);
-                            return (true, "runtime loaded");
-                        }
-
-                        CameraPanelViewModel? panel = _mainViewModel?.Cameras
-                            .FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId);
-                        if (panel is null)
-                        {
-                            return (false, $"camera panel not found: {descriptor.AgentId}");
-                        }
-
-                        IAsyncRelayCommand? command = op switch
-                        {
-                            CameraControlOps.Run => panel.RunCameraCommand,
-                            CameraControlOps.Stop => panel.StopCameraCommand,
-                            CameraControlOps.ShutterOpen => panel.OpenShutterCommand,
-                            CameraControlOps.ShutterClose => panel.CloseShutterCommand,
-                            CameraControlOps.Capture => panel.CaptureSaveCommand,
-                            CameraControlOps.Nuc => panel.RunNucCommand,
-                            CameraControlOps.BiasLow => panel.RunBiasLowCommand,
-                            CameraControlOps.BiasMid => panel.RunBiasMidCommand,
-                            CameraControlOps.BiasHigh => panel.RunBiasHighCommand,
-                            CameraControlOps.SaveConfig => panel.SaveConfigCommand,
-                            CameraControlOps.RefreshInfo => panel.RefreshInfoCommand,
-                            _ => null
-                        };
-                        if (command is null)
-                        {
-                            return (false, $"unknown camera control op: {op}");
-                        }
-
-                        // BIAS 명령만 목표 레벨을 인수로 받는다. 0이면 패널의 모드별 기본 목표를 쓴다.
-                        object? parameter = controlMessage.BiasTargetLevel > 0
-                            ? controlMessage.BiasTargetLevel
-                            : null;
-
-                        await dispatcher.InvokeAsync(() => command.ExecuteAsync(parameter)).Task.Unwrap();
-                        if (op is CameraControlOps.BiasLow or CameraControlOps.BiasMid or CameraControlOps.BiasHigh)
-                            return (panel.LastBiasSucceeded, panel.SerialStatus);
-                        return (true, "ok");
+                            CameraDescriptor? current = config.Cameras.FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId);
+                            CameraPanelViewModel? panel = _mainViewModel?.Cameras.FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId);
+                            if (current is null || panel is null) return (false, $"camera panel not found: {descriptor.AgentId}");
+                            if (op is CameraControlOps.RuntimeUnload or CameraControlOps.RuntimeLoad)
+                            {
+                                if (op == CameraControlOps.RuntimeLoad && (current.OpenCvIndex < 0
+                                    || !_panelBindings.TryGetValue(current.AgentId, out CameraDescriptor? binding)
+                                    || !CameraBindingPolicy.SameBinding(binding, current)))
+                                    return (false, "camera physical identity/index is not resolved");
+                                await panel.ChangeRuntimeAsync(async () =>
+                                {
+                                    CameraRuntimeManager manager = _manager ?? throw new InvalidOperationException("Camera manager unavailable");
+                                    manager.Remove(current.AgentId);
+                                    if (op == CameraControlOps.RuntimeUnload) return null;
+                                    ICameraRuntime runtime = manager.Add(current);
+                                    await runtime.StartAsync(_appLifetime.Token);
+                                    return runtime;
+                                }, _appLifetime.Token);
+                                return (true, op == CameraControlOps.RuntimeLoad ? "runtime loaded" : "runtime unloaded");
+                            }
+                            if (BiasExecutionPolicy.IsBiasOperation(op))
+                                await panel.RunBiasOperationAsync(op, controlMessage.BiasTargetLevel > 0 ? controlMessage.BiasTargetLevel : null, _appLifetime.Token);
+                            else
+                                await panel.RunCameraControlAsync(op, _appLifetime.Token);
+                            return (true, "ok");
+                        }).Task.Unwrap();
                     }
                     catch (Exception ex)
                     {
@@ -242,8 +213,8 @@ namespace HeatingCameraSystem.AgentUI
                 },
                 // 패널이 핫플러그마다 재생성되므로 스냅샷이 아니라 매번 조회한다. 패널이 아직 없으면
                 // 시리얼 제어가 없다는 뜻이므로 false — 영상 전용 구성은 지원 대상이 아니다.
-                serialHealth: descriptor => _mainViewModel?.Cameras
-                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.HasSerialControl ?? false,
+                serialHealth: descriptor => dispatcher.Invoke(() => _mainViewModel?.Cameras
+                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.HasSerialControl ?? false),
                 readCameraTemperature: ReadCameraTemperatureForAsync,
                 readFpaRaw: ReadFpaRawForAsync,
                 readBiasJson: descriptor => dispatcher.Invoke(() => _mainViewModel?.Cameras
@@ -268,17 +239,17 @@ namespace HeatingCameraSystem.AgentUI
                         await panel.RunBiasOperationAsync(controlMessage.Op, target, cancellationToken);
                     }).Task.Unwrap();
                 },
-                diagnosticLog: message =>
-                {
-                    if (message.StartsWith("[BIAS] NG", StringComparison.Ordinal))
-                        AgentUiLog.Logger.Error("{BiasDiagnostic}", message);
-                    else if (message.StartsWith("[BIAS] FAIL", StringComparison.Ordinal))
-                        AgentUiLog.Logger.Warning("{BiasDiagnostic}", message);
-                    else
-                        AgentUiLog.Logger.Information("{BiasDiagnostic}", message);
-                },
+                diagnosticLog: AgentUiLog.WriteBiasDiagnostic,
                 readAppliedBias: descriptor => dispatcher.Invoke(() => _mainViewModel?.Cameras
                     .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.LastAppliedBias),
+                readLogDirectory: () => AgentUiLog.LogDir,
+                serialConfigHandler: ApplySerialConfigForAsync,
+                acquireCaptureLease: async (descriptor, cancellationToken) => await dispatcher.InvokeAsync(() =>
+                {
+                    CameraPanelViewModel panel = _mainViewModel?.Cameras.FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId)
+                        ?? throw new InvalidOperationException($"카메라 패널이 없습니다: {descriptor.AgentId}");
+                    return panel.AcquireCaptureLeaseAsync(cancellationToken);
+                }).Task.Unwrap(),
                 reportCaptureWarning: (descriptor, warning) =>
                 {
                     AgentUiLog.Logger.Warning("[{AgentId}] {CaptureWarning}", descriptor.AgentId, warning);
@@ -327,16 +298,16 @@ namespace HeatingCameraSystem.AgentUI
         /// </summary>
         private Task<short?> ReadFpaRawForAsync(CameraDescriptor descriptor)
         {
-            CameraPanelViewModel? panel = _mainViewModel?.Cameras
-                .FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId);
+            CameraPanelViewModel? panel = Dispatcher.Invoke(() => _mainViewModel?.Cameras
+                .FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId));
 
             return panel is null ? Task.FromResult<short?>(null) : panel.ReadFpaTemperatureRawAsync();
         }
 
         private Task<double?> ReadCameraTemperatureForAsync(CameraDescriptor descriptor)
         {
-            CameraPanelViewModel? panel = _mainViewModel?.Cameras
-                .FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId);
+            CameraPanelViewModel? panel = Dispatcher.Invoke(() => _mainViewModel?.Cameras
+                .FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId));
 
             if (panel is not null)
             {
@@ -377,8 +348,9 @@ namespace HeatingCameraSystem.AgentUI
                 return;
             }
 
+            CameraDescriptor[] before = config.Cameras.ToArray();
             int added = CameraAutoRegistrar.Register(config.Cameras, pairs, Environment.MachineName);
-            if (added > 0)
+            if (added > 0 || !before.SequenceEqual(config.Cameras))
             {
                 config.Save();
                 AgentUiLog.Logger.Information("Auto-registered {Count} new camera(s)", added);
@@ -489,30 +461,30 @@ namespace HeatingCameraSystem.AgentUI
         }
 
         private int ReconcileVideoIndicesFromEnumeration(AgentUiConfig config)
+            => _videoEnumerator is null ? 0 : ReconcileVideoIndicesFromEnumeration(config, _videoEnumerator);
+
+        internal static int ReconcileVideoIndicesFromEnumeration(AgentUiConfig config, IVideoDeviceEnumerator enumerator)
         {
-            if (_videoEnumerator is null)
+            lock (config.Cameras)
             {
-                return 0;
-            }
+                IReadOnlyList<VideoDevice> devices;
+                try
+                {
+                    devices = enumerator.Enumerate();
+                }
+                catch (Exception ex)
+                {
+                    int invalidated = VideoIndexReconciler.Reconcile(config.Cameras, Array.Empty<VideoDevice>());
+                    AgentUiLog.Logger.Warning(ex,
+                        "Video device enumeration failed; {Count} camera mapping(s) invalidated/offline. Native open is blocked until physical video identity is verified again.", invalidated);
+                    return invalidated;
+                }
 
-            IReadOnlyList<VideoDevice> devices;
-            try
-            {
-                devices = _videoEnumerator.Enumerate();
+                int changed = VideoIndexReconciler.Reconcile(config.Cameras, devices);
+                if (changed > 0)
+                    AgentUiLog.Logger.Information("Rebound {Count} camera OpenCvIndex value(s) by ContainerId", changed);
+                return changed;
             }
-            catch (Exception ex)
-            {
-                AgentUiLog.Logger.Warning(ex, "Video device enumeration failed; keeping configured OpenCvIndex");
-                return 0;
-            }
-
-            int changed = VideoIndexReconciler.Reconcile(config.Cameras, devices);
-            if (changed > 0)
-            {
-                AgentUiLog.Logger.Information("Rebound {Count} camera OpenCvIndex value(s) by ContainerId", changed);
-            }
-
-            return changed;
         }
 
         /// <summary>
@@ -521,103 +493,180 @@ namespace HeatingCameraSystem.AgentUI
         /// </summary>
         private static CameraComPair? ResolveConfidentPair(IReadOnlyList<CameraComPair> pairs, CameraDescriptor cam)
         {
-            if (IsUsableSerial(cam.CameraSerialNumber))
-            {
-                var bySerial = pairs
-                    .Where(p => string.Equals(p.CameraSerialNumber, cam.CameraSerialNumber, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                if (bySerial.Count == 1)
-                {
-                    return bySerial[0];
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(cam.UsbContainerId))
-            {
-                return pairs.FirstOrDefault(
-                    p => string.Equals(p.Camera.UsbParentId, cam.UsbContainerId, StringComparison.OrdinalIgnoreCase));
-            }
-
-            return null;
+            CameraComPair? exact = SettingsViewModel.FindPairForRow(pairs, new CameraRow(cam));
+            if (exact is not null) return exact;
+            // 이미 열린 COM은 hotplug 탐색에서 S/N을 읽지 못할 수 있다. 같은 Container의
+            // 유일한 미확인 후보만 재개방하며, 활성화 전 ReadSerialNumber로 기존 S/N을 확인한다.
+            if (!IsUsableSerial(cam.CameraSerialNumber) || string.IsNullOrWhiteSpace(cam.UsbContainerId)) return null;
+            CameraComPair[] candidates = pairs.Where(pair =>
+                string.Equals(pair.Camera.UsbParentId, cam.UsbContainerId, StringComparison.OrdinalIgnoreCase)
+                && !IsUsableSerial(pair.CameraSerialNumber)).ToArray();
+            return candidates.Length == 1 ? candidates[0] : null;
         }
 
         // 비었거나 0뿐인 S/N은 미기록 테스트 카메라 — 식별 키로 쓰지 않는다.
         private static bool IsUsableSerial([NotNullWhen(true)] string? serial) =>
             !string.IsNullOrWhiteSpace(serial) && serial.Any(c => c is >= '1' and <= '9');
 
-        /// <summary>
-        /// 설정된 카메라 전체의 패널을 처음부터 다시 만든다. 기존 패널을 전부 Dispose하고 런타임을
-        /// 재등록하므로 핫플러그 재구성 때마다 카메라 패널이 재생성된다. 시리얼 포트 열기에 실패하면
-        /// serial을 null로 두고 영상은 계속 살린다(영상-시리얼 분리).
-        /// </summary>
+        /// <summary>변경된 물리 바인딩만 교체한다. 다른 카메라의 핫플러그는 진행 중 BIAS를 취소하지 않는다.</summary>
         private void RebuildCameraPanels()
         {
-            if (_manager is null || _mainViewModel is null || _config is null || _serialFactory is null || _nucs is null || _store is null)
+            if (_manager is null || _mainViewModel is null || _config is null || _serialFactory is null || _nucs is null || _store is null) return;
+            CameraDescriptor[] cameras;
+            lock (_config.Cameras) cameras = _config.Cameras.ToArray();
+            var ids = cameras.Select(camera => camera.AgentId).ToHashSet(StringComparer.Ordinal);
+            foreach (CameraPanelViewModel panel in _mainViewModel.Cameras.ToList())
             {
-                return;
+                if (ids.Contains(panel.AgentId)) continue;
+                panel.Dispose();
+                _manager.Remove(panel.AgentId);
+                _mainViewModel.Cameras.Remove(panel);
+                _panelBindings.Remove(panel.AgentId);
+                _nucs.Remove(panel.AgentId);
             }
-
-            foreach (CameraPanelViewModel existing in _mainViewModel.Cameras.ToList())
+            var duplicateIndices = cameras.Where(camera => camera.OpenCvIndex >= 0)
+                .GroupBy(camera => camera.OpenCvIndex).Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet();
+            foreach (CameraDescriptor configured in cameras)
             {
-                existing.Dispose();
-            }
-            _mainViewModel.Cameras.Clear();
-
-            foreach (CameraDescriptor cam in _config.Cameras)
-            {
-                ICameraRuntime runtime = _manager.Add(cam);
-                string agentId = cam.AgentId;
-                int cameraIndex = cam.OpenCvIndex;
-                runtime.StatusChanged += (_, status) =>
+                CameraDescriptor cam = duplicateIndices.Contains(configured.OpenCvIndex)
+                    ? configured with { OpenCvIndex = -1 } : configured;
+                CameraPanelViewModel? existing = _mainViewModel.Cameras.FirstOrDefault(candidate => candidate.AgentId == cam.AgentId);
+                if (existing is not null && _panelBindings.TryGetValue(cam.AgentId, out CameraDescriptor? binding)
+                    && CameraBindingPolicy.SameBinding(binding, cam))
                 {
-                    if (status == CameraRuntimeStatus.Faulted)
-                    {
-                        AgentUiLog.Logger.Error("Camera {AgentId} (index {Index}) faulted", agentId, cameraIndex);
-                    }
-                };
-
-                ICameraSerialClient? serial = _serialFactory(cam);
+                    existing.Title = cam.Alias;
+                    continue;
+                }
+                if (existing is not null)
+                {
+                    existing.Dispose();
+                    _mainViewModel.Cameras.Remove(existing);
+                    _manager.Remove(cam.AgentId);
+                    _nucs.Remove(cam.AgentId);
+                }
+                ICameraRuntime? runtime = cam.OpenCvIndex >= 0 ? _manager.Add(cam) : null;
+                ICameraSerialClient? serial = null;
                 string? serialStatus = null;
-                if (serial is not null)
+                if (runtime is null)
+                    serialStatus = "카메라 연결 대기: 물리 장치/영상 인덱스를 확정하지 못했습니다. 이전 BIAS는 무효입니다.";
+                else if (!string.IsNullOrWhiteSpace(cam.SerialPortName))
                 {
                     try
                     {
-                        // (동기) 포트 열기를 지금 완료해 고장난 포트를 여기서 잡아 serial을 null로
-                        // 만든다 — 영상 출력이 시리얼 성공에 좌우되는 일은 절대 없어야 한다.
-                        serial.InitializeAsync().GetAwaiter().GetResult();
+                        if (!_config.SimulationMode)
+                        {
+                            CameraComPair? pair = ResolveConfidentPair(_lastPairs, cam);
+                            bool knownSerial = IsUsableSerial(cam.CameraSerialNumber);
+                            if (knownSerial && _lastPairs.Count(candidate => string.Equals(candidate.CameraSerialNumber, cam.CameraSerialNumber, StringComparison.OrdinalIgnoreCase)) > 1)
+                                throw new InvalidOperationException("카메라 S/N이 중복되어 COM 포트를 확정할 수 없습니다.");
+                            if (!knownSerial && (pair?.SerialPort is null || !string.Equals(pair.SerialPort.PortName, cam.SerialPortName, StringComparison.OrdinalIgnoreCase)))
+                                throw new InvalidOperationException("카메라 신원과 COM 포트의 일치를 확인하지 못했습니다.");
+                            // 기존 포트를 점유한 패널 때문에 hotplug 탐색이 S/N을 못 읽은 경우,
+                            // 포트 재개방 후 아래의 실제 S/N 읽기로 확인한다. 확인 전 쓰기는 없다.
+                        }
+                        serial = _serialFactory(cam);
+                        if (serial is not null)
+                        {
+                            serial.InitializeAsync().GetAwaiter().GetResult();
+                            if (!_config.SimulationMode && IsUsableSerial(cam.CameraSerialNumber))
+                            {
+                                string actual = serial.ReadSerialNumberAsync().GetAwaiter().GetResult();
+                                if (!string.Equals(actual, cam.CameraSerialNumber, StringComparison.OrdinalIgnoreCase))
+                                    throw new InvalidOperationException($"시리얼 S/N 불일치: 설정 {cam.CameraSerialNumber}, 실제 {actual}");
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
-                        AgentUiLog.Logger.Warning(ex, "Camera {AgentId} serial {Port} open failed", agentId, cam.SerialPortName);
-                        serial.Dispose();
+                        AgentUiLog.Logger.Warning(ex, "Camera {AgentId} serial {Port} open/identity check failed", cam.AgentId, cam.SerialPortName);
+                        serial?.Dispose();
                         serial = null;
-                        serialStatus = $"시리얼 제어 비활성화: {cam.SerialPortName} 열기 실패 ({ex.Message}). 영상은 계속 동작합니다.";
+                        serialStatus = $"시리얼 제어 비활성화: {ex.Message}";
                     }
                 }
-                else if (string.IsNullOrWhiteSpace(cam.SerialPortName))
-                {
-                    serialStatus = "시리얼 포트 없음: 영상만 동작 (제어 비활성화)";
-                }
-
-                ThermalNucCorrector nuc = _nucs.TryGetValue(cam.AgentId, out ThermalNucCorrector? existingNuc)
-                    ? existingNuc
-                    : new ThermalNucCorrector();
+                else serialStatus = "시리얼 포트 없음: 영상만 동작 (제어 비활성화)";
+                var nuc = new ThermalNucCorrector();
                 _nucs[cam.AgentId] = nuc;
-
                 var panel = new CameraPanelViewModel(cam.Alias, cam.AgentId, runtime, Dispatcher, nuc, _store, _config.CaptureBurstCount, serial,
-                    publishResult: msg => _nats is { } n ? n.PublishCaptureResultAsync(msg) : Task.CompletedTask);
-                if (serialStatus is not null)
-                {
-                    panel.SerialStatus = serialStatus;
-                }
+                    publishResult: message => _nats is { } nats ? nats.PublishCaptureResultAsync(message) : Task.CompletedTask);
+                if (serialStatus is not null) panel.SerialStatus = serialStatus;
                 _mainViewModel.Cameras.Add(panel);
-
-                // 라이브 시작은 항상 시도한다: 시리얼 RUN/셔터는 best-effort(serial이 null이면 no-op)라
-                // 영상 출력은 시리얼과 분리된다. 영상 런타임 자체는 StartAllAsync에서 시작된다.
-                _ = panel.StartLiveAsync();
+                _panelBindings[cam.AgentId] = cam;
+                if (runtime is not null)
+                {
+                    _ = StartCameraAsync(panel, runtime);
+                }
             }
+        }
 
-            _ = _manager.StartAllAsync();
+        private static async Task StartCameraAsync(CameraPanelViewModel panel, ICameraRuntime runtime)
+        {
+            try
+            {
+                await panel.StartLiveAsync();
+                if (panel.HasRuntime) await runtime.StartAsync();
+            }
+            catch (Exception ex)
+            {
+                AgentUiLog.Logger.Error(ex, "Camera {AgentId} (index {Index}) start failed", panel.AgentId, runtime.CameraIndex);
+            }
+        }
+
+        internal static AgentConfigSnapshot CreateConfigSnapshot(AgentUiConfig active)
+        {
+            AgentUiConfig saved = active.EditableSnapshot();
+            return new AgentConfigSnapshot
+            {
+                SimulationMode = saved.SimulationMode,
+                NatsUrl = saved.NatsUrl,
+                StoragePath = saved.StoragePath,
+                HeartbeatSeconds = saved.HeartbeatSeconds,
+                CaptureImageFormat = saved.CaptureImageFormat,
+                CaptureBurstCount = saved.CaptureBurstCount,
+                Cameras = saved.Cameras,
+                RestartRequired = active.RestartRequired
+            };
+        }
+
+        private async Task<(bool Success, string Message)> ApplySerialConfigForAsync(CameraDescriptor descriptor, SerialConfigMessage message)
+        {
+            try
+            {
+                return await Dispatcher.InvokeAsync(() =>
+                {
+                    AgentUiConfig config = _config ?? throw new InvalidOperationException("Agent 설정이 없습니다.");
+                    if (config.RestartRequired) throw new InvalidOperationException("저장된 설정의 재시작 적용이 먼저 필요합니다.");
+                    CameraDescriptor? current = config.Cameras.FirstOrDefault(camera => camera.AgentId == descriptor.AgentId);
+                    if (current is null || !string.Equals(message.AgentId, current.AgentId, StringComparison.Ordinal))
+                        throw new InvalidOperationException("설정 대상 카메라가 현재 인벤토리와 다릅니다.");
+                    CameraBindingPolicy.ValidateSerialConfig(current, message.Settings);
+                    CameraPanelViewModel? panel = _mainViewModel?.Cameras.FirstOrDefault(camera => camera.AgentId == current.AgentId);
+                    if (panel is null || !panel.HasRuntime) throw new InvalidOperationException("카메라 런타임이 연결되지 않았습니다.");
+                    if (panel.IsBiasBusy) throw new InvalidOperationException("카메라 명령/BIAS 진행 중에는 시리얼 설정을 바꿀 수 없습니다.");
+                    if (!config.SimulationMode)
+                    {
+                        CameraComPair? pair = ResolveConfidentPair(_lastPairs, current);
+                        if (pair?.SerialPort is null || !string.Equals(pair.SerialPort.PortName, message.Settings.PortName, StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidOperationException("카메라 신원과 요청 COM 포트의 일치를 확인하지 못했습니다.");
+                    }
+                    AgentUiConfig draft = config.EditableSnapshot();
+                    int index = draft.Cameras.FindIndex(camera => camera.AgentId == current.AgentId);
+                    draft.Cameras[index] = current with { SerialPortName = message.Settings.PortName.Trim() };
+                    config.SaveDraft(draft);
+                    // 같은 포트 재시도라도 이전 연결 실패를 복구하도록 이 패널만 교체한다.
+                    _panelBindings.Remove(current.AgentId);
+                    RebuildCameraPanels();
+                    CameraPanelViewModel? applied = _mainViewModel?.Cameras.FirstOrDefault(camera => camera.AgentId == current.AgentId);
+                    if (applied?.HasSerialControl != true)
+                        throw new InvalidOperationException(applied?.SerialStatus ?? "시리얼 연결 실패");
+                    return (true, "serial configuration applied");
+                }).Task;
+            }
+            catch (Exception ex)
+            {
+                AgentUiLog.Logger.Warning(ex, "[{AgentId}] 시리얼 설정 실패", descriptor.AgentId);
+                return (false, ex.Message);
+            }
         }
 
         /// <summary>
@@ -639,6 +688,10 @@ namespace HeatingCameraSystem.AgentUI
             var current = new HashSet<string>(
                 _config.Cameras.Select(cam => cam.AgentId), StringComparer.Ordinal);
 
+            if (!_config.SimulationMode)
+            {
+                lock (_config.Cameras) ReconcileVideoIndicesFromEnumeration(_config);
+            }
             RebuildCameraPanels();
 
             // RebuildCameraPanels는 현재 구성만 재등록(add 전용)하므로 삭제된 카메라의 런타임이 남는다.
@@ -656,21 +709,6 @@ namespace HeatingCameraSystem.AgentUI
             _ = _natsConnector?.SyncSubscriptionsAsync();
         }
 
-        // [S7] 카메라별 runtimeLoad/Unload 후 기존 패널을 새 영상 런타임으로 향하게 하거나(unload면
-        // 해제) 라이브 뷰가 낡은 핸들에 얼어붙지 않고 재적재된 핸들을 따르게 한다. UI 스레드로
-        // 마샬링되며 패널의 시리얼 클라이언트 + NUC는 건드리지 않는다.
-        private void RebindPanelRuntime(string agentId, ICameraRuntime? runtime)
-        {
-            CameraPanelViewModel? panel = _mainViewModel?.Cameras
-                .FirstOrDefault(candidate => candidate.AgentId == agentId);
-            if (panel is null)
-            {
-                return;
-            }
-
-            _ = Dispatcher.InvokeAsync(() => panel.RebindRuntime(runtime));
-        }
-
         /// <summary>
         /// USB 핫플러그 콜백. dirty 플래그 병합 루프로 재구성을 직렬화한다: 재구성 도중 도착한
         /// 이벤트는 플래그만 세우고, 진행 중인 루프가 끝나기 전에 한 번 더 돌아 반영된다.
@@ -678,6 +716,7 @@ namespace HeatingCameraSystem.AgentUI
         /// </summary>
         private void OnCameraHotplug(PnpChange change)
         {
+            if (_appLifetime.IsCancellationRequested) return;
             Interlocked.Exchange(ref _rebuildDirty, 1);
             if (Interlocked.CompareExchange(ref _rebuildInFlight, 1, 0) != 0)
             {
@@ -693,24 +732,25 @@ namespace HeatingCameraSystem.AgentUI
                     // 이벤트를 수 초 간격으로 벌리고, 다음 플러그가 어차피 재구성을 다시 유발한다.
                     while (Interlocked.Exchange(ref _rebuildDirty, 0) == 1)
                     {
-                        if (_config is not null && !_config.SimulationMode && _pairing is not null)
+                        IReadOnlyList<CameraComPair>? pairs = _pairing is not null && _config?.SimulationMode == false
+                            ? GetPairsOrEmpty(_pairing) : null;
+                        await Dispatcher.InvokeAsync(() =>
                         {
-                            IReadOnlyList<CameraComPair> pairs = GetPairsOrEmpty(_pairing);
-                            if (CameraAutoRegistrar.DedupeByAgentId(_config.Cameras) > 0)
+                            if (_config is not null && pairs is not null)
                             {
-                                _config.Save();
+                                _lastPairs = pairs;
+                                lock (_config.Cameras)
+                                {
+                                    CameraAutoRegistrar.DedupeByAgentId(_config.Cameras);
+                                    AutoRegisterDetectedCameras(_config, pairs);
+                                    AutoRegisterVideoOnlyCameras(_config);
+                                    ReconcileSerialPortsFromPairing(_config, pairs);
+                                    ReconcileVideoIndicesFromEnumeration(_config);
+                                    _config.Save();
+                                }
                             }
-                            AutoRegisterDetectedCameras(_config, pairs);
-                            AutoRegisterVideoOnlyCameras(_config);
-                            int serialChanged = ReconcileSerialPortsFromPairing(_config, pairs);
-                            int videoChanged = ReconcileVideoIndicesFromEnumeration(_config);
-                            if (serialChanged + videoChanged > 0)
-                            {
-                                _config.Save();
-                            }
-                        }
-
-                        await Dispatcher.InvokeAsync(RebuildCameraPanels).Task.ConfigureAwait(false);
+                            RebuildCameraPanels();
+                        }).Task.ConfigureAwait(false);
                         if (_natsConnector is not null)
                         {
                             await _natsConnector.SyncSubscriptionsAsync().ConfigureAwait(false);
@@ -724,6 +764,8 @@ namespace HeatingCameraSystem.AgentUI
                 finally
                 {
                     Interlocked.Exchange(ref _rebuildInFlight, 0);
+                    if (Volatile.Read(ref _rebuildDirty) != 0 && !_appLifetime.IsCancellationRequested)
+                        OnCameraHotplug(change);
                 }
             });
         }
@@ -734,6 +776,7 @@ namespace HeatingCameraSystem.AgentUI
         /// </summary>
         protected override void OnExit(ExitEventArgs e)
         {
+            _appLifetime.Cancel();
             _cameraWatcher?.StopWatching();
             _cameraWatcher?.Dispose();
 

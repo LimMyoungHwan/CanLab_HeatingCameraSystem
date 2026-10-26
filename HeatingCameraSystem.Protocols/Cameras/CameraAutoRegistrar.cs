@@ -30,11 +30,34 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     continue;
                 }
 
+                if (serial is not null && pairs.Count(candidate =>
+                    string.Equals(candidate.CameraSerialNumber, serial, StringComparison.OrdinalIgnoreCase)) > 1)
+                {
+                    for (int i = 0; i < cameras.Count; i++)
+                        if (string.Equals(cameras[i].CameraSerialNumber, serial, StringComparison.OrdinalIgnoreCase))
+                            cameras[i] = cameras[i] with { OpenCvIndex = -1, SerialPortName = null, UsbContainerId = null };
+                    continue;
+                }
+
                 int existing = FindRegisteredIndex(cameras, serial, containerId);
+                if (existing == -2) continue; // Ambiguous identity: do not silently pick a camera.
+                if (serial is not null && containerId is not null)
+                {
+                    // A different programmed sensor at the old USB location is a different camera.
+                    // Keep the old AgentId/SN offline so saved recipe targets cannot become the new sensor.
+                    for (int i = 0; i < cameras.Count; i++)
+                    {
+                        CameraDescriptor other = cameras[i];
+                        if (i != existing && IsUsableSerial(other.CameraSerialNumber)
+                            && !string.Equals(other.CameraSerialNumber, serial, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(other.UsbContainerId, containerId, StringComparison.OrdinalIgnoreCase))
+                            cameras[i] = other with { OpenCvIndex = -1, SerialPortName = null, UsbContainerId = null };
+                    }
+                }
                 if (existing >= 0)
                 {
-                    // 같은 물리 장치다. 모드 변경에 S/N이 바뀌거나 USB 포트를 옮긴 경우에도
-                    // 새 항목을 만들지 않고 기존 항목을 새 관측값으로 갱신한다. AgentId 유지.
+                    // A unique S/N match survives a USB port move. Container fallback is only
+                    // allowed where it cannot replace an existing different programmed S/N.
                     // 값이 있는 쪽만 덮어쓴다(못 읽은 쪽으로 기존 값을 지우지 않는다).
                     CameraDescriptor cam = cameras[existing];
                     string? port = pair.SerialPort?.PortName;
@@ -198,23 +221,16 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
         private static int FindRegisteredIndex(IEnumerable<CameraDescriptor> cameras, string? serial, string? containerId)
         {
-            int index = 0;
-            foreach (CameraDescriptor cam in cameras)
+            var entries = cameras.Select((camera, index) => (Camera: camera, Index: index)).ToList();
+            if (serial is not null)
             {
-                if (serial is not null && string.Equals(cam.CameraSerialNumber, serial, StringComparison.OrdinalIgnoreCase))
-                {
-                    return index;
-                }
-
-                if (containerId is not null && string.Equals(cam.UsbContainerId, containerId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return index;
-                }
-
-                index++;
+                var matches = entries.Where(entry => string.Equals(entry.Camera.CameraSerialNumber, serial, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (matches.Count > 0) return matches.Count == 1 ? matches[0].Index : -2;
             }
-
-            return -1;
+            if (containerId is null) return -1;
+            var byContainer = entries.Where(entry => string.Equals(entry.Camera.UsbContainerId, containerId, StringComparison.OrdinalIgnoreCase)
+                && (serial is null || !IsUsableSerial(entry.Camera.CameraSerialNumber))).ToList();
+            return byContainer.Count == 0 ? -1 : byContainer.Count == 1 ? byContainer[0].Index : -2;
         }
 
         private static int NextAgentNumber(IEnumerable<CameraDescriptor> cameras, string host)

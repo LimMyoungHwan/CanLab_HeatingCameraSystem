@@ -215,7 +215,7 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
-        public void Register_ContainerMatch_UpdatesSerialInPlace()
+        public void Register_DifferentProgrammedSerialAtSameContainer_DoesNotReplaceSavedIdentity()
         {
             var cams = new List<CameraDescriptor>
             {
@@ -225,10 +225,59 @@ namespace HeatingCameraSystem.Tests
 
             int added = CameraAutoRegistrar.Register(cams, pairs, Host);
 
-            Assert.Equal(0, added);
+            Assert.Equal(1, added);
+            Assert.Equal(2, cams.Count);
+            Assert.Equal("SN-OLD1", cams[0].CameraSerialNumber);
+            Assert.Equal("PC_Agent_1", cams[0].AgentId);
+            Assert.Equal(-1, cams[0].OpenCvIndex);
+            Assert.Null(cams[0].SerialPortName);
+            Assert.Null(cams[0].UsbContainerId);
+            Assert.Equal("SN-NEW1", cams[1].CameraSerialNumber);
+            Assert.Equal("COM5", cams[1].SerialPortName);
+            Assert.Equal("PC_Agent_2", cams[1].AgentId);
+        }
+
+        [Fact]
+        public void Register_StrongSerialMatchWinsOverEarlierConflictingContainer()
+        {
+            var cams = new List<CameraDescriptor>
+            {
+                new("PC_Agent_1", 0, "A", "COM7", null, "SN-1", "{CID-A}"),
+                new("PC_Agent_2", 1, "B", "COM8", null, "SN-2", "{CID-B}")
+            };
+            var pairs = new[] { Pair(Camera("B moved", "{CID-A}"), "SN-2", "COM9") };
+
+            Assert.Equal(0, CameraAutoRegistrar.Register(cams, pairs, Host));
+
+            Assert.Equal("SN-1", cams[0].CameraSerialNumber);
+            Assert.Equal(-1, cams[0].OpenCvIndex);
+            Assert.Null(cams[0].UsbContainerId);
+            Assert.Equal("SN-2", cams[1].CameraSerialNumber);
+            Assert.Equal("PC_Agent_2", cams[1].AgentId);
+            Assert.Equal("COM9", cams[1].SerialPortName);
+            Assert.Equal("{CID-A}", cams[1].UsbContainerId);
+        }
+
+        [Fact]
+        public void Register_DuplicateObservedSerial_DoesNotPickEitherPhysicalCamera()
+        {
+            var cams = new List<CameraDescriptor>
+            {
+                new("PC_Agent_1", 0, "A", "COM7", null, "SN-1", "{CID-A}")
+            };
+            var pairs = new[]
+            {
+                Pair(Camera("A", "{CID-A}"), "SN-1", "COM7"),
+                Pair(Camera("B", "{CID-B}"), "SN-1", "COM8")
+            };
+
+            Assert.Equal(0, CameraAutoRegistrar.Register(cams, pairs, Host));
+
             Assert.Single(cams);
-            Assert.Equal("SN-NEW1", cams[0].CameraSerialNumber);
-            Assert.Equal("COM5", cams[0].SerialPortName);
+            Assert.Equal("SN-1", cams[0].CameraSerialNumber);
+            Assert.Equal(-1, cams[0].OpenCvIndex);
+            Assert.Null(cams[0].UsbContainerId);
+            Assert.Null(cams[0].SerialPortName);
         }
 
         [Fact]

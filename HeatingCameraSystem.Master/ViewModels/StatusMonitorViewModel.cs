@@ -23,8 +23,10 @@ namespace HeatingCameraSystem.Master.ViewModels
     /// PLC를 직접 폴링하지 않고 공용 PlcStatusService 이벤트만 구독한다.
     /// MainViewModel이 이 VM을 캐시해 두므로 구독은 앱 수명 동안 1회다.
     /// </summary>
-    public partial class StatusMonitorViewModel : ObservableObject
+    public partial class StatusMonitorViewModel : ObservableObject, IDisposable
     {
+        private bool _disposed;
+        private readonly PlcStatusService? _plcStatus = AppServices.PlcStatus;
         [ObservableProperty] private bool _isConnected;
         [ObservableProperty] private string _statusMessage = LocalizationManager.Instance["Status_PollingWait"];
 
@@ -81,14 +83,14 @@ namespace HeatingCameraSystem.Master.ViewModels
 
             // 공용 PlcStatusService 스냅샷을 구독한다. 자체 폴링을 돌리면 PlcXgtClient의 단일 IO
             // 세마포어를 두 배로 점유해(스냅샷 1회 = 태그 70여 회 왕복) 양쪽 모두 굶어 화면이 멈춘다.
-            if (AppServices.PlcStatus == null)
+            if (_plcStatus == null)
             {
                 StatusMessage = LocalizationManager.Instance["Plc_NotInitialized"];
                 return;
             }
-            AppServices.PlcStatus.Updated += OnSharedPlcStatus;
-            AppServices.PlcStatus.BlackBodyUpdated += OnBlackBodyUpdated;
-            Apply(AppServices.PlcStatus.Snapshot);
+            _plcStatus.Updated += OnSharedPlcStatus;
+            _plcStatus.BlackBodyUpdated += OnBlackBodyUpdated;
+            Apply(_plcStatus.Snapshot);
         }
 
         /// <summary>비트 카탈로그에서 이름이 있는 항목만 번역된 라벨로 목록을 재구성한다(언어 전환 시 재호출).</summary>
@@ -111,6 +113,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// <summary>공용 스냅샷 갱신 이벤트 수신. 연결이 끊기면 PLC 값을 기본값으로 비우되 흑체 값은 유지한다.</summary>
         private void OnSharedPlcStatus(object? sender, PlcStatusSnapshot s)
         {
+            if (_disposed) return;
             var st = AppServices.PlcStatus;
             IsConnected = st?.IsConnected ?? false;
             StatusMessage = st?.StatusMessage ?? StatusMessage;
@@ -129,6 +132,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         // (흑체 폴링은 PLC와 독립된 타이머라 PLC가 끊겨도 계속 갱신된다).
         private void OnBlackBodyUpdated(object? sender, EventArgs e)
         {
+            if (_disposed) return;
             var st = AppServices.PlcStatus;
             if (st == null) return;
             BlackBody1Pv = st.BlackBody1Pv;
@@ -188,6 +192,17 @@ namespace HeatingCameraSystem.Master.ViewModels
             foreach (var item in items)
                 if (item.Index < bits.Length)
                     item.On = bits[item.Index];
+        }
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            LocalizationManager.Instance.PropertyChanged -= OnLanguageChanged;
+            if (_plcStatus is not null)
+            {
+                _plcStatus.Updated -= OnSharedPlcStatus;
+                _plcStatus.BlackBodyUpdated -= OnBlackBodyUpdated;
+            }
         }
     }
 }

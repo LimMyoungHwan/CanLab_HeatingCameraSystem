@@ -26,6 +26,8 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         [ObservableProperty] private BitmapSource? _liveImage;
         [ObservableProperty] private string _lastAckStatus = "";
+        [ObservableProperty] private bool _isCommandBusy;
+        internal CancellationTokenSource? CommandCancellation { get; set; }
 
         public CameraTileModel(string agentId, int cameraIndex, string title)
         {
@@ -41,10 +43,12 @@ namespace HeatingCameraSystem.Master.ViewModels
     /// 스냅샷을 1초 타이머로 복사한다. NATS 콜백은 백그라운드 스레드로 오므로 UI 갱신은
     /// Dispatcher.Invoke로 마샬링한다.
     /// </summary>
-    public partial class ManualControlViewModel : ObservableObject
+    public partial class ManualControlViewModel : ObservableObject, IDisposable, IAsyncDisposable
     {
         private readonly DispatcherTimer _timer;
-        private readonly HashSet<string> _subscribedAgentIds = new();
+        private readonly NatsSubscriptionLifetime _subscriptions = new();
+        private readonly AgentDirectory _cameraDirectory = new();
+        private bool _disposed;
 
         public ObservableCollection<CameraTileModel> Cameras { get; } = new();
 
@@ -120,82 +124,66 @@ namespace HeatingCameraSystem.Master.ViewModels
         partial void OnColorMapIndexChanged(int value) => LivePreviewColorMode.SetGrayscale(value == 1);
 
         private void OnColorModeChanged() =>
-            Application.Current?.Dispatcher.Invoke(() => ColorMapIndex = LivePreviewColorMode.Grayscale ? 1 : 0);
+            RunOnUi(() => ColorMapIndex = LivePreviewColorMode.Grayscale ? 1 : 0);
 
-        private void SubscribeCameraServices()
+        private void SubscribeCameraServices() => _ = SubscribeCameraServicesAsync();
+
+        private async Task SubscribeCameraServicesAsync()
         {
             var nats = AppServices.NatsService;
-            if (nats == null) return;
-
+            if (nats is null) return;
             try
             {
-                nats.SubscribeAgentStatusAsync(OnAgentStatus);
-                nats.SubscribeLiveFrameAsync(OnLiveFrame);
+                await _subscriptions.AddAsync(ct => nats.SubscribeAgentStatusScopedAsync(OnAgentStatus, ct));
+                await _subscriptions.AddAsync(ct => nats.SubscribeLiveFrameScopedAsync(OnLiveFrame, ct));
             }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[ManualControl] NATS subscribe failed: {ex.Message}");
-            }
+            catch (Exception ex) { if (!_disposed) StatusMessage = ex.Message; }
         }
 
         private void OnAgentStatus(AgentStatusMessage msg)
         {
-            if (string.IsNullOrEmpty(msg.AgentId)) return;
-            Application.Current?.Dispatcher.Invoke(() => EnsureTile(msg.AgentId, msg.CameraIndex));
+            if (_disposed) return;
+            _cameraDirectory.Note(msg);
+            RunOnUi(() =>
+            {
+                if (_disposed) return;
+                var online = _cameraDirectory.OnlineCameras;
+                foreach (CameraTileModel tile in Cameras.Where(tile => !online.Any(camera =>
+                    camera.AgentId == tile.AgentId && camera.CameraIndex == tile.CameraIndex)).ToArray())
+                {
+                    tile.CommandCancellation?.Cancel();
+                    Cameras.Remove(tile);
+                    if (ReferenceEquals(SelectedCamera, tile)) SelectedCamera = null;
+                }
+                foreach (CameraIdentity camera in online) EnsureTile(camera.AgentId, camera.CameraIndex);
+            });
         }
 
-        /// <summary>
-        /// (AgentId, CameraIndex) 타일을 찾거나 새로 만든다. 새 Agent면 카메라 제어 ACK 구독을
-        /// 1회만 등록한다(해제 API가 없으므로 중복 구독 금지). UI 스레드에서만 호출해야 한다.
-        /// </summary>
         private CameraTileModel EnsureTile(string agentId, int cameraIndex)
         {
             var tile = Cameras.FirstOrDefault(c => c.AgentId == agentId && c.CameraIndex == cameraIndex);
-            if (tile == null)
+            if (tile is null)
             {
                 tile = new CameraTileModel(agentId, cameraIndex, $"{agentId} (cam {cameraIndex})");
                 Cameras.Add(tile);
                 SelectedCamera ??= tile;
-
-                if (_subscribedAgentIds.Add(agentId))
-                {
-                    try
-                    {
-                        AppServices.NatsService?.SubscribeCameraControlAckAsync(agentId, OnCameraAck);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[ManualControl] Ack subscribe failed for {agentId}: {ex.Message}");
-                    }
-                }
             }
             return tile;
         }
 
-        private void OnCameraAck(CameraControlAckMessage ack)
-        {
-            Application.Current?.Dispatcher.Invoke(() =>
-            {
-                var tile = Cameras.FirstOrDefault(c => c.AgentId == ack.AgentId && c.CameraIndex == ack.CameraIndex);
-                if (tile != null)
-                {
-                    tile.LastAckStatus = ack.IsSuccess ? $"✔ {ack.Op} {ack.Message}" : $"✘ {ack.Op} {ack.Message}";
-                }
-            });
-        }
-
         private void OnLiveFrame(LiveFrameMessage msg)
         {
-            if (msg.ImageBytes is null || msg.ImageBytes.Length == 0) return;
+            if (_disposed || msg.ImageBytes is null || msg.ImageBytes.Length == 0) return;
 
             BitmapSource? bmp = Decode(msg.ImageBytes);
             if (bmp is null) return;
             bmp = LivePreviewColorMode.Apply(bmp);
 
-            Application.Current?.Dispatcher.Invoke(() =>
+            RunOnUi(() =>
             {
-                var tile = EnsureTile(msg.AgentId, msg.CameraIndex);
-                tile.LiveImage = bmp;
+                if (_disposed) return;
+                var tile = Cameras.FirstOrDefault(c => c.AgentId == msg.AgentId && c.CameraIndex == msg.CameraIndex);
+                if (tile is not null) tile.LiveImage = bmp;
             });
         }
 
@@ -360,27 +348,33 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// </summary>
         private async Task PublishCameraCommandAsync(CameraTileModel tile, string op)
         {
-            if (tile == null || AppServices.NatsService == null) return;
-
-            tile.LastAckStatus = LocalizationManager.Instance["Manual_Sending"];
-            var msg = new CameraControlMessage
+            if (_disposed || tile is null || tile.IsCommandBusy || AppServices.CameraCommands is not { } commands) return;
+            if (AppServices.RecipeEngine?.IsRunning == true)
             {
-                AgentId = tile.AgentId,
-                CameraIndex = tile.CameraIndex,
-                Op = op,
-                Timestamp = DateTime.UtcNow
-            };
-
+                tile.LastAckStatus = "레시피 실행 중에는 수동 카메라 명령을 사용할 수 없습니다.";
+                return;
+            }
+            tile.IsCommandBusy = true;
+            tile.LastAckStatus = LocalizationManager.Instance["Manual_Sending"];
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_subscriptions.Token);
+            tile.CommandCancellation = cancellation;
             try
             {
-                await AppServices.NatsService.PublishCameraControlAsync(msg);
+                CameraControlAckMessage ack = await commands.SendAsync(tile.AgentId, tile.CameraIndex, op, cancellation.Token);
+                if (!_disposed) tile.LastAckStatus = ack.IsSuccess ? $"✔ {ack.Op} {ack.Message}" : $"✘ {ack.Op} {ack.Message}";
+                if (!ack.IsSuccess) AlarmSink.Raise(AlarmSeverity.Error, "Camera", $"{tile.AgentId}: {ack.Message}");
             }
+            catch (OperationCanceledException) { if (!_disposed) tile.LastAckStatus = "명령이 취소되었습니다."; }
             catch (Exception ex)
             {
-                tile.LastAckStatus = L("Manual_SendFailed", ex.Message);
-                System.Diagnostics.Debug.WriteLine($"[ManualControl] Publish failed: {ex.Message}");
+                if (!_disposed) tile.LastAckStatus = L("Manual_SendFailed", ex.Message);
+                AlarmSink.Raise(AlarmSeverity.Error, "Camera", $"{tile.AgentId}: {ex.Message}");
             }
+            finally { tile.CommandCancellation = null; tile.IsCommandBusy = false; }
         }
+
+        [RelayCommand]
+        private void CancelCameraCommand(CameraTileModel? tile) => tile?.CommandCancellation?.Cancel();
 
         [RelayCommand] private Task SendRun(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Run);
         [RelayCommand] private Task SendStop(CameraTileModel tile) => PublishCameraCommandAsync(tile, CameraControlOps.Stop);
@@ -390,7 +384,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         [RelayCommand]
         private async Task SendCapture(CameraTileModel tile)
         {
-            if (tile == null || AppServices.NatsService == null) return;
+            if (_disposed || tile == null || tile.IsCommandBusy || AppServices.NatsService == null) return;
             tile.LastAckStatus = LocalizationManager.Instance["Manual_CaptureRequesting"];
             try
             {
@@ -437,6 +431,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// </summary>
         private async Task PollAsync()
         {
+            if (_disposed) return;
             var s = AppServices.PlcStatus?.Snapshot;
             if (s != null)
             {
@@ -524,5 +519,22 @@ namespace HeatingCameraSystem.Master.ViewModels
             try { await action(); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ManualControl] jog: {ex.Message}"); }
         }
+        private static void RunOnUi(Action action)
+        {
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher is null || dispatcher.CheckAccess()) action(); else dispatcher.Invoke(action);
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _timer.Stop();
+            _rampCts?.Cancel();
+            foreach (CameraTileModel tile in Cameras) tile.CommandCancellation?.Cancel();
+            LivePreviewColorMode.Changed -= OnColorModeChanged;
+            _subscriptions.Dispose();
+        }
+        public async ValueTask DisposeAsync() { Dispose(); await _subscriptions.DisposeAsync(); }
     }
 }

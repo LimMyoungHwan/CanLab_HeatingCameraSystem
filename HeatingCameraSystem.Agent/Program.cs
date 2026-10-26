@@ -81,7 +81,7 @@ namespace HeatingCameraSystem.Agent
 
             await nats.SubscribeCaptureCommandAsync(config.AgentId, cmd =>
             {
-                _ = HandleCaptureAsync(cmd, cameraService, nats, config.AgentId, statusBox);
+                _ = HandleCaptureAsync(cmd, cameraService, nats, config.AgentId, config.CameraIndex, statusBox);
             });
 
             ISerialShutterController? shutterController = null;
@@ -95,6 +95,8 @@ namespace HeatingCameraSystem.Agent
                 await nats.PublishAgentStatusAsync(new AgentStatusMessage
                 {
                     AgentId      = config.AgentId,
+                    HostName     = Environment.MachineName,
+                    LogDirectory = logDir,
                     CameraIndex  = config.CameraIndex,
                     CameraStatus = statusBox.Current,
                     Timestamp    = DateTime.UtcNow
@@ -229,11 +231,12 @@ namespace HeatingCameraSystem.Agent
         /// 성공 여부와 무관하게 결과를 <c>agent.result.capture.{AgentId}</c>로 발행한다
         /// (저장 파일을 읽을 수 있으면 JPEG 바이트를 함께 실어 보낸다).
         /// </summary>
-        private static async Task HandleCaptureAsync(
+        internal static async Task HandleCaptureAsync(
             CaptureCommandMessage cmd,
             ICameraCaptureService camera,
-            NatsCommunicationService nats,
+            INatsCommunicationService nats,
             string agentId,
+            int cameraIndex,
             StatusBox status)
         {
             var prev = status.Current;
@@ -257,6 +260,9 @@ namespace HeatingCameraSystem.Agent
                     await nats.PublishCaptureResultAsync(new CaptureResultMessage
                     {
                         AgentId      = agentId,
+                        CameraIndex  = cameraIndex,
+                        CaptureId    = Guid.NewGuid().ToString(),
+                        Source       = cmd.Source,
                         RecipeStepId = cmd.RecipeStepId,
                         IsSuccess    = success,
                         ImagePath    = savedPath,
@@ -276,7 +282,7 @@ namespace HeatingCameraSystem.Agent
         /// 하트비트 타이머와 캡처 처리 태스크가 공유하는 현재 카메라 상태 홀더.
         /// Volatile 읽기/쓰기로 스레드 간 가시성을 보장한다.
         /// </summary>
-        private sealed class StatusBox
+        internal sealed class StatusBox
         {
             private int _current;
             public StatusBox(CameraStatus initial) { _current = (int)initial; }

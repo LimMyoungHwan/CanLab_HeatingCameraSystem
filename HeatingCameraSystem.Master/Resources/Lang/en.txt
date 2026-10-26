@@ -1117,3 +1117,5 @@ Dialog_ProductionRun_FormatJpeg=JPEG (8-bit, for visual check / report)
 
 Dialog_ProductionRun_JpegWarning=JPEG is saved as 8-bit and keeps no thermal data. It cannot be used for calibration.
 Dialog_ProductionRun_KeepChamber=Keep chamber running after the recipe ends (hold temperature for the next recipe; still stops on emergency stop)
+Alarm_CAM_008_Cause=The camera command failed or its completion could not be confirmed.
+Alarm_CAM_008_Action=Check the camera, serial connection, selected device, and Agent log before restarting the recipe.

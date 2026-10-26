@@ -27,6 +27,8 @@ namespace HeatingCameraSystem.AgentManager.Config
         /// 실제 USB 카메라 없이 캡처 roundtrip을 검증할 때 사용.
         /// </summary>
         public bool SimulateAgentMode   { get; set; } = false;
+        /// <summary>비표준 사용자 프로필을 쓰는 경우 관리자가 명시한 AgentUI 로그 디렉터리. NATS 경로를 검증하는 신뢰 기준이다.</summary>
+        public string AgentUiLogDirectory { get; set; } = string.Empty;
         public int    LogRetentionDays    { get; set; } = 7;
         /// <summary>true이면 Error/Fatal 외에 Warning 로그도 LogAlert로 승격한다.</summary>
         public bool   WarnAlertEnabled    { get; set; } = false;

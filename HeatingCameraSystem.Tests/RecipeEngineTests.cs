@@ -1020,7 +1020,7 @@ namespace HeatingCameraSystem.Tests
                             .Returns(Task.CompletedTask);
 
             var directory = new AgentDirectory();
-            directory.Note(new AgentStatusMessage { AgentId = "Agent_1", Alias = "cam1", CameraTemperature = 36.5 });
+            directory.Note(new AgentStatusMessage { AgentId = "Agent_1", Alias = "cam1", CameraTemperature = 36.5, CameraStatus = CameraStatus.Connected });
 
             var recipe = new Recipe
             {
@@ -1438,6 +1438,7 @@ namespace HeatingCameraSystem.Tests
                 .Callback<CaptureCommandMessage>(command => receive?.Invoke(new CaptureResultMessage
                 {
                     AgentId = command.TargetAgentId,
+                    CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(command),
                     RecipeStepId = command.RecipeStepId,
                     IsSuccess = false,
                     FailureCode = BiasExecutionPolicy.FileFailureCode,
@@ -1473,6 +1474,7 @@ namespace HeatingCameraSystem.Tests
                 .Callback<CaptureCommandMessage>(command => receive?.Invoke(new CaptureResultMessage
                 {
                     AgentId = command.TargetAgentId,
+                    CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(command),
                     RecipeStepId = command.RecipeStepId,
                     IsSuccess = false,
                     FailureCode = BiasExecutionPolicy.FileFailureCode,
@@ -1800,7 +1802,7 @@ namespace HeatingCameraSystem.Tests
         {
             var (mockPlc, mockNats, mockHistory, published) = WireCameraControlRoundTrip();
             var directory = new AgentDirectory();
-            directory.Note(new AgentStatusMessage { AgentId = "Agent_1" });
+            directory.Note(new AgentStatusMessage { AgentId = "Agent_1", CameraStatus = CameraStatus.Connected });
 
             bool resumeInvoked = false;
             Func<CancellationToken, Task<bool>> resume = _ =>
@@ -1826,7 +1828,7 @@ namespace HeatingCameraSystem.Tests
         {
             var (mockPlc, mockNats, mockHistory, published) = WireCameraControlRoundTrip();
             var directory = new AgentDirectory();
-            directory.Note(new AgentStatusMessage { AgentId = "Agent_1" });
+            directory.Note(new AgentStatusMessage { AgentId = "Agent_1", CameraStatus = CameraStatus.Connected });
 
             Func<CancellationToken, Task<bool>> skip = _ => Task.FromResult(true);
 
@@ -1844,8 +1846,8 @@ namespace HeatingCameraSystem.Tests
         {
             var (mockPlc, mockNats, mockHistory, published) = WireCameraControlRoundTrip();
             var directory = new AgentDirectory();
-            directory.Note(new AgentStatusMessage { AgentId = "Agent_1" });
-            directory.Note(new AgentStatusMessage { AgentId = "Agent_2" });
+            directory.Note(new AgentStatusMessage { AgentId = "Agent_1", CameraStatus = CameraStatus.Connected });
+            directory.Note(new AgentStatusMessage { AgentId = "Agent_2", CameraStatus = CameraStatus.Connected });
 
             bool resumeInvoked = false;
             Func<CancellationToken, Task<bool>> resume = _ =>
@@ -2201,6 +2203,7 @@ namespace HeatingCameraSystem.Tests
                         resultCb?.Invoke(new CaptureResultMessage
                         {
                             AgentId = "Agent_1",
+                            CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(cmd),
                             RecipeStepId = cmd.RecipeStepId,
                             IsSuccess = true,
                             Timestamp = DateTime.UtcNow
@@ -2289,6 +2292,7 @@ namespace HeatingCameraSystem.Tests
                     resultCb?.Invoke(new CaptureResultMessage
                     {
                         AgentId = "Agent_1",
+                        CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(cmd),
                         RecipeStepId = cmd.RecipeStepId,
                         IsSuccess = true,
                         Timestamp = DateTime.UtcNow
@@ -2371,6 +2375,7 @@ namespace HeatingCameraSystem.Tests
                     resultCb?.Invoke(new CaptureResultMessage
                     {
                         AgentId = "Agent_1",
+                        CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(cmd),
                         RecipeStepId = cmd.RecipeStepId,
                         IsSuccess = true,
                         Timestamp = DateTime.UtcNow
@@ -2499,6 +2504,7 @@ namespace HeatingCameraSystem.Tests
                         resultCb?.Invoke(new CaptureResultMessage
                         {
                             AgentId      = cmd.TargetAgentId,
+                            CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(cmd),
                             RecipeStepId = cmd.RecipeStepId,
                             IsSuccess    = true,
                             ImagePath    = $"/test/image_{i}.jpg",

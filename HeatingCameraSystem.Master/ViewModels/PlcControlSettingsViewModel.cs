@@ -105,7 +105,8 @@ namespace HeatingCameraSystem.Master.ViewModels
                 return;
 
             App.RestartRequested = true;
-            System.Windows.Application.Current?.Shutdown();
+            if (System.Windows.Application.Current?.MainWindow is { } window) window.Close();
+            else System.Windows.Application.Current?.Shutdown();
         }
 
         /// <summary>PLC 연결 정보(IP/포트/국번)를 hardware.json에 저장한다. 적용에는 재시작이 필요하다.</summary>

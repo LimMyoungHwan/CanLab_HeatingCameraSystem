@@ -196,6 +196,7 @@ namespace HeatingCameraSystem.Tests
                 .Callback<CaptureCommandMessage>(cmd => resultCb?.Invoke(new CaptureResultMessage
                 {
                     AgentId      = cmd.TargetAgentId,
+                    CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(cmd),
                     RecipeStepId = cmd.RecipeStepId,
                     IsSuccess    = true,
                     ImagePath    = "/sim/img.jpg",
@@ -253,6 +254,7 @@ namespace HeatingCameraSystem.Tests
                         .Callback<CaptureCommandMessage>(cmd => resultCb?.Invoke(new CaptureResultMessage
                         {
                             AgentId      = cmd.TargetAgentId,
+                            CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(cmd),
                             RecipeStepId = cmd.RecipeStepId,
                             IsSuccess    = true,
                             ImagePath    = @"C:\agent\local\img.jpg",
@@ -303,6 +305,7 @@ namespace HeatingCameraSystem.Tests
                     .Callback<CaptureCommandMessage>(cmd => resultCb?.Invoke(new CaptureResultMessage
                     {
                         AgentId      = cmd.TargetAgentId,
+                        CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(cmd),
                         RecipeStepId = cmd.RecipeStepId,
                         IsSuccess    = true,
                         ImagePath    = "/agent/legacy/path.jpg",

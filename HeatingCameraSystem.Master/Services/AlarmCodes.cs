@@ -20,6 +20,7 @@ namespace HeatingCameraSystem.Master.Services
         public const string CaptureAbortNoAck = "CAM-005";
         public const string BiasFailed = "CAM-006";
         public const string BiasFileFailed = "CAM-007";
+        public const string CameraCommandFailed = "CAM-008";
         public const string BlackBodyFailed = "BB-001";
         public const string UserStopped = "RCP-001";
         public const string EmergencyStopped = "RCP-002";

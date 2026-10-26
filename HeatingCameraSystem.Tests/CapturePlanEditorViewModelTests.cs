@@ -59,7 +59,7 @@ public class CapturePlanEditorViewModelTests
     [Fact]
     public void DirectoryTracksActualAgentAndCameraIndexSeparately()
     {
-        var directory = new AgentDirectory(); directory.Note(new AgentStatusMessage { AgentId = "Agent", CameraIndex = 0 }); directory.Note(new AgentStatusMessage { AgentId = "Agent", CameraIndex = 2 });
+        var directory = new AgentDirectory(); directory.Note(new AgentStatusMessage { AgentId = "Agent", CameraIndex = 0, CameraStatus = CameraStatus.Connected }); directory.Note(new AgentStatusMessage { AgentId = "Agent", CameraIndex = 2, CameraStatus = CameraStatus.Connected });
         Assert.Equal(new[] { 0, 2 }, directory.OnlineCameras.Select(c => c.CameraIndex));
         Assert.Empty(new AgentDirectory().OnlineCameras); Assert.True(directory.IsCameraOnline(new CameraIdentity { AgentId = "Agent", CameraIndex = 2 }));
     }

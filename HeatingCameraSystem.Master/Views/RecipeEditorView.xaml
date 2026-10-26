@@ -660,7 +660,9 @@
                             <Button Content="NUC" Command="{Binding RunNucCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="8,0,0,0"/>
                             <Button Content="BIAS LOW" Command="{Binding RunBiasLowCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="8,0,0,0"/>
                             <Button Content="BIAS MID" Command="{Binding RunBiasMidCommand}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="8,0,0,0"/>
+                            <Button Content="{loc:Loc Dialog_ProductionRun_Cancel}" Command="{Binding CancelCameraCommandCommand}" IsEnabled="{Binding IsCameraCommandBusy}" Background="{StaticResource BgSurfaceVariant}" Foreground="{StaticResource TextOnSurface}" BorderThickness="0" Padding="8,4" Margin="8,0,0,0"/>
                         </StackPanel>
+                        <TextBlock Text="{Binding CameraCommandStatus}" TextWrapping="Wrap" Foreground="{StaticResource TextOnSurfaceVariant}"/>
                     </StackPanel>
 
                     <Grid Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,16,0,0">

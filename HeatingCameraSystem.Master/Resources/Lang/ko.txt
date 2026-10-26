@@ -1117,3 +1117,5 @@ Dialog_ProductionRun_FormatJpeg=JPEG (8비트 · 육안검사/보고서용)
 
 Dialog_ProductionRun_JpegWarning=JPEG는 8비트로 저장되어 열 데이터가 남지 않습니다. 캘리브레이션에는 쓸 수 없습니다.
 Dialog_ProductionRun_KeepChamber=레시피가 끝나도 챔버를 끄지 않음 (다음 레시피에서 온도 유지 · 비상정지 시에는 꺼짐)
+Alarm_CAM_008_Cause=카메라 제어 명령이 실패했거나 완료 응답을 확인하지 못했습니다.
+Alarm_CAM_008_Action=카메라와 시리얼 연결, 대상 카메라, Agent 로그를 확인한 뒤 레시피를 다시 실행하세요.

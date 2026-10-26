@@ -6,6 +6,9 @@ namespace HeatingCameraSystem.Core.Models
     /// <summary>Agent 실행 설정 스냅샷. <see cref="AgentConfigApplyMessage"/>로 원격 적용할 수 있다.</summary>
     public class AgentConfigSnapshot
     {
+        /// <summary>저장한 변경이 현재 런타임에는 아직 적용되지 않았다.</summary>
+        public bool RestartRequired { get; set; }
+
         /// <summary>
         /// true이면 실제 카메라 대신 합성 이미지를 생성한다.
         /// 카메라/웹캠이 없는 환경에서 테스트용.
@@ -34,6 +37,8 @@ namespace HeatingCameraSystem.Core.Models
     /// <summary>Master → Agent 설정 조회 요청.</summary>
     public class AgentConfigRequestMessage
     {
+        public string RequestId { get; set; } = string.Empty;
+
         /// <summary>대상 AgentId.</summary>
         public string AgentId { get; set; } = string.Empty;
 
@@ -44,6 +49,8 @@ namespace HeatingCameraSystem.Core.Models
     /// <summary>Agent → Master 현재 설정 보고.</summary>
     public class AgentConfigSnapshotMessage
     {
+        public string RequestId { get; set; } = string.Empty;
+
         /// <summary>발신 AgentId.</summary>
         public string AgentId { get; set; } = string.Empty;
 
@@ -57,6 +64,8 @@ namespace HeatingCameraSystem.Core.Models
     /// <summary>Master → Agent 설정 적용 명령.</summary>
     public class AgentConfigApplyMessage
     {
+        public string RequestId { get; set; } = string.Empty;
+
         /// <summary>대상 AgentId.</summary>
         public string AgentId { get; set; } = string.Empty;
 
@@ -70,6 +79,8 @@ namespace HeatingCameraSystem.Core.Models
     /// <summary>Agent → Master 설정 적용 결과.</summary>
     public class AgentConfigAckMessage
     {
+        public string RequestId { get; set; } = string.Empty;
+
         /// <summary>발신 AgentId.</summary>
         public string AgentId { get; set; } = string.Empty;
 

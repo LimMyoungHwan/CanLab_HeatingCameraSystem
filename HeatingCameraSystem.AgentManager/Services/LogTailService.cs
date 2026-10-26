@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Threading;
 using System.Text.Json;
 using System.Threading.Tasks;
 using HeatingCameraSystem.AgentManager.Config;
@@ -21,6 +22,7 @@ namespace HeatingCameraSystem.AgentManager.Services
         private readonly ILogger<LogTailService> _logger;
         private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
         private readonly ConcurrentDictionary<string, long> _offsets = new();
+        private readonly ConcurrentDictionary<string, SemaphoreSlim> _fileGates = new();
 
         public LogTailService(INatsCommunicationService nats, ManagerSettings settings,
             ILogger<LogTailService> logger)
@@ -30,20 +32,34 @@ namespace HeatingCameraSystem.AgentManager.Services
             _logger   = logger;
         }
 
-        /// <summary>해당 Agent 로그 디렉터리의 *.log 변경 감시를 시작한다. 이미 감시 중이면 무시한다.</summary>
-        public void Watch(string agentId, string logDirectory)
+        /// <summary>AgentUI NDJSON 또는 콘솔 로그를 감시한다. 공유 AgentUI 파일은 반드시 AgentId로 필터링한다.</summary>
+        public void Watch(string agentId, string logDirectory, bool filterByAgentId = false)
         {
-            if (_watchers.ContainsKey(agentId)) return;
-
-            Directory.CreateDirectory(logDirectory);
-
-            var watcher = new FileSystemWatcher(logDirectory, "*.log")
+            if (filterByAgentId && !AgentLogFiles.IsTrustedAgentUiDirectory(logDirectory, _settings)) return;
+            if (_watchers.TryGetValue(agentId, out FileSystemWatcher? current))
             {
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size,
-                EnableRaisingEvents = true,
-            };
-            watcher.Changed += (_, e) => _ = TailFileAsync(agentId, e.FullPath);
-            _watchers[agentId] = watcher;
+                if (string.Equals(current.Path, logDirectory, StringComparison.OrdinalIgnoreCase)) return;
+                Unwatch(agentId);
+            }
+            try
+            {
+                Directory.CreateDirectory(logDirectory);
+                var watcher = new FileSystemWatcher(logDirectory, "*")
+                {
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName
+                };
+                FileSystemEventHandler changed = (_, e) =>
+                {
+                    if (e.FullPath.EndsWith(".log", StringComparison.OrdinalIgnoreCase)
+                        || e.FullPath.EndsWith(".ndjson", StringComparison.OrdinalIgnoreCase))
+                        _ = TailFileAsync(agentId, e.FullPath, filterByAgentId);
+                };
+                watcher.Changed += changed;
+                watcher.Created += changed;
+                _watchers[agentId] = watcher;
+                watcher.EnableRaisingEvents = true;
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "LogTail watch failed for {AgentId}", agentId); }
         }
 
         public void Unwatch(string agentId)
@@ -57,29 +73,33 @@ namespace HeatingCameraSystem.AgentManager.Services
         }
 
         /// <summary>
-        /// 마지막 오프셋 이후 추가된 라인만 읽어 처리한다. 오프셋이 파일이 아니라 Agent 단위로
-        /// 유지되므로 로그 파일이 날짜로 굴러가면 새 파일 앞부분을 건너뛸 수 있다.
+        /// 파일별 오프셋과 직렬화를 사용하므로 일별 롤링/중복 파일 이벤트로 로그를 누락하거나 중복 발행하지 않는다.
         /// </summary>
-        private async Task TailFileAsync(string agentId, string filePath)
+        internal async Task TailFileAsync(string agentId, string filePath, bool filterByAgentId = false)
         {
+            string key = agentId + "\n" + filePath;
+            SemaphoreSlim gate = _fileGates.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync();
             try
             {
                 using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                long offset = _offsets.GetOrAdd(agentId, 0);
+                long offset = _offsets.GetOrAdd(key, 0);
+                if (offset > stream.Length) offset = 0;
                 stream.Seek(offset, SeekOrigin.Begin);
 
                 using var reader = new StreamReader(stream);
                 string? line;
                 while ((line = await reader.ReadLineAsync()) != null)
                 {
-                    ProcessLine(agentId, line);
+                    if (!filterByAgentId || AgentLogFiles.BelongsToAgent(line, agentId)) ProcessLine(agentId, line);
                 }
-                _offsets[agentId] = stream.Position;
+                _offsets[key] = stream.Position;
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "LogTail read failed for {AgentId}", agentId);
             }
+            finally { gate.Release(); }
         }
 
         /// <summary>
@@ -132,6 +152,7 @@ namespace HeatingCameraSystem.AgentManager.Services
                 w.Dispose();
             }
             _watchers.Clear();
+            _offsets.Clear();
         }
     }
 }

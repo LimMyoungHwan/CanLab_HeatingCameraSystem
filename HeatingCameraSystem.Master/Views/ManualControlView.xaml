@@ -572,6 +572,9 @@
                                         Foreground="#47eaed"
                                         Text="{Binding Title}" />
                                     <TextBlock Style="{StaticResource Lbl}" Text="{Binding LastAckStatus}" />
+                                    <Button Content="{loc:Loc Dialog_ProductionRun_Cancel}"
+                                            Command="{Binding DataContext.CancelCameraCommandCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" IsEnabled="{Binding IsCommandBusy}" Style="{StaticResource Btn}" />
                                 </StackPanel>
                                 <DockPanel>
                                     <Image

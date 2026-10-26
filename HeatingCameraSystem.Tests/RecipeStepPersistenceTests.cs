@@ -74,14 +74,17 @@ namespace HeatingCameraSystem.Tests
         public void RecipeStepModel_SelectedCameraSummary_TracksCheckedTargets()
         {
             var step = new RecipeStepModel();
-            step.CameraTargets.Add(new CameraTargetModel { AgentId = "Agent_1", CameraIndex = 1, IsSelected = true });
-            step.CameraTargets.Add(new CameraTargetModel { AgentId = "Agent_2", CameraIndex = 2 });
+            step.CameraTargets.Add(new CameraTargetModel { AgentId = "Agent_1", CameraIndex = 1, IsSelected = true, IsOnline = true });
+            step.CameraTargets.Add(new CameraTargetModel { AgentId = "Agent_2", CameraIndex = 2, IsOnline = true });
 
             Assert.Equal("Agent_1 (CAM-01)", step.SelectedCameraSummary);
 
             step.CameraTargets[1].IsSelected = true;
 
             Assert.Equal("Agent_1 (CAM-01), Agent_2 (CAM-02)", step.SelectedCameraSummary);
+
+            step.CameraTargets[0].IsOnline = false;
+            Assert.Equal("Agent_1 (CAM-01) · 오프라인, Agent_2 (CAM-02)", step.SelectedCameraSummary);
         }
     }
 }

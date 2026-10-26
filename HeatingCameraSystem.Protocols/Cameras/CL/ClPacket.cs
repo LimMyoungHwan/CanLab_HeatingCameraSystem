@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace HeatingCameraSystem.Protocols.Cameras.CL
 {
@@ -14,13 +15,17 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
             return new byte[] { 0x43, 0x4C, mainId, subId, (byte)rw, 0x00, data };
         }
 
-        /// <summary>응답에서 페이로드(7번째 바이트)를 꺼낸다. 7바이트 미만이거나 매직이 다르면 예외.</summary>
+        /// <summary>CL 응답의 헤더와 결과(0=OK, FF=ERR)를 검증하고 7번째 바이트를 반환한다.</summary>
         public static byte ExtractPayload(ReadOnlySpan<byte> rx)
         {
             if (rx.Length < 7 || rx[0] != 0x43 || rx[1] != 0x4C)
             {
                 throw new ArgumentException("CL response must be at least 7 bytes and start with CL.", nameof(rx));
             }
+
+            // ClRspPkt.result is not a reserved byte (vendor DataPacket.h).
+            if (rx[5] != 0x00)
+                throw new IOException($"CL command failed: main=0x{rx[2]:X2}, sub=0x{rx[3]:X2}, rw=0x{rx[4]:X2}, result=0x{rx[5]:X2}.");
 
             return rx[6];
         }

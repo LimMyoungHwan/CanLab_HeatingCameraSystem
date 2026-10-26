@@ -73,6 +73,25 @@ namespace HeatingCameraSystem.Master.Services
         private readonly object _emergencyStopSync = new();
         private CancellationTokenSource _emergencyStopCts = new();
         private volatile bool _isRunning;
+        private readonly object _runSync = new();
+        private readonly CancellationTokenSource _shutdownCancellation = new();
+        private Task? _activeExecution;
+
+        private sealed class ControlAckSubscriptions : HashSet<string>, IAsyncDisposable
+        {
+            public ControlAckSubscriptions() : base(StringComparer.Ordinal) { }
+            public List<IAsyncDisposable> Handles { get; } = new();
+            public async ValueTask DisposeAsync()
+            {
+                foreach (IAsyncDisposable handle in Handles)
+                {
+                    try { await handle.DisposeAsync().ConfigureAwait(false); }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[RecipeEngine] subscription cleanup: {ex.Message}"); }
+                }
+                Handles.Clear();
+                Clear();
+            }
+        }
 
         public event EventHandler? EmergencyStopChanged;
 
@@ -147,17 +166,34 @@ namespace HeatingCameraSystem.Master.Services
         private sealed class CaptureBatch
         {
             private readonly int _expected;
+            private readonly string _agentId;
+            private readonly int _cameraIndex;
+            private readonly HashSet<string> _captureIds = new(StringComparer.Ordinal);
+            private string? _identityFailure;
             private readonly List<CaptureResultMessage> _received = new();
             private readonly TaskCompletionSource _done = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            public CaptureBatch(int expected) => _expected = expected;
+            public CaptureBatch(int expected, string agentId, int cameraIndex)
+            {
+                _expected = expected;
+                _agentId = agentId;
+                _cameraIndex = cameraIndex;
+            }
 
             public Task Completed => _done.Task;
+            public string? IdentityFailure { get { lock (_received) return _identityFailure; } }
 
             public void Add(CaptureResultMessage result)
             {
                 lock (_received)
                 {
+                    if (result.AgentId != _agentId || result.CameraIndex != _cameraIndex)
+                    {
+                        _identityFailure = $"Capture target changed: expected {_agentId}/{_cameraIndex}, received {result.AgentId}/{result.CameraIndex}.";
+                        _done.TrySetResult();
+                        return;
+                    }
+                    if (!string.IsNullOrWhiteSpace(result.CaptureId) && !_captureIds.Add(result.CaptureId)) return;
                     _received.Add(result);
                     if (_received.Count >= _expected || result.FailureCode == BiasExecutionPolicy.FileFailureCode)
                         _done.TrySetResult();
@@ -240,7 +276,38 @@ namespace HeatingCameraSystem.Master.Services
         /// 기존 알람·스킵 정책을 따른다. 챔버를 켠 뒤에는 정상 완료·취소·PLC 알람 어느 경로로 끝나든 StopChamberAsync를
         /// 호출한다.
         /// </summary>
-        public async Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null, Func<CancellationToken, Task<bool>>? waitForResumeAsync = null, string? runId = null)
+        public Task ExecuteRecipeAsync(Recipe recipe, CancellationToken cancellationToken = default, IProgress<RecipeProgress>? progress = null, Func<CancellationToken, Task<bool>>? waitForResumeAsync = null, string? runId = null)
+        {
+            lock (_runSync)
+            {
+                if (_shutdownCancellation.IsCancellationRequested) return Task.FromCanceled(_shutdownCancellation.Token);
+                if (_activeExecution is { IsCompleted: false })
+                    return Task.FromException(new InvalidOperationException("이미 레시피가 실행 중입니다."));
+                _activeExecution = ExecuteTrackedRecipeAsync(recipe, cancellationToken, progress, waitForResumeAsync, runId);
+                return _activeExecution;
+            }
+        }
+
+        private async Task ExecuteTrackedRecipeAsync(Recipe recipe, CancellationToken cancellationToken,
+            IProgress<RecipeProgress>? progress, Func<CancellationToken, Task<bool>>? waitForResumeAsync, string? runId)
+        {
+            using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCancellation.Token);
+            await ExecuteRecipeCoreAsync(recipe, lifetime.Token, progress, waitForResumeAsync, runId);
+        }
+
+        /// <summary>NATS를 닫기 전에 실행 취소와 원격 abort 전송이 끝나도록 제한된 시간만 기다린다.</summary>
+        public async Task CancelActiveRunAsync(TimeSpan timeout)
+        {
+            _shutdownCancellation.Cancel();
+            Task? running;
+            lock (_runSync) running = _activeExecution;
+            if (running is null) return;
+            try { await running.WaitAsync(timeout).ConfigureAwait(false); }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[RecipeEngine] shutdown drain: {ex.Message}"); }
+        }
+
+        private async Task ExecuteRecipeCoreAsync(Recipe recipe, CancellationToken cancellationToken,
+            IProgress<RecipeProgress>? progress, Func<CancellationToken, Task<bool>>? waitForResumeAsync, string? runId)
         {
             runId ??= Guid.NewGuid().ToString();
             CurrentRunId = runId;
@@ -401,14 +468,18 @@ namespace HeatingCameraSystem.Master.Services
             var executions = new List<StepExecutionState>();
             StepExecutionState? currentExecution = null;
             var controlWaiters = new ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>>();
-            var subscribedControlAgents = new HashSet<string>(StringComparer.Ordinal);
+            await using var subscribedControlAgents = new ControlAckSubscriptions();
             bool chamberStarted = false;
 
-            await _natsService.SubscribeCaptureResultAsync(result =>
+            using var captureReady = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            captureReady.CancelAfter(TimeSpan.FromSeconds(30));
+            IAsyncDisposable captureSubscription = await _natsService.SubscribeCaptureResultScopedAsync(result =>
             {
                 if (captureWaiters.TryGetValue(result.RecipeStepId, out var batch))
                     batch.Add(result);
-            });
+            }, captureReady.Token);
+            captureReady.CancelAfter(Timeout.InfiniteTimeSpan);
+            subscribedControlAgents.Handles.Add(captureSubscription);
 
             var skipState = new CameraSkipState();
             await PreflightCamerasAsync(recipe, skipState, totalSteps, progress, waitForResumeAsync, cancellationToken);
@@ -554,6 +625,11 @@ namespace HeatingCameraSystem.Master.Services
             }
             finally
             {
+                // fork된 촬영이 남은 채 NG·취소·종료되면 다른 실행과 겹치지 않도록 해당 요청만 중단한다.
+                PendingCapture[] unfinished;
+                lock (pendingCaptures) unfinished = pendingCaptures.Where(item => item.Batch.Snapshot().Count < item.ExpectedResults).ToArray();
+                await Task.WhenAll(unfinished.Select(item => PublishOperationAbortAsync(
+                    item.AgentId, item.CameraIndex, item.RequestId, CameraControlOps.CaptureAbort)));
                 foreach (var execution in executions)
                 {
                     if (execution.Finished) continue;
@@ -815,7 +891,7 @@ namespace HeatingCameraSystem.Master.Services
             int totalSteps,
             ConcurrentDictionary<string, CaptureBatch> captureWaiters,
             ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>> controlWaiters,
-            HashSet<string> subscribedControlAgents,
+            ControlAckSubscriptions subscribedControlAgents,
             List<PendingCapture> pending,
             CameraSkipState skipState,
             StepExecutionState execution,
@@ -870,64 +946,48 @@ namespace HeatingCameraSystem.Master.Services
                 {
                     await _natsService.PublishCameraControlAsync(new CameraControlMessage
                     {
-                        AgentId = agentId,
-                        CameraIndex = target.CameraIndex,
-                        Op = operation,
-                        RequestId = requestId,
-                        BiasTargetLevel = step.BiasTargetLevel,
-                        Timestamp = DateTime.UtcNow
-                    });
+                        AgentId = agentId, CameraIndex = target.CameraIndex, Op = operation, RequestId = requestId,
+                        BiasTargetLevel = step.BiasTargetLevel, Timestamp = DateTime.UtcNow
+                    }).WaitAsync(_captureTimeout, cancellationToken);
+                    CameraControlAckMessage ack = await controlWaiter.Task.WaitAsync(_captureTimeout, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!ack.IsSuccess || ack.AgentId != agentId || ack.CameraIndex != target.CameraIndex || ack.Op != operation)
+                        throw new RecipeNgException($"Camera {target.CameraIndex}: {operation} 실패: {ack.Message}", AlarmCodes.CameraCommandFailed);
                 }
+                catch (OperationCanceledException) { throw; }
+                catch (RecipeNgException) { throw; }
                 catch (Exception ex)
                 {
-                    // 카메라 통신 실패로 챔버 시퀀스까지 죽이지 않는다. 이 카메라만 건너뛴다.
-                    AlarmSink.Raise(AlarmCodes.NatsPublishFailed, AlarmSeverity.Error, RecipeSource, L("Alarm_Msg_ControlPublishFailed", step.StepId, target.CameraIndex, ex.Message));
-                    controlWaiters.TryRemove(requestId, out _);
-                    execution.Fail($"Camera {target.CameraIndex}: command publish failed: {ex.Message}");
-                    continue;
+                    throw new RecipeNgException($"Camera {target.CameraIndex}: {operation} 완료를 확인하지 못했습니다: {ex.Message}",
+                        AlarmCodes.CameraCommandFailed, ex);
                 }
-
-                Task controlCompleted = await Task.WhenAny(controlWaiter.Task, Task.Delay(_captureTimeout, cancellationToken));
-                if (controlCompleted != controlWaiter.Task)
-                {
-                    AlarmSink.Raise(AlarmCodes.AgentTimeout, AlarmSeverity.Warning, RecipeSource, L("Alarm_Msg_ControlTimeout", step.StepId, target.CameraIndex));
-                    skipState.NoteFailure(agentId);
-                    execution.Fail($"Camera {target.CameraIndex}: command failed or timed out.");
-                }
-                else if (!controlWaiter.Task.Result.IsSuccess)
-                {
-                    string message = controlWaiter.Task.Result.Message;
-                    string reason = $"Camera {target.CameraIndex}: command {operation} failed: {(string.IsNullOrWhiteSpace(message) ? "agent rejected the command." : message)}";
-                    AlarmSink.Raise(AlarmCodes.AgentTimeout, AlarmSeverity.Warning, RecipeSource, reason);
-                    skipState.NoteFailure(agentId);
-                    execution.Fail(reason);
-                }
-                controlWaiters.TryRemove(requestId, out _);
+                finally { controlWaiters.TryRemove(requestId, out _); }
             }
         }
 
         private async Task EnsureControlAckSubscriptionAsync(
             string agentId, string requestId, bool requiredBias,
             ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>> controlWaiters,
-            HashSet<string> subscribedControlAgents, CancellationToken cancellationToken)
+            ControlAckSubscriptions subscribedControlAgents, CancellationToken cancellationToken)
         {
             if (!subscribedControlAgents.Add(agentId)) return;
+            using var readiness = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            readiness.CancelAfter(TimeSpan.FromSeconds(30));
             try
             {
-                Task subscribe = _natsService.SubscribeCameraControlAckAsync(agentId, ack =>
+                IAsyncDisposable subscription = await _natsService.SubscribeCameraControlAckScopedAsync(agentId, ack =>
                 {
                     if (controlWaiters.TryGetValue(ack.RequestId, out var waiter))
                         waiter.TrySetResult(ack);
-                });
-                if (requiredBias) await subscribe.WaitAsync(_biasResponseTimeout, cancellationToken);
-                else await subscribe;
+                }, readiness.Token);
+                subscribedControlAgents.Handles.Add(subscription);
             }
             catch (Exception ex)
             {
                 subscribedControlAgents.Remove(agentId);
-                if (requiredBias && ex is not OperationCanceledException)
-                    throw new RecipeNgException(L("Alarm_Msg_BiasRequestFailed", requestId, agentId, ex.Message), innerException: ex);
-                throw;
+                if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested) throw;
+                throw new RecipeNgException(L("Alarm_Msg_BiasRequestFailed", requestId, agentId, ex.Message),
+                    requiredBias ? AlarmCodes.BiasFailed : AlarmCodes.CameraCommandFailed, ex);
             }
         }
 
@@ -995,7 +1055,7 @@ namespace HeatingCameraSystem.Master.Services
                 // 구형 Agent의 단순 ok 응답이나 이전 실행 결과가 보정 파일 확인을 대신해서는 안 된다.
                 if (!ack.BiasFileSaved || string.IsNullOrWhiteSpace(ack.BiasFilePath)
                     || ack.Attempts < 1 || ack.Attempts > BiasExecutionPolicy.MaxAttempts
-                    || !string.Equals(ack.AgentId, agentId, StringComparison.Ordinal)
+                    || !string.Equals(ack.AgentId, agentId, StringComparison.Ordinal) || ack.CameraIndex != target.CameraIndex
                     || !string.Equals(ack.Op, operation, StringComparison.Ordinal) || storage is null)
                     throw new RecipeNgException(L("Alarm_Msg_BiasFileNotConfirmed", requestId, agentId, ack.Message), AlarmCodes.BiasFileFailed);
 
@@ -1091,7 +1151,7 @@ namespace HeatingCameraSystem.Master.Services
             List<RecipeCameraTarget> targets,
             ConcurrentDictionary<string, CaptureBatch> captureWaiters,
             ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>> controlWaiters,
-            HashSet<string> subscribedControlAgents,
+            ControlAckSubscriptions subscribedControlAgents,
             List<PendingCapture> pending,
             CameraSkipState skipState,
             StepExecutionState execution,
@@ -1335,7 +1395,7 @@ namespace HeatingCameraSystem.Master.Services
             RecipeCameraTarget target,
             ConcurrentDictionary<string, CaptureBatch> captureWaiters,
             ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>> controlWaiters,
-            HashSet<string> subscribedControlAgents,
+            ControlAckSubscriptions subscribedControlAgents,
             List<PendingCapture> pending,
             CameraSkipState skipState,
             StepExecutionState execution,
@@ -1406,7 +1466,7 @@ namespace HeatingCameraSystem.Master.Services
             // 규칙 저장은 배치 전체를 결과 1건으로 보고한다. 장마다 JPEG을 실어 보내면 100장 x
             // 카메라수 만큼의 미리보기가 Master 메모리에 쌓이기 때문이다.
             int expectedResults = production is null ? shots : 1;
-            var batch = new CaptureBatch(expectedResults);
+            var batch = new CaptureBatch(expectedResults, agentId, target.CameraIndex);
             captureWaiters[requestId] = batch;
 
             try
@@ -1430,7 +1490,7 @@ namespace HeatingCameraSystem.Master.Services
                     ShotNumberOffset = shotNumberOffset
                 });
                 if (requiresBias) await publish.WaitAsync(_biasResponseTimeout, cancellationToken);
-                else await publish;
+                else await publish.WaitAsync(_captureTimeout, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -1440,6 +1500,12 @@ namespace HeatingCameraSystem.Master.Services
                     await PublishOperationAbortAsync(agentId, target.CameraIndex, requestId, CameraControlOps.CaptureAbort);
                     if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested) throw;
                     throw new RecipeNgException(L("Alarm_Msg_RequiredCaptureFailed", requestId, agentId, ex.Message), AlarmCodes.BiasFileFailed, ex);
+                }
+                if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                {
+                    captureWaiters.TryRemove(requestId, out _);
+                    await PublishOperationAbortAsync(agentId, target.CameraIndex, requestId, CameraControlOps.CaptureAbort);
+                    throw;
                 }
                 // 카메라 통신 실패로 챔버 시퀀스까지 죽이지 않는다. 이 회차만 건너뛴다.
                 AlarmSink.Raise(AlarmCodes.NatsPublishFailed, AlarmSeverity.Error, RecipeSource, L("Alarm_Msg_CapturePublishFailed", step.StepId, target.CameraIndex, ex.Message));
@@ -1474,11 +1540,10 @@ namespace HeatingCameraSystem.Master.Services
                 {
                     await Task.WhenAny(batch.Completed, Task.Delay(batchTimeout, cancellationToken));
                 }
-                if (cancellationToken.IsCancellationRequested)
-                    execution.Fail("Execution cancelled.");
+                cancellationToken.ThrowIfCancellationRequested();
                 await CollectCaptureAsync(item, skipState);
             }
-            catch (OperationCanceledException) when (requiresBias)
+            catch (OperationCanceledException)
             {
                 await PublishOperationAbortAsync(agentId, target.CameraIndex, requestId, CameraControlOps.CaptureAbort);
                 throw;
@@ -1504,7 +1569,7 @@ namespace HeatingCameraSystem.Master.Services
             List<PendingCapture> pending,
             ConcurrentDictionary<string, CaptureBatch> captureWaiters,
             ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>> controlWaiters,
-            HashSet<string> subscribedControlAgents,
+            ControlAckSubscriptions subscribedControlAgents,
             CameraSkipState skipState,
             CancellationToken cancellationToken)
         {
@@ -1556,20 +1621,15 @@ namespace HeatingCameraSystem.Master.Services
         private async Task<bool> AbortCaptureAsync(
             PendingCapture item,
             ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>> controlWaiters,
-            HashSet<string> subscribedControlAgents,
+            ControlAckSubscriptions subscribedControlAgents,
             CancellationToken cancellationToken)
         {
             while (true)
             {
                 string requestId = $"abort:{item.RequestId}:{Guid.NewGuid():N}";
 
-                if (subscribedControlAgents.Add(item.AgentId))
-                {
-                    await _natsService.SubscribeCameraControlAckAsync(item.AgentId, ack =>
-                    {
-                        if (controlWaiters.TryGetValue(ack.RequestId, out var waiter)) waiter.TrySetResult(ack);
-                    });
-                }
+                await EnsureControlAckSubscriptionAsync(item.AgentId, requestId, false, controlWaiters,
+                    subscribedControlAgents, cancellationToken);
 
                 var waiter = new TaskCompletionSource<CameraControlAckMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
                 controlWaiters[requestId] = waiter;
@@ -1583,12 +1643,17 @@ namespace HeatingCameraSystem.Master.Services
                         CameraIndex = item.CameraIndex,
                         Op = CameraControlOps.CaptureAbort,
                         RequestId = requestId,
+                        TargetRequestId = item.RequestId,
                         Timestamp = DateTime.UtcNow
-                    });
+                    }).WaitAsync(AbortAckTimeout, cancellationToken);
 
                     Task completed = await Task.WhenAny(waiter.Task, Task.Delay(AbortAckTimeout, cancellationToken));
-                    acked = completed == waiter.Task && waiter.Task.Result.IsSuccess;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    acked = completed == waiter.Task && waiter.Task.Result.IsSuccess
+                        && waiter.Task.Result.AgentId == item.AgentId && waiter.Task.Result.CameraIndex == item.CameraIndex
+                        && waiter.Task.Result.Op == CameraControlOps.CaptureAbort;
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception ex)
                 {
                     AlarmSink.Raise(AlarmCodes.NatsPublishFailed, AlarmSeverity.Error, RecipeSource,
@@ -1620,6 +1685,12 @@ namespace HeatingCameraSystem.Master.Services
 
         private async Task CollectCaptureAsync(PendingCapture item, CameraSkipState skipState)
         {
+            if (item.Batch.IdentityFailure is { } identityFailure)
+            {
+                item.Execution.Fail(identityFailure);
+                await PublishOperationAbortAsync(item.AgentId, item.CameraIndex, item.RequestId, CameraControlOps.CaptureAbort);
+                throw new RecipeNgException(identityFailure, AlarmCodes.CameraCommandFailed);
+            }
             var results = item.Batch.Snapshot();
             CaptureResultMessage? biasFailure = results.FirstOrDefault(result => result.FailureCode == BiasExecutionPolicy.FileFailureCode);
             if (biasFailure is not null)

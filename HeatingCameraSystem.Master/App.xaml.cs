@@ -65,6 +65,7 @@ public partial class App : Application
     /// </summary>
     protected override void OnExit(ExitEventArgs e)
     {
+        (MainWindow?.DataContext as IDisposable)?.Dispose();
         _cleanupService?.Stop();
         AppServices.LiveThermalCamera?.Dispose();
         try
@@ -90,4 +91,3 @@ public partial class App : Application
         }
     }
 }
-

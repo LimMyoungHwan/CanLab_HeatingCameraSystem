@@ -1,5 +1,5 @@
 using System;
-using System.IO.Ports;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Interfaces;
@@ -13,27 +13,45 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
     public class ClSerialCameraClient : ICameraSerialClient
     {
         private readonly SemaphoreSlim _gate = new(1, 1);
-        private SerialPort? _port;
+        private readonly object _disposeGate = new();
+        private readonly IClSerialTransport _transport;
+        private readonly CancellationTokenSource _lifetime = new();
+        private readonly CancellationToken _lifetimeToken;
+        private readonly int _timeoutMilliseconds;
+        private int _disposed;
+        private bool _isOpen;
+        private bool _needsRecovery;
 
         public string PortName { get; }
-        public bool IsOpen { get; private set; }
+        public bool IsOpen => Volatile.Read(ref _isOpen) && Volatile.Read(ref _disposed) == 0;
 
-        public ClSerialCameraClient(string portName)
+        public ClSerialCameraClient(string portName) : this(portName, new ClSerialTransport(portName))
+        {
+        }
+
+        internal ClSerialCameraClient(string portName, IClSerialTransport transport, int timeoutMilliseconds = 200)
         {
             PortName = portName;
+            _transport = transport ?? throw new ArgumentNullException(nameof(transport));
+            _timeoutMilliseconds = timeoutMilliseconds > 0 ? timeoutMilliseconds : throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));
+            _lifetimeToken = _lifetime.Token;
         }
 
         /// <summary>포트를 연다. 다른 명령보다 먼저 호출해야 하며, 그 전에는 모든 명령이 예외를 던진다.</summary>
-        public Task InitializeAsync(CancellationToken ct = default)
+        public async Task InitializeAsync(CancellationToken ct = default)
         {
-            _port = new SerialPort(PortName, 115200, Parity.None, 8, StopBits.One)
+            ThrowIfDisposed();
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _lifetimeToken);
+            await _gate.WaitAsync(linked.Token).ConfigureAwait(false);
+            try
             {
-                ReadTimeout = 200,
-                WriteTimeout = 200
-            };
-            _port.Open();
-            IsOpen = true;
-            return Task.CompletedTask;
+                linked.Token.ThrowIfCancellationRequested();
+                ThrowIfDisposed();
+                if (!_transport.IsOpen) _transport.Open();
+                linked.Token.ThrowIfCancellationRequested();
+                _isOpen = true;
+            }
+            finally { _gate.Release(); }
         }
 
         /// <summary>S/N 레지스터 4바이트를 차례로 읽어 9자리 시리얼 번호로 디코딩한다.</summary>
@@ -114,22 +132,15 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
 
         private async Task<byte> QueryAsync(byte mainId, byte subId, ClRw rw, byte data, CancellationToken ct)
         {
-            EnsureOpen();
-            await _gate.WaitAsync(ct).ConfigureAwait(false);
+            ThrowIfDisposed();
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _lifetimeToken);
+            await _gate.WaitAsync(linked.Token).ConfigureAwait(false);
             try
             {
-                byte[] request = ClPacket.BuildRequest(mainId, subId, rw, data);
-                _port!.Write(request, 0, 7);
-
-                byte[] rx = new byte[7];
-                int read = 0;
-                while (read < 7)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    read += _port.Read(rx, read, 7 - read); // ReadTimeout을 따른다
-                }
-
-                return ClPacket.ExtractPayload(rx);
+                linked.Token.ThrowIfCancellationRequested();
+                EnsureOpen();
+                // SerialPort is synchronous. Do not block the Dispatcher while the device responds.
+                return await Task.Run(() => QueryCore(mainId, subId, rw, data, linked.Token)).ConfigureAwait(false);
             }
             finally
             {
@@ -137,25 +148,117 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
             }
         }
 
+        private byte QueryCore(byte mainId, byte subId, ClRw rw, byte data, CancellationToken ct)
+        {
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                if (_needsRecovery) DrainUntilQuiet(ct);
+                _transport.DiscardInBuffer();
+                ct.ThrowIfCancellationRequested();
+                byte[] request = ClPacket.BuildRequest(mainId, subId, rw, data);
+                long started = Stopwatch.GetTimestamp();
+                _transport.Write(request, 0, request.Length, _timeoutMilliseconds);
+
+                var pending = new List<byte>(14);
+                byte[] chunk = new byte[7];
+                while (true)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    int remaining = _timeoutMilliseconds - (int)Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                    if (remaining <= 0) throw new TimeoutException("CL response timeout.");
+                    int count = _transport.Read(chunk, 0, chunk.Length, remaining);
+                    ct.ThrowIfCancellationRequested();
+                    if (Stopwatch.GetElapsedTime(started).TotalMilliseconds >= _timeoutMilliseconds)
+                        throw new TimeoutException("CL response timeout.");
+                    if (count <= 0) throw new IOException("CL serial connection closed while reading a response.");
+                    pending.AddRange(chunk.AsSpan(0, count).ToArray());
+
+                    // Recover a frame boundary after noise/partial packets. Foreign replies must
+                    // never acknowledge this command, even if their header and payload look valid.
+                    while (pending.Count >= 2)
+                    {
+                        if (pending[0] != 0x43 || pending[1] != 0x4C)
+                        {
+                            pending.RemoveAt(0);
+                            continue;
+                        }
+                        if (pending.Count < 7) break;
+                        byte[] response = pending.GetRange(0, 7).ToArray();
+                        pending.RemoveRange(0, 7);
+                        if (response[2] != mainId || response[3] != subId || response[4] != (byte)rw)
+                            continue;
+                        byte payload = ClPacket.ExtractPayload(response);
+                        ct.ThrowIfCancellationRequested();
+                        return payload;
+                    }
+                }
+            }
+            catch
+            {
+                // A timed-out/cancelled packet may arrive after this operation releases the gate.
+                // The next transaction must observe a quiet interval before sending another request.
+                _needsRecovery = true;
+                ct.ThrowIfCancellationRequested();
+                throw;
+            }
+        }
+
+        private void DrainUntilQuiet(CancellationToken ct)
+        {
+            _transport.DiscardInBuffer();
+            long started = Stopwatch.GetTimestamp();
+            byte[] discard = new byte[64];
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (Stopwatch.GetElapsedTime(started).TotalMilliseconds >= 4L * _timeoutMilliseconds)
+                    throw new TimeoutException("CL serial input did not become quiet after a failed command.");
+                try
+                {
+                    int count = _transport.Read(discard, 0, discard.Length, _timeoutMilliseconds);
+                    if (count <= 0) throw new IOException("CL serial connection closed during recovery.");
+                }
+                catch (TimeoutException)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    _needsRecovery = false;
+                    return;
+                }
+            }
+        }
+
         private void EnsureOpen()
         {
-            if (!IsOpen || _port is null || !_port.IsOpen)
+            ThrowIfDisposed();
+            if (!_isOpen || !_transport.IsOpen)
             {
                 throw new InvalidOperationException("Serial port not open. Call InitializeAsync first.");
             }
         }
 
+        private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
         public void Dispose()
         {
-            if (_port?.IsOpen == true)
+            lock (_disposeGate)
             {
-                _port.Close();
+                if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+                _lifetime.Cancel();
+                // Cancel queued reads, then let the bounded active read finish before closing COM.
+                // Do not dispose SemaphoreSlim with WaitAsync continuations still unwinding.
+                _gate.Wait();
+                try
+                {
+                    _isOpen = false;
+                    _transport.Dispose();
+                }
+                finally
+                {
+                    _gate.Release();
+                    _lifetime.Dispose();
+                }
             }
-
-            _port?.Dispose();
-            _port = null;
-            IsOpen = false;
-            _gate.Dispose();
         }
     }
 }

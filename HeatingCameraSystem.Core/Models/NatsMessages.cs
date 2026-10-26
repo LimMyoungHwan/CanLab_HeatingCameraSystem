@@ -47,6 +47,11 @@ namespace HeatingCameraSystem.Core.Models
         public string Alias { get; set; } = string.Empty;
 
         public string HostName { get; set; } = string.Empty;
+        /// <summary>같은 호스트의 Manager가 실제 AgentUI 카메라를 유일하게 연결하는 물리 식별자.</summary>
+        public string UsbContainerId { get; set; } = string.Empty;
+        public string CameraSerialNumber { get; set; } = string.Empty;
+        /// <summary>로컬 AgentUI 로그 경로. 수신자는 신뢰된 로컬 로그 루트 하위인지 검증해야 한다.</summary>
+        public string LogDirectory { get; set; } = string.Empty;
         public int CameraIndex { get; set; }
         public CameraStatus CameraStatus { get; set; }
         public DateTime Timestamp { get; set; }

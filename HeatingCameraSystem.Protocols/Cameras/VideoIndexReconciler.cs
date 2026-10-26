@@ -13,26 +13,31 @@ namespace HeatingCameraSystem.Protocols.Cameras
     /// </summary>
     public static class VideoIndexReconciler
     {
-        /// <summary>리스트를 제자리에서 수정하며, 바뀐 OpenCvIndex 개수를 반환한다.</summary>
+        /// <summary>
+        /// 현재 유일하게 확인된 물리 장치에만 인덱스를 배정한다. 미존재/모호/중복은 -1(offline)로
+        /// 표시한다. 저장된 AgentId/SN은 유지하며, 호출자는 -1을 native camera open에 넘기면 안 된다.
+        /// </summary>
         public static int Reconcile(IList<CameraDescriptor> cameras, IReadOnlyList<VideoDevice> devices)
         {
+            var indices = new int[cameras.Count];
+            for (int i = 0; i < cameras.Count; i++)
+            {
+                CameraDescriptor cam = cameras[i];
+                var matches = string.IsNullOrWhiteSpace(cam.UsbContainerId)
+                    ? new List<VideoDevice>()
+                    : devices.Where(d => string.Equals(d.ContainerId, cam.UsbContainerId, StringComparison.OrdinalIgnoreCase)).ToList();
+                indices[i] = matches.Count == 1 && matches[0].Index >= 0
+                    && devices.Count(d => d.Index == matches[0].Index) == 1 ? matches[0].Index : -1;
+            }
+            var duplicateIndices = indices.Where(index => index >= 0)
+                .GroupBy(index => index).Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet();
             int changed = 0;
             for (int i = 0; i < cameras.Count; i++)
             {
                 CameraDescriptor cam = cameras[i];
-                if (string.IsNullOrWhiteSpace(cam.UsbContainerId))
-                {
-                    continue;
-                }
-
-                VideoDevice? dev = devices.FirstOrDefault(
-                    d => string.Equals(d.ContainerId, cam.UsbContainerId, StringComparison.OrdinalIgnoreCase));
-                if (dev is null || dev.Index == cam.OpenCvIndex)
-                {
-                    continue;
-                }
-
-                cameras[i] = cam with { OpenCvIndex = dev.Index };
+                int index = duplicateIndices.Contains(indices[i]) ? -1 : indices[i];
+                if (index == cam.OpenCvIndex) continue;
+                cameras[i] = cam with { OpenCvIndex = index };
                 changed++;
             }
 

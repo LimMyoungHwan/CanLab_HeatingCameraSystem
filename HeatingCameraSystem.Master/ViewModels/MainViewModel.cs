@@ -40,7 +40,7 @@ namespace HeatingCameraSystem.Master.ViewModels
     /// 메인 셸 화면. 좌측 내비게이션으로 각 화면 ViewModel을 전환하고, 상단 알람 패널
     /// (필터·삭제)과 부저 정지·에러 리셋·원점 복귀·비상정지 등 전역 PLC 트리거를 담당한다.
     /// </summary>
-    public partial class MainViewModel : ObservableObject
+    public partial class MainViewModel : ObservableObject, IDisposable
     {
         [ObservableProperty]
         private string _currentViewTitle = string.Empty;
@@ -57,6 +57,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private readonly DashboardViewModel _dashboardViewModel = new();
         // PlcStatus.Updated 구독자이므로 매 진입마다 새로 만들면 죽은 VM이 계속 이벤트를 받는다.
         private StatusMonitorViewModel? _statusMonitorViewModel;
+        private bool _disposed;
         private string _currentTitleKey = "Title_Dashboard";
 
         public ObservableCollection<AlarmEntry> Alarms => AlarmSink.Entries;
@@ -67,6 +68,25 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
             NavigateToDashboard();
+        }
+
+        partial void OnCurrentViewModelChanged(object? oldValue, object? newValue)
+        {
+            if (ReferenceEquals(oldValue, newValue) || ReferenceEquals(oldValue, _dashboardViewModel)
+                || ReferenceEquals(oldValue, _statusMonitorViewModel)) return;
+            (oldValue as IDisposable)?.Dispose();
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            LocalizationManager.Instance.PropertyChanged -= OnLocalizationChanged;
+            if (!ReferenceEquals(CurrentViewModel, _dashboardViewModel)
+                && !ReferenceEquals(CurrentViewModel, _statusMonitorViewModel))
+                (CurrentViewModel as IDisposable)?.Dispose();
+            _dashboardViewModel.Dispose();
+            _statusMonitorViewModel?.Dispose();
         }
 
         private void OnLocalizationChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

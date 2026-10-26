@@ -107,7 +107,7 @@ public class CapturePlanRunTests
                 BiasSourceOperation = cmd.Op == CameraControlOps.BiasUseCurrent ? cmd.BiasSourceOperation : cmd.Op
             });
         }).Returns(Task.CompletedTask);
-        nats.Setup(s => s.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>())).Callback<CaptureCommandMessage>(cmd => callback?.Invoke(new() { AgentId = cmd.TargetAgentId, RecipeStepId = cmd.RecipeStepId, IsSuccess = succeeds(cmd), ImagePath = "/test/image.jpg", Timestamp = DateTime.UtcNow })).Returns(Task.CompletedTask);
+        nats.Setup(s => s.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>())).Callback<CaptureCommandMessage>(cmd => callback?.Invoke(new() { AgentId = cmd.TargetAgentId, CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(cmd), RecipeStepId = cmd.RecipeStepId, IsSuccess = succeeds(cmd), ImagePath = "/test/image.jpg", Timestamp = DateTime.UtcNow })).Returns(Task.CompletedTask);
         return new RecipeEngine(plc.Object, nats.Object, history.Object, new RecipeEngineSettings { CaptureResultTimeoutSeconds = 1 });
     }
 }

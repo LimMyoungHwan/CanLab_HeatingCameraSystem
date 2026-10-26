@@ -21,7 +21,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
     /// </summary>
     public partial class CameraPanelViewModel : ObservableObject, IDisposable
     {
-        private ICameraRuntime _runtime;
+        private ICameraRuntime? _runtime;
+        private CancellationTokenSource _runtimeLifetimeCts = new();
         private readonly Dispatcher _dispatcher;
         private readonly ICameraSerialClient? _serial;
         private readonly ThermalNucCorrector _nuc;
@@ -65,6 +66,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(CanEditBias))]
+        [NotifyPropertyChangedFor(nameof(CanControlCamera))]
+        [NotifyPropertyChangedFor(nameof(CanCapture))]
         [NotifyCanExecuteChangedFor(nameof(RunBiasLowCommand))]
         [NotifyCanExecuteChangedFor(nameof(RunBiasMidCommand))]
         [NotifyCanExecuteChangedFor(nameof(RunBiasHighCommand))]
@@ -80,7 +83,38 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         [NotifyCanExecuteChangedFor(nameof(RestoreManualBiasCommand))]
         private string _manualBiasValueText = string.Empty;
 
-        public bool CanEditBias => HasSerialControl && !IsBiasBusy && !_disposed;
+        public bool CanEditBias => CanControlCamera;
+
+        public bool HasRuntime => _runtime is not null && !_disposed;
+        public bool CanCapture => HasRuntime && !IsBiasBusy;
+        public bool CanControlCamera => HasSerialControl && CanCapture;
+
+        partial void OnIsBiasBusyChanged(bool value) => NotifyControlCommands();
+
+        private void NotifyControlCommands()
+        {
+            OnPropertyChanged(nameof(HasRuntime));
+            OnPropertyChanged(nameof(CanCapture));
+            OnPropertyChanged(nameof(CanControlCamera));
+            OnPropertyChanged(nameof(CanEditBias));
+            RestartCommand.NotifyCanExecuteChanged();
+            CaptureSaveCommand.NotifyCanExecuteChanged();
+            OpenShutterCommand.NotifyCanExecuteChanged();
+            CloseShutterCommand.NotifyCanExecuteChanged();
+            RunCameraCommand.NotifyCanExecuteChanged();
+            StopCameraCommand.NotifyCanExecuteChanged();
+            SaveConfigCommand.NotifyCanExecuteChanged();
+            RefreshInfoCommand.NotifyCanExecuteChanged();
+            RunNucCommand.NotifyCanExecuteChanged();
+            ApplyOutputFormatCommand.NotifyCanExecuteChanged();
+            RunBiasLowCommand.NotifyCanExecuteChanged();
+            RunBiasMidCommand.NotifyCanExecuteChanged();
+            RunBiasHighCommand.NotifyCanExecuteChanged();
+            RestoreManualBiasCommand.NotifyCanExecuteChanged();
+        }
+
+        private ICameraRuntime RequireRuntime() => _runtime
+            ?? throw new InvalidOperationException("카메라 런타임이 내려가 있거나 장치를 확인하지 못했습니다.");
 
         public string ManualBiasValuePreview => TryParseManualBiasValue(ManualBiasValueText, out byte value)
             ? $"0x{value:X2} ({value})" : string.Empty;
@@ -94,9 +128,9 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
         public string AgentId => _agentId;
 
-        public int CameraIndex => _runtime.CameraIndex;
+        public int CameraIndex => _runtime?.CameraIndex ?? -1;
 
-        public CameraPanelViewModel(string title, string agentId, ICameraRuntime runtime, Dispatcher dispatcher, ThermalNucCorrector nuc, CaptureStore store, int captureBurstCount = 1, ICameraSerialClient? serial = null, Func<CaptureResultMessage, Task>? publishResult = null)
+        public CameraPanelViewModel(string title, string agentId, ICameraRuntime? runtime, Dispatcher dispatcher, ThermalNucCorrector nuc, CaptureStore store, int captureBurstCount = 1, ICameraSerialClient? serial = null, Func<CaptureResultMessage, Task>? publishResult = null)
         {
             _title = title;
             _agentId = agentId;
@@ -107,10 +141,13 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _captureBurstCount = captureBurstCount > 0 ? captureBurstCount : 1;
             _serial = serial;
             _publishResult = publishResult;
-            _status = runtime.Status.ToString();
+            _status = runtime?.Status.ToString() ?? CameraRuntimeStatus.Stopped.ToString();
 
-            _runtime.FrameReady += OnFrameReady;
-            _runtime.StatusChanged += OnStatusChanged;
+            if (runtime is not null)
+            {
+                runtime.FrameReady += OnFrameReady;
+                runtime.StatusChanged += OnStatusChanged;
+            }
 
             if (_serial is not null)
             {
@@ -134,138 +171,235 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 return;
             }
 
-            _dispatcher.InvokeAsync(() => LiveImage = bmp);
+            _dispatcher.InvokeAsync(() =>
+            {
+                if (!_disposed && ReferenceEquals(sender, _runtime)) LiveImage = bmp;
+            });
         }
 
         private void OnStatusChanged(object? sender, CameraRuntimeStatus status)
         {
-            _dispatcher.InvokeAsync(() => Status = status.ToString());
+            _dispatcher.InvokeAsync(() =>
+            {
+                if (!_disposed && ReferenceEquals(sender, _runtime)) Status = status.ToString();
+            });
         }
 
-        // [S7] 패널을 재적재된 영상 런타임으로 향하게 하거나(Manager runtimeLoad), runtimeUnload 시
-        // 해제한다(runtime = null). 영상 런타임만 교체된다 — 시리얼 클라이언트 + NUC는 그대로이므로
-        // 카메라별 unload/reload가 COM 포트를 절대 흔들지 않는다. 필드 교체가 _runtime을 읽는 캡처
-        // 명령들과 직렬화되도록 UI 스레드에서 호출할 것.
+        /// <summary>장치 바인딩을 바꿀 때 진행 작업과 이전 BIAS 세대를 무효화한다.</summary>
         public void RebindRuntime(ICameraRuntime? runtime)
         {
-            _runtime.FrameReady -= OnFrameReady;
-            _runtime.StatusChanged -= OnStatusChanged;
-
-            if (runtime is null)
+            if (ReferenceEquals(_runtime, runtime)) return;
+            if (_runtime is { } previous)
             {
-                LiveImage = null;
-                Status = CameraRuntimeStatus.Stopped.ToString();
-                return;
+                previous.FrameReady -= OnFrameReady;
+                previous.StatusChanged -= OnStatusChanged;
             }
-
+            CancellationTokenSource previousLifetime = _runtimeLifetimeCts;
+            _runtimeLifetimeCts = new CancellationTokenSource();
             _runtime = runtime;
-            _runtime.FrameReady += OnFrameReady;
-            _runtime.StatusChanged += OnStatusChanged;
-            Status = _runtime.Status.ToString();
+            previousLifetime.Cancel();
+            previousLifetime.Dispose();
+            SetAppliedBias(null);
+            SerialStatus = "카메라 바인딩 변경: 이전 BIAS는 무효입니다. 다시 적용/확인하세요.";
+            LiveImage = null;
+            Status = runtime?.Status.ToString() ?? CameraRuntimeStatus.Stopped.ToString();
+            if (runtime is not null)
+            {
+                runtime.FrameReady += OnFrameReady;
+                runtime.StatusChanged += OnStatusChanged;
+            }
+            OnPropertyChanged(nameof(CameraIndex));
+            NotifyControlCommands();
         }
 
-        [RelayCommand]
-        private async Task RestartAsync()
+        /// <summary>이전 작업의 취소가 끝난 뒤에만 네이티브 런타임을 제거/교체한다.</summary>
+        public async Task ChangeRuntimeAsync(Func<Task<ICameraRuntime?>> change, CancellationToken cancellationToken = default)
         {
-            await _runtime.StopAsync();
-            await _runtime.StartAsync();
+            if (_disposed) throw new ObjectDisposedException(nameof(CameraPanelViewModel));
+            RebindRuntime(null);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token);
+            await _biasGate.WaitAsync(linked.Token);
+            IsBiasBusy = true;
+            try
+            {
+                linked.Token.ThrowIfCancellationRequested();
+                ICameraRuntime? next = await change();
+                linked.Token.ThrowIfCancellationRequested();
+                RebindRuntime(next);
+            }
+            finally { ExitBias(); }
         }
+
+        /// <summary>원격 촬영 전체가 로컬 셔터/보정과 같은 게이트를 보유한다. 장치 교체는 촬영 토큰도 취소한다.</summary>
+        public async Task<ICameraOperationLease> AcquireCaptureLeaseAsync(CancellationToken cancellationToken)
+        {
+            await EnterBiasAsync();
+            try
+            {
+                var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token, _runtimeLifetimeCts.Token);
+                if (linked.IsCancellationRequested)
+                {
+                    linked.Dispose();
+                    throw new OperationCanceledException(cancellationToken);
+                }
+                return new CaptureLease(this, linked);
+            }
+            catch { ExitBias(); throw; }
+        }
+
+        private sealed class CaptureLease : ICameraOperationLease
+        {
+            private CameraPanelViewModel? _owner;
+            private readonly CancellationTokenSource _linked;
+            public CaptureLease(CameraPanelViewModel owner, CancellationTokenSource linked) { _owner = owner; _linked = linked; }
+            public CancellationToken CancellationToken => _linked.Token;
+            public ValueTask DisposeAsync()
+            {
+                CameraPanelViewModel? owner = Interlocked.Exchange(ref _owner, null);
+                if (owner is null) return ValueTask.CompletedTask;
+                // 종료는 UI 스레드에서 동기 대기할 수 있다. 게이트 반환 자체는 dispatcher를
+                // 기다리지 않으며, 늦게 도착한 UI 갱신은 새 명령의 busy 상태를 지우지 않는다.
+                owner._biasGate.Release();
+                if (owner._dispatcher.CheckAccess()) owner.IsBiasBusy = false;
+                else if (!owner._dispatcher.HasShutdownStarted && !owner._dispatcher.HasShutdownFinished)
+                    _ = owner._dispatcher.InvokeAsync(() =>
+                    {
+                        if (owner._biasGate.CurrentCount == 1) owner.IsBiasBusy = false;
+                    });
+                _linked.Dispose();
+                return ValueTask.CompletedTask;
+            }
+        }
+
+        [RelayCommand(CanExecute = nameof(CanCapture))]
+        private Task RestartAsync() => RunUiControlAsync(async ct =>
+        {
+            ICameraRuntime runtime = RequireRuntime();
+            SetAppliedBias(null);
+            await runtime.StopAsync();
+            ct.ThrowIfCancellationRequested();
+            await runtime.StartAsync(ct);
+        }, "영상 재시작");
 
         /// <summary>버스트 수만큼 스냅샷을 NUC 보정 후 저장하고, 마지막 장을 캡처 결과로 Master에 발행한다.</summary>
-        [RelayCommand]
-        private async Task CaptureSaveAsync()
+        [RelayCommand(CanExecute = nameof(CanCapture))]
+        private Task CaptureSaveAsync() => RunUiCommandAsync(CameraControlOps.Capture);
+
+        private async Task CaptureSaveCoreAsync(CancellationToken ct)
         {
-            int saved = 0;
+            ICameraRuntime runtime = RequireRuntime();
             ThermalFrame? lastFrame = null;
             CaptureRecord? lastRecord = null;
-            try
+            for (int i = 0; i < _captureBurstCount; i++)
             {
-                for (int i = 0; i < _captureBurstCount; i++)
-                {
-                    bool forceFreshFrame = i > 0;
-                    ThermalFrame? snap = await _runtime.CaptureSnapshotAsync(
-                        maxAge: forceFreshFrame ? TimeSpan.Zero : TimeSpan.FromSeconds(1),
-                        nextFrameTimeout: TimeSpan.FromSeconds(2));
-
-                    if (snap is not null)
-                    {
-                        ThermalFrame corrected = _nuc.Apply(snap);
-                        lastRecord = _store.Save(corrected, _agentId, _runtime.CameraIndex);
-                        lastFrame = corrected;
-                        saved++;
-                    }
-                }
-
-                CaptureStatus = saved > 0
-                    ? $"{saved}/{_captureBurstCount}장 저장됨 {DateTime.Now:HH:mm:ss}"
-                    : "저장 실패: 프레임 없음";
-
-                if (saved > 0 && lastFrame is not null && lastRecord is not null)
-                    await PublishCaptureResultAsync(lastFrame, lastRecord);
+                ThermalFrame? snap = await runtime.CaptureSnapshotAsync(
+                    maxAge: i > 0 ? TimeSpan.Zero : TimeSpan.FromSeconds(1),
+                    nextFrameTimeout: TimeSpan.FromSeconds(2), ct: ct);
+                ct.ThrowIfCancellationRequested();
+                if (snap is null) throw new InvalidOperationException($"저장 실패: 프레임 없음 ({i}/{_captureBurstCount})");
+                ThermalFrame corrected = _nuc.Apply(snap);
+                lastRecord = _store.Save(corrected, _agentId, runtime.CameraIndex);
+                lastFrame = corrected;
             }
-            catch (Exception ex)
-            {
-                CaptureStatus = $"저장 오류: {ex.Message}";
-            }
-        }
-
-        private async Task PublishCaptureResultAsync(ThermalFrame frame, CaptureRecord record)
-        {
-            if (_publishResult is null) return;
-            try
-            {
+            ct.ThrowIfCancellationRequested();
+            if (lastFrame is not null && lastRecord is not null && _publishResult is not null)
                 await _publishResult(new CaptureResultMessage
                 {
                     AgentId = _agentId,
                     Alias = Title,
-                    CameraIndex = _runtime.CameraIndex,
+                    CameraIndex = runtime.CameraIndex,
                     Source = CaptureSource.AgentUi,
                     CaptureId = Guid.NewGuid().ToString(),
                     IsSuccess = true,
-                    ImagePath = record.Y16Path,
-                    ImageBytes = ThermalPreviewEncoder.EncodeJpeg(frame),
+                    ImagePath = lastRecord.Y16Path,
+                    ImageBytes = ThermalPreviewEncoder.EncodeJpeg(lastFrame),
                     Timestamp = DateTime.UtcNow
                 });
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[CameraPanel] capture result publish failed: {ex.Message}");
-            }
+            CaptureStatus = $"{_captureBurstCount}/{_captureBurstCount}장 저장됨 {DateTime.Now:HH:mm:ss}";
         }
 
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task OpenShutterAsync() => RunSerialAsync(s => s.SetShutterAsync(true), "셔터 열림");
+        [RelayCommand(CanExecute = nameof(CanControlCamera))]
+        private Task OpenShutterAsync() => RunUiCommandAsync(CameraControlOps.ShutterOpen);
 
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task CloseShutterAsync() => RunSerialAsync(s => s.SetShutterAsync(false), "셔터 닫힘");
+        [RelayCommand(CanExecute = nameof(CanControlCamera))]
+        private Task CloseShutterAsync() => RunUiCommandAsync(CameraControlOps.ShutterClose);
 
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task RunCameraAsync() => RunSerialAsync(s => s.SetCameraRunningAsync(true), "카메라 RUN");
+        [RelayCommand(CanExecute = nameof(CanControlCamera))]
+        private Task RunCameraAsync() => RunUiCommandAsync(CameraControlOps.Run);
 
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task StopCameraAsync() => RunSerialAsync(s => s.SetCameraRunningAsync(false), "카메라 STOP");
+        [RelayCommand(CanExecute = nameof(CanControlCamera))]
+        private Task StopCameraAsync() => RunUiCommandAsync(CameraControlOps.Stop);
 
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task SaveConfigAsync() => RunSerialAsync(s => s.SaveConfigAsync(), "설정 저장");
+        [RelayCommand(CanExecute = nameof(CanControlCamera))]
+        private Task SaveConfigAsync() => RunUiCommandAsync(CameraControlOps.SaveConfig);
 
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private async Task RefreshInfoAsync()
+        [RelayCommand(CanExecute = nameof(CanControlCamera))]
+        private Task RefreshInfoAsync() => RunUiCommandAsync(CameraControlOps.RefreshInfo);
+
+        /// <summary>원격 명령은 UI용 예외 흡수 래퍼를 거치지 않고 실제 실패/취소를 ACK 처리기로 전달한다.</summary>
+        public Task RunCameraControlAsync(string operation, CancellationToken cancellationToken = default)
+            => RunExclusiveControlAsync(async ct =>
+            {
+                if (operation == CameraControlOps.Capture)
+                {
+                    await CaptureSaveCoreAsync(ct);
+                    return;
+                }
+                ICameraSerialClient serial = _serial ?? throw new InvalidOperationException("카메라 제어용 시리얼 연결이 없습니다.");
+                switch (operation)
+                {
+                    case CameraControlOps.Run: await serial.SetCameraRunningAsync(true, ct); break;
+                    case CameraControlOps.Stop: await serial.SetCameraRunningAsync(false, ct); break;
+                    case CameraControlOps.ShutterOpen: await serial.SetShutterAsync(true, ct); break;
+                    case CameraControlOps.ShutterClose: await serial.SetShutterAsync(false, ct); break;
+                    case CameraControlOps.SaveConfig: await serial.SaveConfigAsync(ct); break;
+                    case CameraControlOps.Nuc: await RunNucCoreAsync(serial, ct); break;
+                    case CameraControlOps.RefreshInfo:
+                        string serialNumber = await serial.ReadSerialNumberAsync(ct);
+                        double fpa = await serial.ReadFpaTemperatureAsync(ct);
+                        byte lsb = await serial.ReadBiasAsync(ct);
+                        CameraOutputFormat format = await serial.ReadOutputFormatAsync(ct);
+                        ct.ThrowIfCancellationRequested();
+                        ApplyInfo((serialNumber, fpa, lsb));
+                        SelectedOutputFormat = format;
+                        OutputFormatText = DescribeOutputFormat(format);
+                        break;
+                    default: throw new ArgumentOutOfRangeException(nameof(operation), operation, "지원하지 않는 카메라 제어 명령입니다.");
+                }
+                ct.ThrowIfCancellationRequested();
+                SerialStatus = $"{operation} 적용됨";
+            }, operation, cancellationToken);
+
+        private async Task RunExclusiveControlAsync(Func<CancellationToken, Task> action, string label, CancellationToken cancellationToken)
         {
-            if (_serial is null) return;
-
+            await EnterBiasAsync();
             try
             {
-                string serialNumber = await _serial.ReadSerialNumberAsync();
-                double fpa = await _serial.ReadFpaTemperatureAsync();
-                byte lsb = await _serial.ReadBiasAsync();
-                ApplyInfo((serialNumber, fpa, lsb));
-                await ReadOutputFormatAsync();
-                SerialStatus = $"정보 갱신 {DateTime.Now:HH:mm:ss}";
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token, _runtimeLifetimeCts.Token);
+                linked.Token.ThrowIfCancellationRequested();
+                await action(linked.Token);
+                linked.Token.ThrowIfCancellationRequested();
             }
             catch (Exception ex)
             {
-                SerialStatus = $"읽기 실패: {ex.Message}";
+                SerialStatus = $"{label} 오류: {ex.Message}";
+                if (label == CameraControlOps.Capture) CaptureStatus = $"저장 오류: {ex.Message}";
+                AgentUiLog.Logger.Warning(ex, "[{AgentId}] 카메라 제어 실패: {Operation}", _agentId, label);
+                throw;
             }
+            finally { ExitBias(); }
+        }
+
+        private async Task RunUiCommandAsync(string operation)
+        {
+            try { await RunCameraControlAsync(operation); }
+            catch (Exception ex) { SerialStatus = $"{operation} 오류: {ex.Message}"; }
+        }
+
+        private async Task RunUiControlAsync(Func<CancellationToken, Task> action, string label)
+        {
+            try { await RunExclusiveControlAsync(action, label, CancellationToken.None); }
+            catch (Exception ex) { SerialStatus = $"{label} 오류: {ex.Message}"; }
         }
 
         /// <summary>
@@ -367,26 +501,17 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         /// (<c>참고/util/Viewer.cpp:414-425</c>) 이어지는 명령은 실패하는 게 정상이다 —
         /// 여기서 예외를 실패로 보고하지 않고 재시작 안내로 바꾸는 이유다.
         /// </summary>
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private async Task ApplyOutputFormatAsync()
+        [RelayCommand(CanExecute = nameof(CanControlCamera))]
+        private Task ApplyOutputFormatAsync() => RunUiControlAsync(async ct =>
         {
-            if (_serial is null) return;
-
+            ICameraSerialClient serial = _serial ?? throw new InvalidOperationException("시리얼 연결이 없습니다.");
             CameraOutputFormat target = SelectedOutputFormat;
-            try
-            {
-                await _serial.SetOutputFormatAsync(target);
-            }
-            catch (Exception ex)
-            {
-                SerialStatus = $"출력 포맷 변경 실패: {ex.Message}";
-                return;
-            }
-
+            SetAppliedBias(null);
+            await serial.SetOutputFormatAsync(target, ct);
+            ct.ThrowIfCancellationRequested();
             OutputFormatText = $"{DescribeOutputFormat(target)} — 적용 대기";
-            SerialStatus = $"출력 포맷을 {target}로 변경했습니다. 카메라가 링크를 끊었으니 "
-                           + "AgentUI를 재시작한 뒤 '정보 읽기'로 확인하고, '설정 저장'으로 카메라에 영구 저장하세요.";
-        }
+            SerialStatus = $"출력 포맷을 {target}로 변경했습니다. AgentUI를 재시작한 뒤 '정보 읽기'로 확인하세요.";
+        }, "출력 포맷 변경");
 
         /// <summary>
         /// 하트비트와 캡처가 Master로 실어 보낼 카메라(FPA) 온도를 읽는다. 실패는 null로 흡수하되
@@ -456,33 +581,28 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         }
 
         /// <summary>셔터를 닫아 평면필드를 캡처해 NUC 보정 테이블을 갱신한 뒤 셔터를 다시 연다.</summary>
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private async Task RunNucAsync()
+        [RelayCommand(CanExecute = nameof(CanControlCamera))]
+        private Task RunNucAsync() => RunUiCommandAsync(CameraControlOps.Nuc);
+
+        private async Task RunNucCoreAsync(ICameraSerialClient serial, CancellationToken ct)
         {
-            if (_serial is null) return;
+            RequireRuntime();
+            SerialStatus = "NUC: 셔터 닫고 평면필드 캡처…";
             try
             {
-                SerialStatus = "NUC: 셔터 닫고 평면필드 캡처…";
-                await _serial.SetShutterAsync(false);
-                await Task.Delay(400);
-
-                ThermalFrame? flat = await AverageFramesAsync(12);
-                await _serial.SetShutterAsync(true);
-
-                if (flat is null)
-                {
-                    SerialStatus = "NUC 실패: 프레임 없음";
-                    return;
-                }
-
+                await serial.SetShutterAsync(false, ct);
+                await Task.Delay(400, ct);
+                ThermalFrame? flat = await AverageFramesAsync(12, ct);
+                if (flat is null) throw new InvalidOperationException("NUC 실패: 새 프레임 없음");
+                ct.ThrowIfCancellationRequested();
                 _nuc.CaptureFromFlat(flat);
-                SerialStatus = $"NUC 완료 (데드픽셀 {_nuc.DeadPixelCount}개) {DateTime.Now:HH:mm:ss}";
             }
-            catch (Exception ex)
+            finally
             {
-                SerialStatus = $"NUC 오류: {ex.Message}";
-                try { await _serial.SetShutterAsync(true); } catch { }
+                // 취소/프레임 실패 때도 닫힌 셔터를 복구하며, 복구 실패 또한 호출자에게 전달한다.
+                await serial.SetShutterAsync(true, CancellationToken.None);
             }
+            SerialStatus = $"NUC 완료 (데드픽셀 {_nuc.DeadPixelCount}개) {DateTime.Now:HH:mm:ss}";
         }
 
         private const double BiasTargetTolerance = 100;
@@ -571,9 +691,10 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private async Task EnterBiasAsync()
         {
             if (_disposed) throw new ObjectDisposedException(nameof(CameraPanelViewModel));
+            RequireRuntime();
             if (!await _biasGate.WaitAsync(0))
             {
-                const string message = "이 카메라는 이미 BIAS 적용 또는 확인 중입니다.";
+                const string message = "이 카메라는 이미 BIAS 또는 다른 카메라 명령을 처리 중입니다.";
                 AgentUiLog.Logger.Warning("[{AgentId}] BIAS 중복 실행 거부: {Reason}", _agentId, message);
                 throw new InvalidOperationException(message);
             }
@@ -593,7 +714,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             SetAppliedBias(null);
             try
             {
-                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token);
+                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token, _runtimeLifetimeCts.Token);
                 await RestoreBiasCoreAsync(operation, value, linkedCancellation.Token);
             }
             finally
@@ -620,20 +741,12 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 await EnterBiasAsync();
                 entered = true;
                 SetAppliedBias(null);
-                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token);
+                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token, _runtimeLifetimeCts.Token);
                 BiasOperationResult result = await BiasOperationRunner.RunAsync(
                     ct => _dispatcher.InvokeAsync(() => RestoreBiasCoreAsync(operation, value, ct)).Task.Unwrap(),
                     () => LastBiasJson, null, false, BiasExecutionPolicy.DefaultAttemptTimeoutSeconds,
                     $"agent={_agentId} source=manual op={operation} GSK_LSB=0x{value:X2}",
-                    message =>
-                    {
-                        if (message.StartsWith("[BIAS] NG", StringComparison.Ordinal))
-                            AgentUiLog.Logger.Error("{BiasDiagnostic}", message);
-                        else if (message.StartsWith("[BIAS] FAIL", StringComparison.Ordinal))
-                            AgentUiLog.Logger.Warning("{BiasDiagnostic}", message);
-                        else
-                            AgentUiLog.Logger.Information("{BiasDiagnostic}", message);
-                    },
+                    AgentUiLog.WriteBiasDiagnostic,
                     linkedCancellation.Token);
                 if (!result.IsSuccess)
                     SerialStatus = BiasText("Cam_ManualBiasRetryFailed", result.Message);
@@ -713,7 +826,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             await EnterBiasAsync();
             try
             {
-                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token);
+                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token, _runtimeLifetimeCts.Token);
                 CancellationToken ct = linkedCancellation.Token;
                 ct.ThrowIfCancellationRequested();
                 AppliedBiasResult applied = LastAppliedBias ?? throw new InvalidOperationException("확인할 현재 BIAS 적용 기록이 없습니다.");
@@ -767,7 +880,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             SetAppliedBias(null);
             try
             {
-                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token);
+                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token, _runtimeLifetimeCts.Token);
                 CancellationToken ct = linkedCancellation.Token;
                 ct.ThrowIfCancellationRequested();
                 ICameraSerialClient serial = _serial ?? throw new InvalidOperationException("BIAS 제어용 시리얼 연결이 없습니다.");
@@ -921,7 +1034,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 ThermalFrame? frame;
                 do
                 {
-                    frame = await _runtime.CaptureSnapshotAsync(
+                    frame = await RequireRuntime().CaptureSnapshotAsync(
                         maxAge: TimeSpan.Zero,
                         nextFrameTimeout: TimeSpan.FromSeconds(2),
                         ct: ct);
@@ -949,61 +1062,48 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         }
 
         /// <summary>라이브 프레임을 frameCount장 누적 평균해(14비트 마스킹) NUC 평면필드용 프레임을 만든다.</summary>
-        private async Task<ThermalFrame?> AverageFramesAsync(int frameCount)
+        private async Task<ThermalFrame?> AverageFramesAsync(int frameCount, CancellationToken ct)
         {
-            ThermalFrame? first = _runtime.LatestFrame;
-            if (first is null) return null;
-
-            int len = first.Pixels.Length;
-            var acc = new long[len];
-            int used = 0;
+            ICameraRuntime runtime = RequireRuntime();
+            ThermalFrame? first = null;
+            long[]? acc = null;
+            DateTimeOffset previous = DateTimeOffset.Now;
             for (int k = 0; k < frameCount; k++)
             {
-                ThermalFrame? f = _runtime.LatestFrame;
-                if (f is not null && f.Pixels.Length == len)
-                {
-                    for (int i = 0; i < len; i++) acc[i] += f.Pixels[i] & 0x3FFF;
-                    used++;
-                }
-                await Task.Delay(35);
+                ThermalFrame? frame = await runtime.CaptureSnapshotAsync(TimeSpan.Zero, TimeSpan.FromSeconds(2), ct);
+                ct.ThrowIfCancellationRequested();
+                if (frame is null || frame.Timestamp <= previous || !frame.IsRadiometric || frame.Pixels.Length == 0) return null;
+                previous = frame.Timestamp;
+                first ??= frame;
+                acc ??= new long[frame.Pixels.Length];
+                if (frame.Width != first.Width || frame.Height != first.Height || frame.Pixels.Length != acc.Length) return null;
+                for (int i = 0; i < acc.Length; i++) acc[i] += frame.Pixels[i] & 0x3FFF;
+                await Task.Delay(35, ct);
             }
-
-            if (used == 0) return null;
-
-            var avg = new ushort[len];
-            for (int i = 0; i < len; i++) avg[i] = (ushort)(acc[i] / used);
+            if (first is null || acc is null) return null;
+            var avg = new ushort[acc.Length];
+            for (int i = 0; i < acc.Length; i++) avg[i] = (ushort)(acc[i] / frameCount);
             return new ThermalFrame(avg, first.Width, first.Height, DateTimeOffset.Now);
         }
 
-        /// <summary>영상 시작: 카메라 RUN 후 셔터 열기 (기본 셔터 닫힘 → 실 열영상 취득). 앱 시작 시 자동 호출.</summary>
-        public Task StartLiveAsync() => RunSerialAsync(async s =>
+        /// <summary>기동은 영상 전용 구성을 허용하되, 시리얼이 있으면 다른 제어와 직렬화한다.</summary>
+        public Task StartLiveAsync() => _serial is null ? Task.CompletedTask : RunUiControlAsync(async ct =>
         {
-            await s.SetCameraRunningAsync(true);
-            await s.SetShutterAsync(true);
-            await ReadOutputFormatAsync();
-        }, "영상 시작 (RUN+셔터 열림)");
+            await _serial.SetCameraRunningAsync(true, ct);
+            await _serial.SetShutterAsync(true, ct);
+            CameraOutputFormat format = await _serial.ReadOutputFormatAsync(ct);
+            ct.ThrowIfCancellationRequested();
+            SelectedOutputFormat = format;
+            OutputFormatText = DescribeOutputFormat(format);
+            SerialStatus = "영상 시작 (RUN+셔터 열림) 적용됨";
+        }, "영상 시작");
 
-        /// <summary>영상 종료: 셔터 닫기 후 카메라 STOP. 앱 종료 시 자동 호출.</summary>
-        public Task StopLiveAsync() => RunSerialAsync(async s =>
+        public Task StopLiveAsync() => _serial is null ? Task.CompletedTask : RunUiControlAsync(async ct =>
         {
-            await s.SetShutterAsync(false);
-            await s.SetCameraRunningAsync(false);
-        }, "영상 종료 (셔터 닫힘+STOP)");
-
-        /// <summary>시리얼 명령 공통 실행기. _serial이 null이면 no-op — 영상 출력이 시리얼 성패에 좌우되지 않게 하는 지점이다.</summary>
-        private async Task RunSerialAsync(Func<ICameraSerialClient, Task> action, string label)
-        {
-            if (_serial is null) return;
-            try
-            {
-                await action(_serial);
-                SerialStatus = $"{label} 적용됨";
-            }
-            catch (Exception ex)
-            {
-                SerialStatus = $"{label} 오류: {ex.Message}";
-            }
-        }
+            await _serial.SetShutterAsync(false, ct);
+            await _serial.SetCameraRunningAsync(false, ct);
+            SerialStatus = "영상 종료 (셔터 닫힘+STOP) 적용됨";
+        }, "영상 종료");
 
         public void Dispose()
         {
@@ -1018,8 +1118,15 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _biasLifetimeCts.Cancel();
             _infoPollCts?.Cancel();
             _infoPollCts?.Dispose();
-            _runtime.FrameReady -= OnFrameReady;
-            _runtime.StatusChanged -= OnStatusChanged;
+            if (_runtime is { } runtime)
+            {
+                runtime.FrameReady -= OnFrameReady;
+                runtime.StatusChanged -= OnStatusChanged;
+            }
+            _runtime = null;
+            _runtimeLifetimeCts.Cancel();
+            _runtimeLifetimeCts.Dispose();
+            NotifyControlCommands();
             _serial?.Dispose();
             _biasLifetimeCts.Dispose();
         }

@@ -10,13 +10,15 @@ namespace HeatingCameraSystem.Tests
     [Trait("Category", "Integration")]
     public class NatsIntegrationTests
     {
-        private const string NatsUrl = "nats://127.0.0.1:4222";
+        private static string NatsUrl => Environment.GetEnvironmentVariable("HCS_TEST_NATS_URL") ?? "nats://127.0.0.1:4222";
 
         [Fact]
         public async Task PublishSubscribe_CaptureCommand_RoundTrip()
         {
             if (!await IsNatsAvailableAsync(NatsUrl))
             {
+                Assert.True(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("HCS_TEST_NATS_URL")),
+                    $"명시한 통합 테스트 NATS 서버에 연결할 수 없습니다: {NatsUrl}");
                 Console.WriteLine($"[SKIP] NATS not reachable at {NatsUrl}");
                 return;
             }
@@ -31,8 +33,6 @@ namespace HeatingCameraSystem.Tests
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
             await sub.SubscribeCaptureCommandAsync("Agent_99", cmd => received.TrySetResult(cmd));
-
-            await Task.Delay(300);
 
             string stepId = $"itest-{Guid.NewGuid():N}";
             await pub.PublishCaptureCommandAsync(new CaptureCommandMessage
@@ -53,6 +53,8 @@ namespace HeatingCameraSystem.Tests
         {
             if (!await IsNatsAvailableAsync(NatsUrl))
             {
+                Assert.True(string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("HCS_TEST_NATS_URL")),
+                    $"명시한 통합 테스트 NATS 서버에 연결할 수 없습니다: {NatsUrl}");
                 Console.WriteLine($"[SKIP] NATS not reachable at {NatsUrl}");
                 return;
             }
@@ -67,8 +69,6 @@ namespace HeatingCameraSystem.Tests
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
             await sub.SubscribeCaptureResultAsync(r => received.TrySetResult(r));
-
-            await Task.Delay(300);
 
             string stepId = $"itest-{Guid.NewGuid():N}";
             await pub.PublishCaptureResultAsync(new CaptureResultMessage

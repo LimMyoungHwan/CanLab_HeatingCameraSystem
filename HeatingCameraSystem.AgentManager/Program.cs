@@ -102,11 +102,16 @@ public class ManagerWorker : BackgroundService
         _logger.LogInformation("Manager started. PCId={PCId}", _settings.PCId);
 
         // 수신 명령 + 로그 덤프 요청 구독
-        _cmdHandler.Subscribe();
-        _logDump.Subscribe();
+        await _cmdHandler.SubscribeAsync();
+        await _logDump.SubscribeAsync();
 
         // [S7] AgentUI의 카메라별 하트비트를 supervisor에 공급한다 — 생존 판정 + disable 재조정용.
-        await _nats.SubscribeAgentStatusAsync(status => _supervisor.NoteHeartbeat(status.AgentId));
+        await using var heartbeatSubscription = await _nats.SubscribeAgentStatusScopedAsync(status =>
+        {
+            CameraEntry? entry = _supervisor.NoteHeartbeat(status);
+            if (entry is not null && !string.IsNullOrWhiteSpace(entry.AgentLogDirectory))
+                _logTail.Watch(entry.AgentId, entry.AgentLogDirectory, filterByAgentId: true);
+        }, stoppingToken);
 
         // 최초 카메라 열거: 탐지 결과를 저장된 상태와 병합한다
         var discovered = _enumerator.Enumerate();
@@ -118,7 +123,8 @@ public class ManagerWorker : BackgroundService
                 _store.Upsert(new CameraEntry
                 {
                     HardwareId  = cam.HardwareId,
-                    OpenCvIndex = cam.OpenCvIndex,
+                    UsbContainerId = cam.UsbParentId,
+                    OpenCvIndex = -1, // WMI 열거 순번은 실제 영상 인덱스가 아니다. AgentUI 하트비트로 확정한다.
                     FirstSeen   = DateTime.UtcNow,
                     LastSeen    = DateTime.UtcNow,
                     IsApproved  = false,
@@ -128,21 +134,21 @@ public class ManagerWorker : BackgroundService
             else
             {
                 existing.LastSeen    = DateTime.UtcNow;
-                existing.OpenCvIndex = cam.OpenCvIndex;
+                existing.UsbContainerId = cam.UsbParentId;
                 _store.Upsert(existing);
             }
         }
 
-        // 승인된 카메라의 런타임 로드 요청
-        _supervisor.SpawnAll();
+        // 이미 실행 중인 AgentUI의 BIAS를 보존한다. 실제 로드는 검증된 Offline 보고 뒤에만 요청한다.
+        _supervisor.RestoreDesiredState();
 
         // 실행 중인 모든 Agent의 로그 tail 시작
         foreach (var entry in _store.GetAll())
         {
             if (!string.IsNullOrEmpty(entry.AgentId))
             {
-                var logDir = Path.Combine(_settings.InstallRoot, "logs", entry.AgentId);
-                _logTail.Watch(entry.AgentId, logDir);
+                string logDir = AgentLogFiles.ResolveDirectory(_settings, entry.AgentId, entry.AgentLogDirectory);
+                _logTail.Watch(entry.AgentId, logDir, filterByAgentId: !string.IsNullOrWhiteSpace(entry.AgentLogDirectory));
             }
         }
 
@@ -180,7 +186,8 @@ public class ManagerWorker : BackgroundService
                 _store.Upsert(new CameraEntry
                 {
                     HardwareId  = cam.HardwareId,
-                    OpenCvIndex = cam.OpenCvIndex,
+                    UsbContainerId = cam.UsbParentId,
+                    OpenCvIndex = -1, // WMI 열거 순번은 실제 영상 인덱스가 아니다. AgentUI 하트비트로 확정한다.
                     FirstSeen   = DateTime.UtcNow,
                     LastSeen    = DateTime.UtcNow,
                     IsApproved  = false,
@@ -190,10 +197,10 @@ public class ManagerWorker : BackgroundService
             else
             {
                 existing.LastSeen    = DateTime.UtcNow;
-                existing.OpenCvIndex = cam.OpenCvIndex;
+                existing.UsbContainerId = cam.UsbParentId;
                 _store.Upsert(existing);
-                if (existing.IsApproved && !_supervisor.IsRunning(cam.HardwareId))
-                    _supervisor.Spawn(existing);
+                if (existing.IsApproved && !existing.IsDisabled && !_supervisor.IsRunning(cam.HardwareId))
+                    _supervisor.RequestLoadAfterHeartbeat(existing);
             }
         }
         else
@@ -209,7 +216,10 @@ public class ManagerWorker : BackgroundService
     {
         // [S7] 서비스 중지 시 AgentUI 카메라를 언로드하지 않는다 — AgentUI는 로그온 예약 작업으로
         // 독립 실행되며 Manager가 내려가도 단독으로 계속 서비스해야 한다.
+        _enumerator.Changed -= OnPnpChanged;
         _enumerator.StopWatching();
+        _cmdHandler.Dispose();
+        _logDump.Dispose();
         _logTail.Dispose();
         await _nats.DisposeAsync();
         await base.StopAsync(cancellationToken);

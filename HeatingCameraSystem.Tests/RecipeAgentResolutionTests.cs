@@ -46,7 +46,7 @@ namespace HeatingCameraSystem.Tests
                           .ReturnsAsync(new CameraDevice { Alias = "CAM-X", AgentId = "Stale_Agent" });
 
             var directory = new AgentDirectory();
-            directory.Note(new AgentStatusMessage { Alias = "CAM-X", AgentId = "PC1_Agent_3" });
+            directory.Note(new AgentStatusMessage { Alias = "CAM-X", AgentId = "PC1_Agent_3", CameraStatus = CameraStatus.Connected });
 
             var (engine, mockNats) = CreateEngine(mockDeviceRepo.Object, directory);
             var recipe = CreateRecipe(cameraIndex: 7, cameraAlias: "CAM-X");
@@ -65,7 +65,7 @@ namespace HeatingCameraSystem.Tests
                           .ReturnsAsync(new CameraDevice { Alias = "CAM-X", AgentId = "Agent_X" });
 
             var directory = new AgentDirectory();
-            directory.Note(new AgentStatusMessage { Alias = "OTHER", AgentId = "PC1_Agent_9" });
+            directory.Note(new AgentStatusMessage { Alias = "OTHER", AgentId = "PC1_Agent_9", CameraStatus = CameraStatus.Connected });
 
             var (engine, mockNats) = CreateEngine(mockDeviceRepo.Object, directory);
             var recipe = CreateRecipe(cameraIndex: 7, cameraAlias: "CAM-X");
@@ -113,6 +113,7 @@ namespace HeatingCameraSystem.Tests
                     .Callback<CaptureCommandMessage>(cmd => resultCb?.Invoke(new CaptureResultMessage
                     {
                         AgentId = cmd.TargetAgentId,
+                        CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(cmd),
                         RecipeStepId = cmd.RecipeStepId,
                         IsSuccess = false,
                         Timestamp = DateTime.UtcNow

@@ -92,7 +92,7 @@ namespace HeatingCameraSystem.Master.ViewModels
     /// 공용 PLC 상태 반영, 레시피 실행/정지, Agent·카메라 인벤토리 정리를 담당한다.
     /// NATS·PLC 콜백은 백그라운드 스레드로 오므로 바인딩 상태 갱신은 <see cref="RunOnUi"/>를 거친다.
     /// </summary>
-    public partial class DashboardViewModel : ObservableObject, IDisposable
+    public partial class DashboardViewModel : ObservableObject, IDisposable, IAsyncDisposable
     {
         [ObservableProperty]
         private float _currentTemperature;
@@ -223,6 +223,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         private readonly RecipeEngine? _subscribedEngine;
         private readonly PlcStatusService? _subscribedPlcStatus;
         private bool _disposed;
+        private readonly NatsSubscriptionLifetime _subscriptions = new();
         private readonly Dictionary<int, List<DashboardLayoutSlot>> _persistedLayout = new();
         private readonly Queue<(float Temperature, float Humidity)> _samples = new();
         private bool _recipeRunning;
@@ -405,12 +406,14 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             if (_natsService == null) return;
 
-            await _natsService.SubscribeAgentStatusAsync(msg =>
+            await _subscriptions.AddAsync(ct => _natsService.SubscribeAgentStatusScopedAsync(msg =>
             {
+                if (_disposed) return;
                 if (msg.PendingSyncFiles is int pending) _pendingSyncFiles[msg.AgentId] = pending;
 
                 RunOnUi(() =>
                 {
+                    if (_disposed) return;
                     string hostName = string.IsNullOrWhiteSpace(msg.HostName) ? LocalizationManager.Instance["Dash_UnknownPc"] : msg.HostName;
 
                     // 발신자가 자기 인벤토리에 없다 = 살아있는 카메라가 아니다. 카메라가 0대가 된
@@ -430,7 +433,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                         Agents.Add(agent);
                     }
 
-                    agent.IsOnline      = true;
+                    agent.IsOnline      = msg.CameraStatus != CameraStatus.Offline;
                     agent.LastHeartbeat  = msg.Timestamp;
                     agent.HostName       = hostName;
 
@@ -458,7 +461,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     if (CurrentViewMode == 1 || currentLayoutChanged || removed)
                         LoadCameraFeeds();
                 });
-            });
+            }, ct));
         }
 
         // AgentUI는 카메라 1대 = AgentId 1개다(인벤토리를 보내는 발신자만 이 규칙을 보장). 카메라의
@@ -576,8 +579,9 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             if (_natsService == null) return;
 
-            await _natsService.SubscribeLiveFrameAsync(msg =>
+            await _subscriptions.AddAsync(ct => _natsService.SubscribeLiveFrameScopedAsync(msg =>
             {
+                if (_disposed) return;
                 _ = Task.Run(() =>
                 {
                     if (msg.ImageBytes is null || msg.ImageBytes.Length == 0) return;
@@ -587,11 +591,12 @@ namespace HeatingCameraSystem.Master.ViewModels
 
                     RunOnUi(() => ApplyLiveFrame(msg, image));
                 });
-            });
+            }, ct));
         }
 
         private void ApplyLiveFrame(LiveFrameMessage msg, BitmapSource image)
         {
+            if (_disposed) return;
             if (!_agentMap.TryGetValue(msg.AgentId, out var agent))
             {
                 agent = new AgentNode { Name = msg.AgentId, IsExpanded = true };
@@ -1310,6 +1315,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         {
             if (_disposed) return;
             _disposed = true;
+            _subscriptions.Dispose();
             Interlocked.Increment(ref _boardLoadVersion);
             if (_planRunService != null)
                 _planRunService.BoardChanged -= OnPlanBoardChanged;
@@ -1327,6 +1333,11 @@ namespace HeatingCameraSystem.Master.ViewModels
                 _recipeCts?.Cancel();
                 NotifyRunCommands();
             });
+        }
+        public async ValueTask DisposeAsync()
+        {
+            Dispose();
+            await _subscriptions.DisposeAsync();
         }
     }
 }

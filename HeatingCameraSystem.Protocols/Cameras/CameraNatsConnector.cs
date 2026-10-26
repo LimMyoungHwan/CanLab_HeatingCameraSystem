@@ -43,6 +43,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly ProductionCaptureSink? _productionSink;
         private readonly Func<CameraDescriptor, CameraControlMessage, CancellationToken, Task>? _biasControlHandler;
         private readonly Action<string>? _diagnosticLog;
+        private readonly Func<string>? _readLogDirectory;
+        private readonly Func<CameraDescriptor, CancellationToken, Task<ICameraOperationLease>>? _acquireCaptureLease;
+        private readonly Func<CameraDescriptor, SerialConfigMessage, Task<(bool Success, string Message)>>? _serialConfigHandler;
 
         private sealed record VerifiedBias(string RequestId, string Json, string FilePath, int AttemptTimeoutSeconds,
             string ApplicationId, string SourceOperation);
@@ -74,8 +77,12 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly Dictionary<(string AgentId, string Operation, string RequestId), DateTime> _cancelledRequests = new();
         private readonly CancellationTokenSource _cts = new();
         private readonly SemaphoreSlim _subscriptionGate = new(1, 1);
-        private readonly HashSet<string> _subscribedAgentIds = new(StringComparer.Ordinal);
-        private Timer? _heartbeat;
+        private sealed record CameraSubscription(CameraDescriptor Descriptor, List<IAsyncDisposable> Leases);
+        private readonly Dictionary<string, CameraSubscription> _subscriptions = new(StringComparer.Ordinal);
+        private readonly object _lifetimeSync = new();
+        private readonly HashSet<Task> _inFlight = new();
+        private Task? _lifetimeTask;
+        private Task? _disposeTask;
         private volatile bool _connected;
 
         public CameraNatsConnector(
@@ -97,7 +104,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
             Action<CameraDescriptor, string>? reportCaptureWarning = null,
             Func<CameraDescriptor, CameraControlMessage, CancellationToken, Task>? biasControlHandler = null,
             Action<string>? diagnosticLog = null,
-            Func<CameraDescriptor, AppliedBiasResult?>? readAppliedBias = null)
+            Func<CameraDescriptor, AppliedBiasResult?>? readAppliedBias = null,
+            Func<string>? readLogDirectory = null,
+            Func<CameraDescriptor, SerialConfigMessage, Task<(bool Success, string Message)>>? serialConfigHandler = null,
+            Func<CameraDescriptor, CancellationToken, Task<ICameraOperationLease>>? acquireCaptureLease = null)
         {
             _nats = nats ?? throw new ArgumentNullException(nameof(nats));
             _manager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -118,6 +128,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _productionSink = productionSink;
             _biasControlHandler = biasControlHandler;
             _diagnosticLog = diagnosticLog;
+            _readLogDirectory = readLogDirectory;
+            _serialConfigHandler = serialConfigHandler;
+            _acquireCaptureLease = acquireCaptureLease;
         }
 
         public bool IsConnected => _connected;
@@ -125,130 +138,194 @@ namespace HeatingCameraSystem.Protocols.Cameras
         /// <summary>백그라운드에서 접속 재시도를 시작한다. 접속에 실패해도 호출자를 막지 않는다.</summary>
         public void Start(string natsUrl)
         {
-            _ = Task.Run(() => ConnectWithRetryAsync(natsUrl, _cts.Token));
+            lock (_lifetimeSync)
+            {
+                if (_lifetimeTask is not null || _cts.IsCancellationRequested) return;
+                _lifetimeTask = Task.Run(() => ConnectWithRetryAsync(natsUrl, _cts.Token));
+            }
+        }
+
+        private CameraDescriptor[] CameraSnapshot()
+        {
+            lock (_cameras) return _cameras.ToArray();
+        }
+
+        private CameraDescriptor ResolveCurrentDescriptor(string agentId)
+        {
+            CameraDescriptor[] matches = CameraSnapshot().Where(cam =>
+                string.Equals(cam.AgentId, agentId, StringComparison.Ordinal)).ToArray();
+            if (matches.Length != 1)
+                throw new InvalidOperationException($"카메라 대상이 없거나 중복되었습니다: {agentId}");
+            return matches[0];
+        }
+
+        private static bool SameBinding(CameraDescriptor left, CameraDescriptor right)
+            => left.OpenCvIndex == right.OpenCvIndex
+                && string.Equals(left.SerialPortName, right.SerialPortName, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(left.CameraSerialNumber, right.CameraSerialNumber, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(left.UsbContainerId, right.UsbContainerId, StringComparison.OrdinalIgnoreCase);
+
+        private void EnsureBindingCurrent(CameraDescriptor expected, ICameraRuntime? expectedRuntime = null)
+        {
+            CameraDescriptor current = ResolveCurrentDescriptor(expected.AgentId);
+            if (current.OpenCvIndex < 0 || !SameBinding(expected, current))
+                throw new InvalidOperationException("카메라 연결 대상이 변경되었거나 오프라인입니다. 현재 장치를 다시 확인해 주세요.");
+            if (expectedRuntime is not null && (!_manager.TryGet(expected.AgentId, out var currentRuntime)
+                    || !ReferenceEquals(expectedRuntime, currentRuntime)))
+                throw new InvalidOperationException("촬영 중 카메라 런타임이 교체되었습니다.");
+        }
+
+        private void CancelForBindingChange(string agentId)
+        {
+            _verifiedBias.TryRemove(agentId, out _);
+            if (_activeBias.TryGetValue(agentId, out var bias))
+                try { bias.Cancellation.Cancel(); } catch (ObjectDisposedException) { }
+            if (_activeCaptures.TryGetValue(agentId, out var capture))
+                try { capture.Cancellation.Cancel(); } catch (ObjectDisposedException) { }
+        }
+
+        private void Track(Func<Task> work)
+        {
+            Task task;
+            lock (_lifetimeSync)
+            {
+                if (_cts.IsCancellationRequested) return;
+                task = Task.Run(work);
+                _inFlight.Add(task);
+            }
+            _ = ObserveAsync(task);
+        }
+
+        private async Task ObserveAsync(Task task)
+        {
+            try { await task.ConfigureAwait(false); }
+            catch (OperationCanceledException) when (_cts.IsCancellationRequested) { }
+            catch (Exception ex) { LogBias($"[CameraNats] background operation failed: {ex}"); }
+            finally { lock (_lifetimeSync) _inFlight.Remove(task); }
         }
 
         private async Task ConnectWithRetryAsync(string natsUrl, CancellationToken ct)
         {
-            while (!ct.IsCancellationRequested && !_connected)
+            while (!ct.IsCancellationRequested)
             {
                 try
                 {
                     await _nats.ConnectAsync(natsUrl).ConfigureAwait(false);
+                    ct.ThrowIfCancellationRequested();
                     _connected = true;
+                    await SyncSubscriptionsAsync().ConfigureAwait(false);
+                    await Task.WhenAll(HeartbeatLoopAsync(ct), LiveStreamLoopAsync(ct)).ConfigureAwait(false);
+                    return;
                 }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[CameraNats] connect failed, retrying: {ex.Message}");
+                    LogBias($"[CameraNats] connection/startup failed, retrying: {ex}");
                     try { await Task.Delay(ReconnectDelay, ct).ConfigureAwait(false); }
                     catch (OperationCanceledException) { return; }
                 }
             }
-
-            if (!_connected || ct.IsCancellationRequested)
-            {
-                return;
-            }
-
-            await SyncSubscriptionsAsync().ConfigureAwait(false);
-
-            _heartbeat = new Timer(_ => PublishHeartbeats(), null, TimeSpan.Zero, TimeSpan.FromSeconds(_heartbeatSeconds));
-
-            _ = Task.Run(() => LiveStreamLoopAsync(_cts.Token));
         }
 
-        /// <summary>
-        /// 아직 구독하지 않은 카메라의 NATS 구독을 채운다. 핫플러그로 카메라가 늘어난 뒤 호출하지
-        /// 않으면 새 카메라는 캡처 명령을 받지 못한다.
-        /// </summary>
+        private async Task HeartbeatLoopAsync(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(_heartbeatSeconds), ct).ConfigureAwait(false);
+                // 부분 구독 실패도 다음 주기에 다시 채운다. 완료되지 않은 구독은 먼저 전부 정리한다.
+                await SyncSubscriptionsAsync().ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>구독을 현재 AgentId 목록에 맞추고 변경된 물리 바인딩의 작업·BIAS 증거를 무효화한다.</summary>
         public async Task SyncSubscriptionsAsync()
         {
-            if (!_connected || _cts.IsCancellationRequested)
-            {
-                return;
-            }
-
+            if (!_connected || _cts.IsCancellationRequested) return;
+            try { await _subscriptionGate.WaitAsync(_cts.Token).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return; }
             try
             {
-                await _subscriptionGate.WaitAsync(_cts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-
-            try
-            {
-                foreach (CameraDescriptor descriptor in new List<CameraDescriptor>(_cameras))
+                CameraDescriptor[] snapshot = CameraSnapshot();
+                var current = snapshot.GroupBy(cam => cam.AgentId, StringComparer.Ordinal)
+                    .Where(group => group.Count() == 1).ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
+                foreach (string removed in _subscriptions.Keys.Where(id => !current.ContainsKey(id)).ToArray())
                 {
-                    if (!_subscribedAgentIds.Add(descriptor.AgentId))
+                    CancelForBindingChange(removed);
+                    CameraSubscription old = _subscriptions[removed];
+                    _subscriptions.Remove(removed);
+                    await DisposeLeasesAsync(old.Leases).ConfigureAwait(false);
+                }
+                foreach (CameraDescriptor descriptor in current.Values)
+                {
+                    if (_subscriptions.TryGetValue(descriptor.AgentId, out var subscribed))
                     {
+                        if (!SameBinding(subscribed.Descriptor, descriptor))
+                        {
+                            CancelForBindingChange(descriptor.AgentId);
+                            _subscriptions[descriptor.AgentId] = subscribed with { Descriptor = descriptor };
+                            LogBias($"[CameraNats] camera binding changed agent={descriptor.AgentId} index={descriptor.OpenCvIndex}; BIAS invalidated");
+                        }
                         continue;
                     }
-
-                    if (!await SubscribeCameraAsync(descriptor).ConfigureAwait(false))
-                    {
-                        _subscribedAgentIds.Remove(descriptor.AgentId);
-                    }
+                    List<IAsyncDisposable>? leases = await SubscribeCameraAsync(descriptor.AgentId).ConfigureAwait(false);
+                    if (leases is not null) _subscriptions.Add(descriptor.AgentId, new(descriptor, leases));
                 }
             }
-            finally
-            {
-                _subscriptionGate.Release();
-            }
-
-            // 카메라 구성이 바뀐 직후(핫플러그/재구성) 즉시 인벤토리를 알린다. 하트비트 주기를
-            // 기다리면 Master가 최대 HeartbeatSeconds 동안 사라진 카메라를 계속 보여준다.
-            PublishHeartbeats();
+            finally { _subscriptionGate.Release(); }
+            await PublishHeartbeatsAsync().ConfigureAwait(false);
         }
 
-        private async Task<bool> SubscribeCameraAsync(CameraDescriptor descriptor)
+        private async Task<List<IAsyncDisposable>?> SubscribeCameraAsync(string agentId)
         {
-            bool success = true;
+            var leases = new List<IAsyncDisposable>();
             try
             {
-                await _nats.SubscribeCaptureCommandAsync(
-                    descriptor.AgentId,
-                    cmd => _ = HandleCaptureAsync(descriptor, cmd)).ConfigureAwait(false);
+                CancellationToken ct = _cts.Token;
+                leases.Add(await _nats.SubscribeCaptureCommandScopedAsync(agentId,
+                    cmd => Track(() => HandleCaptureForAgentAsync(agentId, cmd)), ct).ConfigureAwait(false));
+                leases.Add(await _nats.SubscribeCameraControlScopedAsync(agentId,
+                    msg => Track(() => HandleControlForAgentAsync(agentId, msg)), ct).ConfigureAwait(false));
+                leases.Add(await _nats.SubscribeRawImageRequestScopedAsync(agentId,
+                    req => { if (req.AgentId == agentId) Track(() => HandleRawImageRequestAsync(req)); }, ct).ConfigureAwait(false));
+                if (_getConfigSnapshot is not null)
+                    leases.Add(await _nats.SubscribeAgentConfigRequestScopedAsync(agentId,
+                        req => { if (req.AgentId == agentId) Track(() => PublishConfigSnapshotAsync(agentId, req.RequestId)); }, ct).ConfigureAwait(false));
+                if (_applyConfigSnapshot is not null)
+                    leases.Add(await _nats.SubscribeAgentConfigApplyScopedAsync(agentId,
+                        msg => { if (msg.AgentId == agentId) Track(() => ApplyConfigAsync(msg)); }, ct).ConfigureAwait(false));
+                if (_serialConfigHandler is not null)
+                    leases.Add(await _nats.SubscribeSerialConfigScopedAsync(agentId,
+                        msg => { if (msg.AgentId == agentId) Track(() => HandleSerialConfigAsync(agentId, msg)); }, ct).ConfigureAwait(false));
+                return leases;
             }
             catch (Exception ex)
             {
-                success = false;
-                Debug.WriteLine($"[CameraNats] subscribe failed for {descriptor.AgentId}: {ex.Message}");
+                await DisposeLeasesAsync(leases).ConfigureAwait(false);
+                LogBias($"[CameraNats] subscription setup failed agent={agentId}: {ex}");
+                return null;
             }
+        }
 
-            try
+        private static async Task DisposeLeasesAsync(IEnumerable<IAsyncDisposable> leases)
+        {
+            foreach (var lease in leases)
             {
-                await _nats.SubscribeCameraControlAsync(
-                    descriptor.AgentId,
-                    msg => _ = HandleCameraControlAsync(descriptor, msg)).ConfigureAwait(false);
-                await _nats.SubscribeRawImageRequestAsync(
-                    descriptor.AgentId,
-                    req => _ = HandleRawImageRequestAsync(req)).ConfigureAwait(false);
+                try { await lease.DisposeAsync().ConfigureAwait(false); }
+                catch (Exception ex) { Debug.WriteLine($"[CameraNats] unsubscribe failed: {ex}"); }
             }
-            catch (Exception ex)
-            {
-                success = false;
-                Debug.WriteLine($"[CameraNats] camera control subscribe failed for {descriptor.AgentId}: {ex.Message}");
-            }
+        }
 
-            if (_getConfigSnapshot is not null || _applyConfigSnapshot is not null)
-            {
-                try
-                {
-                    if (_getConfigSnapshot is not null)
-                        await _nats.SubscribeAgentConfigRequestAsync(descriptor.AgentId, req => _ = PublishConfigSnapshotAsync(descriptor.AgentId)).ConfigureAwait(false);
-                    if (_applyConfigSnapshot is not null)
-                        await _nats.SubscribeAgentConfigApplyAsync(descriptor.AgentId, msg => _ = ApplyConfigAsync(msg)).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    success = false;
-                    Debug.WriteLine($"[CameraNats] config subscribe failed for {descriptor.AgentId}: {ex.Message}");
-                }
-            }
+        private Task HandleCaptureForAgentAsync(string agentId, CaptureCommandMessage cmd)
+        {
+            // 콜백에는 초기 descriptor를 가두지 않는다. 재연결 후의 현재 라우팅을 사용한다.
+            CameraDescriptor? current = CameraSnapshot().SingleOrDefault(cam => cam.AgentId == agentId);
+            return current is null ? Task.CompletedTask : HandleCaptureAsync(current, cmd);
+        }
 
-            return success;
+        private Task HandleControlForAgentAsync(string agentId, CameraControlMessage msg)
+        {
+            CameraDescriptor? current = CameraSnapshot().SingleOrDefault(cam => cam.AgentId == agentId);
+            return current is null ? Task.CompletedTask : HandleCameraControlAsync(current, msg);
         }
 
         /// <summary>
@@ -258,6 +335,20 @@ namespace HeatingCameraSystem.Protocols.Cameras
         /// </summary>
         public async Task HandleCaptureAsync(CameraDescriptor descriptor, CaptureCommandMessage cmd)
         {
+            try
+            {
+                if (cmd.TargetAgentId != "all" && !string.Equals(cmd.TargetAgentId, descriptor.AgentId, StringComparison.Ordinal))
+                    throw new InvalidOperationException("촬영 명령의 대상 AgentId가 일치하지 않습니다.");
+                descriptor = ResolveCurrentDescriptor(descriptor.AgentId);
+                EnsureBindingCurrent(descriptor);
+                _cts.Token.ThrowIfCancellationRequested();
+            }
+            catch (Exception ex)
+            {
+                await PublishCaptureResultAsync(descriptor, cmd, false, string.Empty, null, null,
+                    RequiresBiasFile(cmd) ? BiasExecutionPolicy.FileFailureCode : "cameraBindingChanged", $"NG: {ex.Message}").ConfigureAwait(false);
+                return;
+            }
             SemaphoreSlim gate = _cameraOperationGates.GetOrAdd(descriptor.AgentId, _ => new SemaphoreSlim(1, 1));
             using var active = new ActiveCameraOperation(cmd.RecipeStepId, _cts.Token);
             if (!_activeCaptures.TryAdd(descriptor.AgentId, active))
@@ -270,6 +361,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
             bool entered = false;
             CaptureOutcome? outcome = null;
+            ICameraOperationLease? localLease = null;
+            CancellationTokenRegistration bindingCancellation = default;
             try
             {
                 if (IsRequestCancelled(descriptor.AgentId, CameraControlOps.Capture, cmd.RecipeStepId))
@@ -279,6 +372,16 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     throw new InvalidOperationException("이전 BIAS 또는 촬영 작업이 종료되지 않았습니다.");
 
                 active.Cancellation.Token.ThrowIfCancellationRequested();
+                EnsureBindingCurrent(descriptor);
+                if (_acquireCaptureLease is not null)
+                {
+                    localLease = await _acquireCaptureLease(descriptor, active.Cancellation.Token).ConfigureAwait(false);
+                    bindingCancellation = localLease.CancellationToken.Register(() =>
+                    {
+                        try { active.Cancellation.Cancel(); } catch (ObjectDisposedException) { }
+                    });
+                    active.Cancellation.Token.ThrowIfCancellationRequested();
+                }
                 outcome = await HandleCaptureCoreAsync(descriptor, cmd, active.Cancellation.Token).ConfigureAwait(false);
                 active.Cancellation.Token.ThrowIfCancellationRequested();
             }
@@ -296,9 +399,22 @@ namespace HeatingCameraSystem.Protocols.Cameras
             }
             finally
             {
-                _activeCaptures.TryRemove(descriptor.AgentId, out _);
-                if (entered) gate.Release();
-                active.Finished.TrySetResult();
+                bindingCancellation.Dispose();
+                try
+                {
+                    if (localLease is not null) await localLease.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    outcome = new CaptureOutcome(false, string.Empty, null, null, Message: $"NG: 카메라 작업 해제 실패: {ex.Message}");
+                    LogBias($"[CAPTURE] lease release failed agent={descriptor.AgentId}: {ex}");
+                }
+                finally
+                {
+                    _activeCaptures.TryRemove(descriptor.AgentId, out _);
+                    if (entered) gate.Release();
+                    active.Finished.TrySetResult();
+                }
             }
             if (outcome is not null)
                 await PublishCaptureResultAsync(descriptor, cmd, outcome.Success, outcome.ImagePath, outcome.ImageBytes,
@@ -341,6 +457,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
             ThermalFrame? representative = null;
             int representativeShotIndex = -1;
             int captured = 0;
+            DateTimeOffset? lastFrameTimestamp = null;
+            string captureFailure = string.Empty;
 
             for (int i = 0; i < shots; i++)
             {
@@ -350,6 +468,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     break;
                 }
 
+                EnsureBindingCurrent(descriptor);
                 EnsureRequiredBiasIsCurrent(descriptor, cmd);
 
                 bool success = false;
@@ -360,12 +479,21 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 {
                     if (_manager.TryGet(descriptor.AgentId, out ICameraRuntime shotRuntime))
                     {
-                        bool forceFreshFrame = i > 0;
+                        EnsureBindingCurrent(descriptor, shotRuntime);
+                        bool forceFreshFrame = production || i > 0;
+                        DateTimeOffset requestedAt = DateTimeOffset.UtcNow;
                         ThermalFrame? snap = await shotRuntime.CaptureSnapshotAsync(
                             maxAge: forceFreshFrame ? TimeSpan.Zero : TimeSpan.FromSeconds(1),
                             nextFrameTimeout: TimeSpan.FromSeconds(2),
                             ct: cancellationToken).ConfigureAwait(false);
                         cancellationToken.ThrowIfCancellationRequested();
+                        EnsureBindingCurrent(descriptor, shotRuntime);
+                        if (snap is null)
+                            throw new InvalidOperationException("카메라에서 새 프레임을 받지 못했습니다.");
+                        if ((forceFreshFrame && snap.Timestamp < requestedAt)
+                            || (lastFrameTimestamp is not null && snap.Timestamp <= lastFrameTimestamp.Value))
+                            throw new InvalidOperationException("이전 프레임이 반환되었습니다. 새 촬영으로 저장할 수 없습니다.");
+                        lastFrameTimestamp = snap.Timestamp;
 
                         if (snap is not null)
                         {
@@ -403,16 +531,22 @@ namespace HeatingCameraSystem.Protocols.Cameras
                         }
                     }
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[CameraNats] capture failed for {descriptor.AgentId}: {ex.Message}");
+                    captureFailure = ex.Message;
+                    LogBias($"[CAPTURE] NG agent={descriptor.AgentId} shot={i + 1}/{shots}: {ex.Message}");
                     success = false;
                 }
 
-                if (!production) await PublishCaptureResultAsync(descriptor, cmd, success, imagePath, bytes, cameraTemperature).ConfigureAwait(false);
+                if (!production) await PublishCaptureResultAsync(descriptor, cmd, success, imagePath, bytes, cameraTemperature,
+                    message: success ? string.Empty : captureFailure).ConfigureAwait(false);
+                else if (!success) break;
             }
             if (production)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                EnsureBindingCurrent(descriptor);
                 EnsureRequiredBiasIsCurrent(descriptor, cmd);
                 string imagePath = string.Empty;
                 byte[]? bytes = null;
@@ -435,7 +569,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 // BIAS는 앞선 strict 경로에서 저장·검증했다. 남아 있던 과거 JSON을 일반 전송으로 덮지 않는다.
                 await _productionSink!.SyncFolderAsync(descriptor, cmd, cancellationToken, syncBiasJson: false).ConfigureAwait(false);
                 EnsureRequiredBiasIsCurrent(descriptor, cmd);
-                return new CaptureOutcome(captured == shots, imagePath, bytes, cameraTemperature, ProductionRawPath: productionRawPath);
+                EnsureBindingCurrent(descriptor);
+                return new CaptureOutcome(captured == shots, imagePath, bytes, cameraTemperature,
+                    Message: captured == shots ? string.Empty : $"NG: 촬영 {captured}/{shots}. {captureFailure}", ProductionRawPath: productionRawPath);
             }
             return null;
         }
@@ -671,6 +807,25 @@ namespace HeatingCameraSystem.Protocols.Cameras
         /// <summary>카메라 제어 명령을 주입된 핸들러에 위임하고 성패를 ACK로 발행한다.</summary>
         public async Task HandleCameraControlAsync(CameraDescriptor cam, CameraControlMessage msg)
         {
+            bool abort = msg.Op == CameraControlOps.BiasAbort || msg.Op == CameraControlOps.CaptureAbort;
+            try
+            {
+                if (!string.Equals(msg.AgentId, cam.AgentId, StringComparison.Ordinal))
+                    throw new InvalidOperationException("제어 명령의 대상 AgentId가 일치하지 않습니다.");
+                cam = ResolveCurrentDescriptor(cam.AgentId);
+                if (!abort)
+                {
+                    EnsureBindingCurrent(cam);
+                    if (msg.CameraIndex != cam.OpenCvIndex)
+                        throw new InvalidOperationException($"카메라 인덱스가 변경되었습니다: 요청={msg.CameraIndex}, 현재={cam.OpenCvIndex}");
+                    _cts.Token.ThrowIfCancellationRequested();
+                }
+            }
+            catch (Exception ex)
+            {
+                await PublishControlAckAsync(cam, msg, false, $"NG: {ex.Message}").ConfigureAwait(false);
+                return;
+            }
             if (msg.Op == CameraControlOps.BiasAbort)
             {
                 bool matched = await AbortCameraOperationAsync(_activeBias, cam.AgentId, CameraControlOps.Bias,
@@ -697,18 +852,30 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 return;
             }
 
+            SemaphoreSlim gate = _cameraOperationGates.GetOrAdd(cam.AgentId, _ => new SemaphoreSlim(1, 1));
+            bool entered = false;
             try
             {
+                bool changesRuntime = msg.Op == CameraControlOps.RuntimeLoad || msg.Op == CameraControlOps.RuntimeUnload;
+                if (changesRuntime) CancelForBindingChange(cam.AgentId);
+                entered = changesRuntime
+                    ? await gate.WaitAsync(TimeSpan.FromSeconds(5), _cts.Token).ConfigureAwait(false)
+                    : await gate.WaitAsync(0, _cts.Token).ConfigureAwait(false);
+                if (!entered) throw new InvalidOperationException("카메라가 BIAS 또는 촬영 작업 중입니다.");
+                EnsureBindingCurrent(cam);
                 if (_cameraControlHandler is not null)
                 {
                     (success, message) = await _cameraControlHandler(cam, msg).ConfigureAwait(false);
+                    _cts.Token.ThrowIfCancellationRequested();
                 }
             }
             catch (Exception ex)
             {
-                message = ex.Message;
-                Debug.WriteLine($"[CameraNats] camera control failed for {cam.AgentId}: {ex.Message}");
+                success = false;
+                message = $"NG: {ex.Message}";
+                LogBias($"[CameraNats] control failed agent={cam.AgentId} request={msg.RequestId} op={msg.Op}: {ex.Message}");
             }
+            finally { if (entered) gate.Release(); }
 
             await PublishControlAckAsync(cam, msg, success, message).ConfigureAwait(false);
         }
@@ -738,6 +905,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     throw new InvalidOperationException("이전 BIAS 또는 촬영 작업이 아직 종료되지 않았습니다.");
 
                 active.Cancellation.Token.ThrowIfCancellationRequested();
+                EnsureBindingCurrent(cam);
                 _verifiedBias.TryRemove(cam.AgentId, out _);
                 AppliedBiasResult? selectedApplication = null;
                 string? prerequisiteError = null;
@@ -761,6 +929,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                         if (_biasControlHandler is null)
                             throw new InvalidOperationException("취소 가능한 BIAS 처리기가 없습니다. AgentUI를 업데이트해 주세요.");
 
+                        EnsureBindingCurrent(cam);
                         appliedForAttempt = null;
                         if (useCurrent && selectedApplication is not null)
                             EnsureBiasApplicationMatchesCurrent(cam, selectedApplication, selectedApplication.Json);
@@ -768,6 +937,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                         // 자동 보정 탐색으로 바꾸지 않는다. 파일 재시도도 선택한 적용 세대를 유지한다.
                         await _biasControlHandler(cam, msg, ct).ConfigureAwait(false);
                         ct.ThrowIfCancellationRequested();
+                        EnsureBindingCurrent(cam);
                         if (_readAppliedBias is not null)
                         {
                             AppliedBiasResult applied = ReadCurrentAppliedBias(cam, sourceOperation);
@@ -800,6 +970,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 active.Cancellation.Token.ThrowIfCancellationRequested();
                 if (result.IsSuccess)
                 {
+                    EnsureBindingCurrent(cam);
                     EnsureBiasApplicationMatchesCurrent(cam, appliedForAttempt, result.BiasJson);
                     if (msg.RequireBiasFile)
                         _verifiedBias[cam.AgentId] = new VerifiedBias(msg.RequestId, result.BiasJson, result.FilePath, msg.BiasAttemptTimeoutSeconds,
@@ -846,7 +1017,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 await _nats.PublishCameraControlAckAsync(new CameraControlAckMessage
                 {
                     AgentId = cam.AgentId,
-                    CameraIndex = msg.CameraIndex,
+                    CameraIndex = cam.OpenCvIndex,
                     Op = msg.Op,
                     RequestId = msg.RequestId,
                     IsSuccess = success,
@@ -865,7 +1036,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             }
         }
 
-        private async Task PublishConfigSnapshotAsync(string agentId)
+        private async Task PublishConfigSnapshotAsync(string agentId, string requestId)
         {
             if (_getConfigSnapshot is null) return;
             try
@@ -873,6 +1044,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 await _nats.PublishAgentConfigSnapshotAsync(new AgentConfigSnapshotMessage
                 {
                     AgentId = agentId,
+                    RequestId = requestId,
                     Config = _getConfigSnapshot(),
                     Timestamp = DateTime.UtcNow
                 }).ConfigureAwait(false);
@@ -889,7 +1061,11 @@ namespace HeatingCameraSystem.Protocols.Cameras
             string message = "저장됨. AgentUI 재시작 후 적용됩니다.";
             try
             {
-                _applyConfigSnapshot?.Invoke(msg.Config);
+                if (_applyConfigSnapshot is null) throw new InvalidOperationException("설정 저장 처리기가 없습니다.");
+                ResolveCurrentDescriptor(msg.AgentId);
+                _applyConfigSnapshot(msg.Config);
+                message = (_getConfigSnapshot?.Invoke().RestartRequired ?? true)
+                    ? "저장됨. AgentUI 재시작 후 적용됩니다." : "설정이 적용되었습니다.";
             }
             catch (Exception ex)
             {
@@ -903,6 +1079,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 await _nats.PublishAgentConfigAckAsync(new AgentConfigAckMessage
                 {
                     AgentId = msg.AgentId,
+                    RequestId = msg.RequestId,
                     IsSuccess = success,
                     Message = message,
                     Timestamp = DateTime.UtcNow
@@ -912,12 +1089,39 @@ namespace HeatingCameraSystem.Protocols.Cameras
             {
                 Debug.WriteLine($"[CameraNats] config ack publish failed for {msg.AgentId}: {ex.Message}");
             }
+            if (success) await PublishConfigSnapshotAsync(msg.AgentId, msg.RequestId).ConfigureAwait(false);
         }
 
-        private void PublishHeartbeats()
+        private async Task HandleSerialConfigAsync(string agentId, SerialConfigMessage msg)
         {
+            bool success = false;
+            string message;
+            SemaphoreSlim gate = _cameraOperationGates.GetOrAdd(agentId, _ => new SemaphoreSlim(1, 1));
+            bool entered = false;
+            try
+            {
+                entered = await gate.WaitAsync(0, _cts.Token).ConfigureAwait(false);
+                if (!entered) throw new InvalidOperationException("카메라가 BIAS 또는 촬영 작업 중입니다.");
+                CameraDescriptor current = ResolveCurrentDescriptor(agentId);
+                EnsureBindingCurrent(current);
+                if (_serialConfigHandler is null) throw new InvalidOperationException("시리얼 설정 처리기가 없습니다.");
+                CancelForBindingChange(agentId);
+                (success, message) = await _serialConfigHandler(current, msg).ConfigureAwait(false);
+            }
+            catch (Exception ex) { message = $"NG: {ex.Message}"; }
+            finally { if (entered) gate.Release(); }
+            await _nats.PublishSerialConfigAckAsync(new SerialConfigAckMessage
+            {
+                AgentId = agentId, IsSuccess = success, ErrorMessage = success ? string.Empty : message,
+                Timestamp = DateTime.UtcNow
+            }).ConfigureAwait(false);
+        }
+
+        private async Task PublishHeartbeatsAsync()
+        {
+            CameraDescriptor[] cameras = CameraSnapshot();
             var live = new List<CameraDescriptor>();
-            foreach (CameraDescriptor cam in new List<CameraDescriptor>(_cameras))
+            foreach (CameraDescriptor cam in cameras)
             {
                 if (_manager.TryGet(cam.AgentId, out _))
                 {
@@ -932,16 +1136,17 @@ namespace HeatingCameraSystem.Protocols.Cameras
             // 인벤토리를 한 번 보고해야 Master가 그 PC의 카메라를 지운다(침묵은 신호가 아니다).
             if (live.Count == 0)
             {
-                _ = PublishHostInventoryAsync(inventory);
-                return;
+                await PublishHostInventoryAsync(inventory).ConfigureAwait(false);
             }
 
-            foreach (CameraDescriptor cam in live)
+            foreach (CameraDescriptor cam in cameras)
             {
-                if (_manager.TryGet(cam.AgentId, out ICameraRuntime runtime))
-                {
-                    _ = PublishStatusAsync(cam, MapStatus(runtime.Status), inventory);
-                }
+                if (cam.OpenCvIndex < 0) continue; // 물리 영상 대상 미확정: 자동 load의 근거로 쓰지 않는다.
+                CameraStatus status = _manager.TryGet(cam.AgentId, out ICameraRuntime runtime)
+                    ? MapStatus(runtime.Status) : CameraStatus.Offline;
+                // runtime을 unload한 카메라도 신원이 확정되어 있으면 Offline을 보고한다.
+                // Manager는 이 실제 인덱스를 받아 원하는 로드 상태를 복원할 수 있다.
+                await PublishStatusAsync(cam, status, inventory).ConfigureAwait(false);
             }
         }
 
@@ -974,6 +1179,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     Alias = cam.Alias,
                     HostName = Environment.MachineName,
                     CameraIndex = cam.OpenCvIndex,
+                    UsbContainerId = cam.UsbContainerId ?? string.Empty,
+                    CameraSerialNumber = cam.CameraSerialNumber ?? string.Empty,
+                    LogDirectory = _readLogDirectory?.Invoke() ?? string.Empty,
                     CameraStatus = status,
                     Timestamp = DateTime.UtcNow,
                     HostAgentIds = inventory,
@@ -1078,14 +1286,15 @@ namespace HeatingCameraSystem.Protocols.Cameras
         {
             while (!ct.IsCancellationRequested)
             {
-                foreach (CameraDescriptor cam in _cameras)
+                foreach (CameraDescriptor cam in CameraSnapshot())
                 {
                     if (!_manager.TryGet(cam.AgentId, out ICameraRuntime runtime)) continue;
 
                     // 라이브는 무조건 원본(LatestFrame)을 본다 — NUC·AGC 같은 표시 처리는
                     // Master 측에서 한다. 여기서 보정 프레임을 본면 Master는 원본을 볼 수 없다.
                     ThermalFrame? frame = runtime.LatestFrame;
-                    if (frame is null) continue;
+                    if (frame is null || runtime.Status != CameraRuntimeStatus.Running
+                        || DateTimeOffset.UtcNow - frame.Timestamp > TimeSpan.FromSeconds(2)) continue;
 
                     try
                     {
@@ -1111,17 +1320,45 @@ namespace HeatingCameraSystem.Protocols.Cameras
             }
         }
 
-        public async ValueTask DisposeAsync()
+        public ValueTask DisposeAsync()
+        {
+            lock (_lifetimeSync)
+            {
+                _disposeTask ??= DisposeCoreAsync();
+                return new ValueTask(_disposeTask);
+            }
+        }
+
+        private async Task DisposeCoreAsync()
         {
             _cts.Cancel();
-
-            if (_heartbeat is not null)
+            _connected = false;
+            Task? lifetime;
+            Task[] work;
+            lock (_lifetimeSync)
             {
-                await _heartbeat.DisposeAsync().ConfigureAwait(false);
+                lifetime = _lifetimeTask;
+                work = _inFlight.ToArray();
             }
-
-            _subscriptionGate.Dispose();
-            _cts.Dispose();
+            if (lifetime is not null)
+            {
+                try { await lifetime.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+                catch (Exception ex) { Debug.WriteLine($"[CameraNats] startup/loop shutdown: {ex.Message}"); }
+            }
+            await _subscriptionGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                foreach (var subscription in _subscriptions.Values)
+                    await DisposeLeasesAsync(subscription.Leases).ConfigureAwait(false);
+                _subscriptions.Clear();
+            }
+            finally { _subscriptionGate.Release(); }
+            Task drain = Task.WhenAll(work.Concat(_activeBias.Values.Select(active => active.Finished.Task))
+                .Concat(_activeCaptures.Values.Select(active => active.Finished.Task)));
+            try { await drain.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+            catch (Exception ex) { Debug.WriteLine($"[CameraNats] command shutdown: {ex.Message}"); }
+            // Gate/CTS는 늦게 끝나는 핸들러가 Release/Token을 사용할 수 있다. 종료 경합에서
+            // 이를 먼저 Dispose해 실제 장치 종료 예외를 덮어쓰지 않는다.
         }
     }
 }

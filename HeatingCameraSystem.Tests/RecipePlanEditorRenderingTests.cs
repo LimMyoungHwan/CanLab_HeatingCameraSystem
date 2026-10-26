@@ -35,7 +35,7 @@ public class RecipePlanEditorRenderingTests
         try
         {
             Set(nameof(AppServices.Settings), new HardwareSettings()); Set(nameof(AppServices.NatsService), null); Set(nameof(AppServices.PlcStatus), null); Set(nameof(AppServices.RecipeEngine), null); Set(nameof(AppServices.PlcController), null);
-            var directory = new AgentDirectory(); directory.Note(new AgentStatusMessage { AgentId = TemplatePlanTestData.Cameras[0].AgentId, CameraIndex = 0 }); Set(nameof(AppServices.AgentDirectory), directory);
+            var directory = new AgentDirectory(); directory.Note(new AgentStatusMessage { AgentId = TemplatePlanTestData.Cameras[0].AgentId, CameraIndex = 0, CameraStatus = CameraStatus.Connected }); Set(nameof(AppServices.AgentDirectory), directory);
             var recipes = new FileRecipeRepository(runtime); var source = TemplatePlanTestData.Template(); var plan = TemplatePlanTestData.Plan(source);
             await recipes.SaveAsync(source); await recipes.SaveAsync(plan);
             var positions = new LiteDbCameraPositionRepository(db); Set(nameof(AppServices.CameraPositions), positions);

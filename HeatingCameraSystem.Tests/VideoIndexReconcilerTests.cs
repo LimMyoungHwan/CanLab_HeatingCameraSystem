@@ -38,27 +38,27 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Fact]
-        public void SkipsCameraWithoutContainerId()
+        public void CameraWithoutContainerId_IsOfflineRatherThanOpeningAnUnverifiedIndex()
         {
             var cams = new List<CameraDescriptor> { Cam("Agent_1", 0, "") };
             var devices = new List<VideoDevice> { Dev(2, "C1") };
 
             int changed = VideoIndexReconciler.Reconcile(cams, devices);
 
-            Assert.Equal(0, changed);
-            Assert.Equal(0, cams[0].OpenCvIndex);
+            Assert.Equal(1, changed);
+            Assert.Equal(-1, cams[0].OpenCvIndex);
         }
 
         [Fact]
-        public void SkipsWhenNoDeviceMatchesContainer()
+        public void NoMatchingDevice_MarksTheStoredCameraOffline()
         {
             var cams = new List<CameraDescriptor> { Cam("Agent_1", 0, "C1") };
             var devices = new List<VideoDevice> { Dev(2, "C2") };
 
             int changed = VideoIndexReconciler.Reconcile(cams, devices);
 
-            Assert.Equal(0, changed);
-            Assert.Equal(0, cams[0].OpenCvIndex);
+            Assert.Equal(1, changed);
+            Assert.Equal(-1, cams[0].OpenCvIndex);
         }
 
         [Fact]
@@ -76,6 +76,41 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal(2, changed);
             Assert.Equal(1, cams[0].OpenCvIndex);
             Assert.Equal(0, cams[1].OpenCvIndex);
+        }
+
+        [Fact]
+        public void RemovingFirstCamera_DoesNotAssignItsIdentityToRemainingCameraAtIndexZero()
+        {
+            var cams = new List<CameraDescriptor> { Cam("A", 0, "C1"), Cam("B", 1, "C2") };
+
+            Assert.Equal(2, VideoIndexReconciler.Reconcile(cams, new[] { Dev(0, "C2") }));
+
+            Assert.Equal(-1, cams[0].OpenCvIndex);
+            Assert.Equal(0, cams[1].OpenCvIndex);
+        }
+
+        [Fact]
+        public void AmbiguousPhysicalContainer_IsNotOpened()
+        {
+            var cams = new List<CameraDescriptor> { Cam("A", 0, "C1") };
+            VideoIndexReconciler.Reconcile(cams, new[] { Dev(0, "C1"), Dev(1, "C1") });
+            Assert.Equal(-1, cams[0].OpenCvIndex);
+        }
+
+        [Fact]
+        public void TwoConfiguredIdentitiesForOnePhysicalCamera_AreBothOffline()
+        {
+            var cams = new List<CameraDescriptor> { Cam("A", 0, "C1"), Cam("B", 1, "C1") };
+            VideoIndexReconciler.Reconcile(cams, new[] { Dev(0, "C1") });
+            Assert.All(cams, camera => Assert.Equal(-1, camera.OpenCvIndex));
+        }
+
+        [Fact]
+        public void DuplicateDeviceIndices_AreRejectedInsteadOfChoosingTheFirst()
+        {
+            var cams = new List<CameraDescriptor> { Cam("A", 0, "C1"), Cam("B", 1, "C2") };
+            VideoIndexReconciler.Reconcile(cams, new[] { Dev(0, "C1"), Dev(0, "C2") });
+            Assert.All(cams, camera => Assert.Equal(-1, camera.OpenCvIndex));
         }
     }
 }

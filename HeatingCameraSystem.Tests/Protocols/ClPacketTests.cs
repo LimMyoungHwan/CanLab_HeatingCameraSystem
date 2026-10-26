@@ -47,6 +47,15 @@ namespace HeatingCameraSystem.Tests.Protocols
                 ClPacket.ExtractPayload(new byte[] { 0x00, 0x00, 0, 0, 0, 0, 0 }));
         }
 
+        [Theory]
+        [InlineData(0xFF)]
+        [InlineData(0x7F)]
+        public void ExtractPayload_DeviceErrorOrInvalidStatus_IsRejected(int status)
+        {
+            Assert.Throws<System.IO.IOException>(() =>
+                ClPacket.ExtractPayload(new byte[] { 0x43, 0x4C, 0, 6, 1, (byte)status, 0x73 }));
+        }
+
         [Fact]
         public void DecodeSerialNumber_GoldenBytes_ReturnsGoldenSerial()
         {

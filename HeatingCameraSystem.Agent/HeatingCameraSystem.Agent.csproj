@@ -1,6 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <InternalsVisibleTo Include="HeatingCameraSystem.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\HeatingCameraSystem.Core\HeatingCameraSystem.Core.csproj" />
     <ProjectReference Include="..\HeatingCameraSystem.Protocols\HeatingCameraSystem.Protocols.csproj" />
   </ItemGroup>

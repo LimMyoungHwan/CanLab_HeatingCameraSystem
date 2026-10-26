@@ -87,7 +87,7 @@ public class RecipeEngineOutcomeTests
     public async Task MixedTargets_IntentionalSkipDoesNotBecomeSuccessForWholeStep()
     {
         var directory = new AgentDirectory();
-        directory.Note(new AgentStatusMessage { AgentId = "Agent_7" });
+        directory.Note(new AgentStatusMessage { AgentId = "Agent_7", CameraStatus = CameraStatus.Connected });
         var fixture = new Fixture(directory);
         var step = CaptureStep();
         step.CameraTargets.Add(new RecipeCameraTarget { CameraIndex = 7 });
@@ -253,8 +253,9 @@ public class RecipeEngineOutcomeTests
         using var cancellation = new CancellationTokenSource();
         fixture.Reply = (_, _) => cancellation.Cancel();
 
-        // The existing final-round cancellation path collects available results and returns.
-        await fixture.Engine.ExecuteRecipeAsync(RecipeWith(CaptureStep()), cancellation.Token);
+        // Cancellation must leave the run cancelled and stop the outstanding remote capture.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            fixture.Engine.ExecuteRecipeAsync(RecipeWith(CaptureStep()), cancellation.Token));
 
         Assert.Empty(fixture.History);
         Assert.Equal(RecipeStepOutcome.Failed, Assert.Single(fixture.TerminalEvents).Outcome);
@@ -274,6 +275,7 @@ public class RecipeEngineOutcomeTests
     private static CaptureResultMessage Result(CaptureCommandMessage command, bool success = true) => new()
     {
         AgentId = command.TargetAgentId,
+        CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(command),
         RecipeStepId = command.RecipeStepId,
         IsSuccess = success,
         ImagePath = "/test/outcome.y16",

@@ -7,6 +7,8 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HeatingCameraSystem.Core.Models;
@@ -224,6 +226,11 @@ namespace HeatingCameraSystem.Master.ViewModels
         [ObservableProperty] private string _agentId = string.Empty;
         [ObservableProperty] private int _cameraIndex;
         [ObservableProperty] private bool _isSelected;
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(Label))]
+        private bool _isOnline;
+        /// <summary>저장된 대상은 연결이 잠시 끊겨도 대역·역할·선택을 보존한다.</summary>
+        public bool IsPersisted { get; set; }
 
         /// <summary>이 카메라의 온도대역. BIAS 명령과 저장 폴더가 함께 이 값을 쓴다.</summary>
         [ObservableProperty] private ChamberRange? _targetChamber;
@@ -231,7 +238,7 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// <summary>촬영 시점에 이 카메라 앞에 놓인 흑체. 흑체가 이동하고 카메라는 고정이라 여기에 붙는다.</summary>
         [ObservableProperty] private BlackBodyRole? _targetBlackBody;
 
-        public string Label => $"{AgentId} (CAM-{CameraIndex:D2})";
+        public string Label => $"{AgentId} (CAM-{CameraIndex:D2})" + (IsOnline ? string.Empty : " · 오프라인");
 
         partial void OnAgentIdChanged(string value) => OnPropertyChanged(nameof(Label));
         partial void OnCameraIndexChanged(int value) => OnPropertyChanged(nameof(Label));
@@ -284,7 +291,7 @@ namespace HeatingCameraSystem.Master.ViewModels
     /// 그리고 좌표 잡기를 위한 서보 이동·JOG와 카메라 라이브 미리보기를 담당한다.
     /// NATS 콜백은 백그라운드 스레드로 오므로 UI 갱신은 Dispatcher로 마샬링한다.
     /// </summary>
-    public partial class RecipeEditorViewModel : ObservableObject, IDisposable
+    public partial class RecipeEditorViewModel : ObservableObject, IDisposable, IAsyncDisposable
     {
         public ObservableCollection<RecipeModel> Recipes { get; } = new ObservableCollection<RecipeModel>();
         public RecipeStepKindOption[] StepKindOptions { get; } =
@@ -345,6 +352,11 @@ namespace HeatingCameraSystem.Master.ViewModels
         private readonly IRecipeRepository _recipeRepository;
         private readonly ICameraPositionRepository? _positionRepository;
         private bool _disposed;
+        private readonly NatsSubscriptionLifetime _subscriptions = new();
+        private readonly AgentDirectory _cameraDirectory = new();
+        private CancellationTokenSource? _cameraCommandCancellation;
+        [ObservableProperty] private bool _isCameraCommandBusy;
+        [ObservableProperty] private string _cameraCommandStatus = string.Empty;
 
         public RecipeEditorViewModel() : this(AppServices.RecipeRepo, AppServices.CameraPositions) { }
 
@@ -895,6 +907,7 @@ namespace HeatingCameraSystem.Master.ViewModels
                     CameraIndex = target.CameraIndex,
                     TargetChamber = target.TargetChamber,
                     TargetBlackBody = target.TargetBlackBody,
+                    IsPersisted = true,
                     IsSelected = true
                 });
                 if (step.CameraTargets.Count == 0 && s.CameraIndex > 0)
@@ -926,34 +939,37 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public ObservableCollection<AgentCameraOption> OnlineAgentCameras { get; } = new();
 
-        private readonly Dictionary<(string AgentId, int CameraIndex), DateTime> _cameraLastSeen = new();
 
-        private void SubscribeCameraServices()
+        private void SubscribeCameraServices() => _ = SubscribeCameraServicesAsync();
+
+        private async Task SubscribeCameraServicesAsync()
         {
             var nats = AppServices.NatsService;
-            if (nats == null) return;
+            if (nats is null) return;
             try
             {
-                nats.SubscribeAgentStatusAsync(OnAgentStatus);
-                nats.SubscribeLiveFrameAsync(OnLiveFrame);
+                await _subscriptions.AddAsync(ct => nats.SubscribeAgentStatusScopedAsync(OnAgentStatus, ct));
+                await _subscriptions.AddAsync(ct => nats.SubscribeLiveFrameScopedAsync(OnLiveFrame, ct));
             }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[RecipeEditor] NATS subscribe failed: {ex.Message}");
-            }
+            catch (Exception ex) { if (!_disposed) CameraCommandStatus = ex.Message; }
         }
 
         private void OnAgentStatus(AgentStatusMessage msg)
         {
-            if (string.IsNullOrEmpty(msg.AgentId)) return;
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            if (_disposed) return;
+            _cameraDirectory.Note(msg);
+            RunOnUi(() =>
             {
-                _cameraLastSeen[(msg.AgentId, msg.CameraIndex)] = DateTime.UtcNow;
-                if (!OnlineAgentCameras.Any(a => a.AgentId == msg.AgentId && a.CameraIndex == msg.CameraIndex))
-                    OnlineAgentCameras.Add(new AgentCameraOption { AgentId = msg.AgentId, CameraIndex = msg.CameraIndex });
-                PruneOfflineAgentCameras(OnlineAgentCameras, _cameraLastSeen, DateTime.UtcNow);
-                if (SelectedPreviewCamera is not null
-                    && !OnlineAgentCameras.Any(a => a.AgentId == SelectedPreviewCamera.AgentId && a.CameraIndex == SelectedPreviewCamera.CameraIndex))
+                if (_disposed) return;
+                var online = _cameraDirectory.OnlineCameras;
+                foreach (var option in OnlineAgentCameras.Where(option => !online.Any(camera =>
+                    camera.AgentId == option.AgentId && camera.CameraIndex == option.CameraIndex)).ToArray())
+                    OnlineAgentCameras.Remove(option);
+                foreach (CameraIdentity camera in online)
+                    if (!OnlineAgentCameras.Any(option => option.AgentId == camera.AgentId && option.CameraIndex == camera.CameraIndex))
+                        OnlineAgentCameras.Add(new AgentCameraOption { AgentId = camera.AgentId, CameraIndex = camera.CameraIndex });
+                if (SelectedPreviewCamera is not null && !online.Any(camera =>
+                    camera.AgentId == SelectedPreviewCamera.AgentId && camera.CameraIndex == SelectedPreviewCamera.CameraIndex))
                     SelectedPreviewCamera = null;
                 foreach (var step in Recipes.SelectMany(recipe => recipe.Steps))
                 {
@@ -988,7 +1004,8 @@ namespace HeatingCameraSystem.Master.ViewModels
             for (int i = targets.Count - 1; i >= 0; i--)
             {
                 CameraTargetModel target = targets[i];
-                if (target.AgentId.Length > 0 && !keys.Contains((target.AgentId, target.CameraIndex)))
+                target.IsOnline = keys.Contains((target.AgentId, target.CameraIndex));
+                if (target.AgentId.Length > 0 && !target.IsOnline && !target.IsSelected && !target.IsPersisted)
                 {
                     targets.RemoveAt(i);
                     removed++;
@@ -1005,24 +1022,26 @@ namespace HeatingCameraSystem.Master.ViewModels
                 if (fallback is not null)
                 {
                     fallback.AgentId = camera.AgentId;
+                    fallback.IsOnline = true;
                     continue;
                 }
-                if (!step.CameraTargets.Any(target => target.AgentId == camera.AgentId && target.CameraIndex == camera.CameraIndex))
-                    step.CameraTargets.Add(new CameraTargetModel { AgentId = camera.AgentId, CameraIndex = camera.CameraIndex });
+                var existing = step.CameraTargets.FirstOrDefault(target => target.AgentId == camera.AgentId && target.CameraIndex == camera.CameraIndex);
+                if (existing is not null) existing.IsOnline = true;
+                else step.CameraTargets.Add(new CameraTargetModel { AgentId = camera.AgentId, CameraIndex = camera.CameraIndex, IsOnline = true });
             }
         }
 
         /// <summary>선택된 미리보기 카메라의 프레임만 디코드해 표시한다. 나머지 카메라 프레임은 버린다.</summary>
         private void OnLiveFrame(LiveFrameMessage msg)
         {
-            if (msg.ImageBytes is null || msg.ImageBytes.Length == 0) return;
+            if (_disposed || msg.ImageBytes is null || msg.ImageBytes.Length == 0) return;
             var sel = SelectedPreviewCamera;
             if (sel == null || msg.AgentId != sel.AgentId || msg.CameraIndex != sel.CameraIndex) return;
 
             var bmp = Decode(msg.ImageBytes);
             if (bmp is null) return;
             bmp = HeatingCameraSystem.Master.Services.LivePreviewColorMode.Apply(bmp);
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => CurrentPreview = bmp));
+            RunOnUi(() => { if (!_disposed) CurrentPreview = bmp; });
         }
 
         /// <summary>JPEG 바이트를 디코드한다. Freeze로 스레드 간 전달을 허용하며, 손상 데이터는 null을 반환한다.</summary>
@@ -1045,7 +1064,11 @@ namespace HeatingCameraSystem.Master.ViewModels
             }
         }
 
-        partial void OnSelectedPreviewCameraChanged(AgentCameraOption? value) => CurrentPreview = null;
+        partial void OnSelectedPreviewCameraChanged(AgentCameraOption? value)
+        {
+            CurrentPreview = null;
+            _cameraCommandCancellation?.Cancel();
+        }
 
         /// <summary>선택 스텝의 좌표(mm)로 서보를 이동시킨다.</summary>
         [RelayCommand]
@@ -1099,23 +1122,34 @@ namespace HeatingCameraSystem.Master.ViewModels
         /// <summary>선택된 미리보기 카메라에 카메라 제어 명령(Run/Stop/셔터)을 발행한다.</summary>
         private async System.Threading.Tasks.Task SendCameraOpAsync(string op)
         {
-            var sel = SelectedPreviewCamera;
-            if (sel == null || AppServices.NatsService == null) return;
+            var selected = SelectedPreviewCamera;
+            if (_disposed || selected is null || IsCameraCommandBusy || AppServices.CameraCommands is not { } commands) return;
+            if (AppServices.RecipeEngine?.IsRunning == true)
+            {
+                CameraCommandStatus = "레시피 실행 중에는 수동 카메라 명령을 사용할 수 없습니다.";
+                return;
+            }
+            IsCameraCommandBusy = true;
+            CameraCommandStatus = $"{selected.Label}: {op} 처리 중";
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_subscriptions.Token);
+            _cameraCommandCancellation = cancellation;
             try
             {
-                await AppServices.NatsService.PublishCameraControlAsync(new CameraControlMessage
-                {
-                    AgentId = sel.AgentId,
-                    CameraIndex = sel.CameraIndex,
-                    Op = op,
-                    Timestamp = DateTime.UtcNow
-                });
+                CameraControlAckMessage ack = await commands.SendAsync(selected.AgentId, selected.CameraIndex, op, cancellation.Token);
+                if (!_disposed) CameraCommandStatus = $"{selected.Label}: {(ack.IsSuccess ? "✔" : "✘")} {ack.Op} {ack.Message}";
+                if (!ack.IsSuccess) AlarmSink.Raise(AlarmSeverity.Error, "Camera", $"{selected.AgentId}: {ack.Message}");
             }
+            catch (OperationCanceledException) { if (!_disposed) CameraCommandStatus = "명령이 취소되었습니다."; }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RecipeEditor] camera op publish failed: {ex.Message}");
+                if (!_disposed) CameraCommandStatus = $"{selected.Label}: {ex.Message}";
+                AlarmSink.Raise(AlarmSeverity.Error, "Camera", $"{selected.AgentId}: {ex.Message}");
             }
+            finally { _cameraCommandCancellation = null; IsCameraCommandBusy = false; }
         }
+
+        [RelayCommand]
+        private void CancelCameraCommand() => _cameraCommandCancellation?.Cancel();
 
         [RelayCommand] private System.Threading.Tasks.Task OpenShutterAsync() => SendCameraOpAsync(CameraControlOps.ShutterOpen);
         [RelayCommand] private System.Threading.Tasks.Task CloseShutterAsync() => SendCameraOpAsync(CameraControlOps.ShutterClose);
@@ -1134,15 +1168,24 @@ namespace HeatingCameraSystem.Master.ViewModels
 
         public void Dispose()
         {
+            if (_disposed) return;
             _disposed = true;
+            _cameraCommandCancellation?.Cancel();
+            _subscriptions.Dispose();
             if (PlanEditor is { } editor)
             {
                 editor.PropertyChanged -= OnPlanEditorPropertyChanged;
                 editor.Dispose();
             }
             PlanEditor = null;
-            // ponytail: NatsCommunicationService에는 구독 해제 API가 없다(fire-and-forget 루프).
-            // ManualControlViewModel과 같은 상황이므로 여기서 해제할 것이 없다.
+
+        }
+        public async ValueTask DisposeAsync() { Dispose(); await _subscriptions.DisposeAsync(); }
+
+        private static void RunOnUi(Action action)
+        {
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher is null || dispatcher.CheckAccess()) action(); else dispatcher.Invoke(action);
         }
     }
 }

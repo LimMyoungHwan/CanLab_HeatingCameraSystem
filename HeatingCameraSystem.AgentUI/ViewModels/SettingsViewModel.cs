@@ -105,14 +105,15 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         {
             _config = config;
             _pairing = pairing;
-            _simulationMode = config.SimulationMode;
-            _natsUrl = config.NatsUrl;
-            _storagePath = config.StoragePath;
-            _heartbeatSeconds = config.HeartbeatSeconds;
-            _captureImageFormat = config.CaptureImageFormat;
-            _captureBurstCount = config.CaptureBurstCount;
+            AgentUiConfig editable = config.EditableSnapshot();
+            _simulationMode = editable.SimulationMode;
+            _natsUrl = editable.NatsUrl;
+            _storagePath = editable.StoragePath;
+            _heartbeatSeconds = editable.HeartbeatSeconds;
+            _captureImageFormat = editable.CaptureImageFormat;
+            _captureBurstCount = editable.CaptureBurstCount;
 
-            foreach (CameraDescriptor camera in config.Cameras)
+            foreach (CameraDescriptor camera in editable.Cameras)
             {
                 Cameras.Add(new CameraRow(camera));
             }
@@ -166,33 +167,28 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 return;
             }
 
-            _config.SimulationMode = SimulationMode;
-            _config.NatsUrl = NatsUrl;
-            _config.StoragePath = StoragePath;
-            _config.HeartbeatSeconds = HeartbeatSeconds;
-            _config.CaptureImageFormat = CaptureImageFormat;
-            _config.CaptureBurstCount = CaptureBurstCount;
-
-            // ponytail: 새 List로 재할당 금지 — CameraNatsConnector가 시작 시점의 이 리스트 객체를
-            // 참조로 붙들고 하트비트 인벤토리를 만든다. in-place로 갈아끼워야 카메라 삭제/추가가
-            // 재시작 없이 인벤토리에 즉시 반영된다. (상한: 하트비트 타이머 스레드의 열거와 겹칠 수
-            // 있음 — 실사용 빈도상 무해. 문제 시 config.Cameras 접근에 락.)
-            List<CameraDescriptor> updated = Cameras.Select(row => row.ToDescriptor()).ToList();
-            _config.Cameras.Clear();
-            _config.Cameras.AddRange(updated);
-
+            var draft = new AgentUiConfig
+            {
+                SimulationMode = SimulationMode,
+                NatsUrl = NatsUrl,
+                StoragePath = StoragePath,
+                HeartbeatSeconds = HeartbeatSeconds,
+                CaptureImageFormat = CaptureImageFormat,
+                CaptureBurstCount = CaptureBurstCount,
+                Cameras = Cameras.Select(row => row.ToDescriptor()).ToList()
+            };
             try
             {
-                _config.Save();
-                StatusText = "저장됨. 재시작 없이 즉시 적용됩니다.";
+                bool restart = _config.SaveDraft(draft);
+                StatusText = restart
+                    ? "저장됨. 실행 환경·연결·저장 설정이 바뀌어 AgentUI 재시작이 필요합니다. 현재 실행 설정은 유지됩니다."
+                    : "저장됨. 카메라 구성을 즉시 적용합니다.";
+                if (!restart) Saved?.Invoke();
             }
             catch (Exception ex)
             {
                 StatusText = $"Save failed: {ex.Message}";
-                return;
             }
-
-            Saved?.Invoke();
         }
 
         /// <summary>
@@ -217,8 +213,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 int matched = 0;
                 foreach (CameraRow row in Cameras)
                 {
-                    CameraComPair? pair = FindPairForRow(pairs.Where(p => !consumed.Contains(p)).ToList(), row);
-                    if (pair?.SerialPort is not null)
+                    CameraComPair? pair = FindPairForRow(pairs, row);
+                    if (pair?.SerialPort is not null && !consumed.Contains(pair))
                     {
                         consumed.Add(pair);
                         row.SerialPortName = pair.SerialPort.PortName;
@@ -235,8 +231,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                     : string.Join(", ", pairs.Select(p => $"{p.Camera.FriendlyName}[{p.CameraSerialNumber ?? "?"}]→{p.SerialPort?.PortName ?? p.Status.ToString()}"));
 
                 StatusText = matched > 0
-                    ? $"자동 감지 {matched}/{Cameras.Count} 매칭. 감지: {detected}. Save 후 재시작."
-                    : $"매칭 없음 — 각 행 Device Name에 장치명 입력 후 재시도. 감지: {detected}";
+                    ? $"자동 감지 {matched}/{Cameras.Count} 매칭. 감지: {detected}. 저장 후 적용."
+                    : $"매칭 없음 — S/N 또는 USB ContainerId를 확인하세요. 모호한 이름은 자동 연결하지 않습니다. 감지: {detected}";
             }
             catch (Exception ex)
             {
@@ -244,35 +240,27 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             }
         }
 
-        /// <summary>
-        /// 행과 감지된 페어를 매칭한다. 우선순위: 고유 카메라 S/N → UsbContainerId →
-        /// Device Name 부분 일치 → OpenCvIndex.
-        /// </summary>
-        private static CameraComPair? FindPairForRow(IReadOnlyList<CameraComPair> pairs, CameraRow row)
+        /// <summary>강한 식별자가 있으면 불일치 시 중단한다. 모델명·WMI 순번으로 다른 카메라를 채택하지 않는다.</summary>
+        internal static CameraComPair? FindPairForRow(IReadOnlyList<CameraComPair> pairs, CameraRow row)
         {
             if (IsUsableSerial(row.CameraSerialNumber))
             {
-                var bySerial = pairs
-                    .Where(p => string.Equals(p.CameraSerialNumber, row.CameraSerialNumber, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                if (bySerial.Count == 1)
-                    return bySerial[0];
+                var matches = pairs.Where(p => string.Equals(p.CameraSerialNumber, row.CameraSerialNumber, StringComparison.OrdinalIgnoreCase)).ToList();
+                return matches.Count == 1 && IsUnambiguous(matches[0], pairs) ? matches[0] : null;
             }
-
             if (!string.IsNullOrWhiteSpace(row.UsbContainerId))
             {
-                CameraComPair? byContainer = pairs.FirstOrDefault(
-                    p => string.Equals(p.Camera.UsbParentId, row.UsbContainerId, StringComparison.OrdinalIgnoreCase));
-                if (byContainer is not null)
-                    return byContainer;
+                var matches = pairs.Where(p => string.Equals(p.Camera.UsbParentId, row.UsbContainerId, StringComparison.OrdinalIgnoreCase)).ToList();
+                return matches.Count == 1 && IsUnambiguous(matches[0], pairs) ? matches[0] : null;
             }
-
-            if (!string.IsNullOrWhiteSpace(row.DeviceName))
-                return pairs.FirstOrDefault(
-                    p => p.Camera.FriendlyName.Contains(row.DeviceName, StringComparison.OrdinalIgnoreCase));
-
-            return pairs.FirstOrDefault(p => p.Camera.OpenCvIndex == row.OpenCvIndex);
+            // 같은 모델이 하나만 있어도 기존 영상 인덱스와 WMI 순번의 동일성은 보장되지 않는다.
+            // 물리 식별자가 없는 행은 운영자가 S/N/ContainerId를 지정해야 한다.
+            return null;
         }
+
+        private static bool IsUnambiguous(CameraComPair pair, IReadOnlyList<CameraComPair> pairs) =>
+            pair.Status != PairingStatus.Ambiguous && (!IsUsableSerial(pair.CameraSerialNumber)
+            || pairs.Count(candidate => string.Equals(candidate.CameraSerialNumber, pair.CameraSerialNumber, StringComparison.OrdinalIgnoreCase)) == 1);
 
         // 비었거나 0뿐인 S/N은 미기록 테스트 카메라 — 진짜 식별 키가 아니므로 ContainerID로 fall back한다.
         private static bool IsUsableSerial([NotNullWhen(true)] string? serial) =>

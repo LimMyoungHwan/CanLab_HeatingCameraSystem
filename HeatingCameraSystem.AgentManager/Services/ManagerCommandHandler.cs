@@ -2,6 +2,7 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.AgentManager.Config;
 using HeatingCameraSystem.AgentManager.State;
@@ -15,8 +16,11 @@ namespace HeatingCameraSystem.AgentManager.Services
     /// <c>server.cmd.mgr.{PCId}</c>로 들어오는 서버 명령(Approve/Reject/Rename/SetSerial/Restart/Disable)을
     /// 처리한다. 대상 카메라는 안정 식별자인 HardwareId로 지정되며, 처리 후 매번 인벤토리를 재발행한다.
     /// </summary>
-    public class ManagerCommandHandler
+    public class ManagerCommandHandler : IDisposable
     {
+        private bool _disposed;
+        private readonly CancellationTokenSource _lifetime = new();
+        private IAsyncDisposable? _subscription;
         private readonly INatsCommunicationService _nats;
         private readonly ManagerSettings _settings;
         private readonly ManagerStateStore _store;
@@ -37,16 +41,27 @@ namespace HeatingCameraSystem.AgentManager.Services
         }
 
         /// <summary><c>server.cmd.mgr.{PCId}</c> 구독을 시작한다.</summary>
-        public void Subscribe()
+        public void Subscribe() => _ = SubscribeAsync();
+
+        public async Task SubscribeAsync()
         {
-            _nats.SubscribeManagerCommandAsync(_settings.PCId, cmd => _ = HandleAsync(cmd));
+            _subscription = await _nats.SubscribeManagerCommandScopedAsync(_settings.PCId, cmd => _ = HandleAsync(cmd), _lifetime.Token);
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _lifetime.Cancel();
+            if (_subscription is not null) _ = _subscription.DisposeAsync();
+            _lifetime.Dispose();
         }
 
         /// <summary>
         /// 명령 한 건을 Op별로 분기 처리한다. Approve를 제외하면 미지의 HardwareId는 경고만 남기고 버린다.
         /// SetSerial은 Payload의 시리얼 설정을 <c>master.config.serial.{AgentId}</c>로 전달한다.
         /// </summary>
-        private async Task HandleAsync(ManagerCommandMessage cmd)
+        internal async Task HandleAsync(ManagerCommandMessage cmd)
         {
             _logger.LogInformation("ManagerCommand: {Op} for {HwId}", cmd.Op, cmd.HardwareId);
 
@@ -83,6 +98,7 @@ namespace HeatingCameraSystem.AgentManager.Services
                             var serialSettings = JsonSerializer.Deserialize<Core.Models.CameraSerialSettings>(cmd.Payload);
                             if (serialSettings is not null)
                             {
+                                serialSettings.CameraIndex = entry.OpenCvIndex;
                                 await _nats.PublishSerialConfigAsync(new Core.Models.SerialConfigMessage
                                 {
                                     AgentId   = entry.AgentId,
@@ -135,9 +151,8 @@ namespace HeatingCameraSystem.AgentManager.Services
             if (!string.IsNullOrEmpty(cmd.Payload))
                 entry.Alias = cmd.Payload;
 
-            if (string.IsNullOrEmpty(entry.AgentId))
-                entry.AgentId = BuildAgentId(_settings.PCId, cmd.HardwareId);
-
+            // AgentUI가 실제 사용하는 ID는 물리 ContainerId 하트비트로 채택한다.
+            // 별도 hash ID를 만들면 존재하지 않는 구독으로 load/serial 명령을 보내게 된다.
             _store.Upsert(entry);
             _supervisor.Spawn(entry);
             await _inventory.PublishAsync();

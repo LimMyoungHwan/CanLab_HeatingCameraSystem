@@ -47,6 +47,7 @@ namespace HeatingCameraSystem.Master.Services
         public static IPlcController? PlcController { get; private set; }
         public static IBlackBodyController? BlackBodyController { get; private set; }
         public static RecipeEngine? RecipeEngine { get; private set; }
+        public static CameraCommandClient? CameraCommands { get; private set; }
         public static ConnectionMonitorService? ConnectionMonitor { get; private set; }
         public static PlcStatusService? PlcStatus { get; private set; }
         public static ILiveThermalCamera? LiveThermalCamera { get; private set; }
@@ -62,6 +63,8 @@ namespace HeatingCameraSystem.Master.Services
 
         // 종료 1회 보장 가드 — DisposeAsync 재진입 시 재-종료 방지.
         private static bool _disposed;
+        private static NatsSubscriptionLifetime _subscriptions = new();
+        private static Task? _natsConnectionTask;
 
         private static string _hardwareJsonPath = string.Empty;
 
@@ -73,6 +76,8 @@ namespace HeatingCameraSystem.Master.Services
         public static void Initialize()
         {
             _disposed = false;
+            _subscriptions = new NatsSubscriptionLifetime();
+            _natsConnectionTask = null;
             string dir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "HeatingCameraSystem");
@@ -117,6 +122,7 @@ namespace HeatingCameraSystem.Master.Services
             MigrationService.Run(Db, CameraDeviceRepo);
 
             NatsService = new NatsCommunicationService();
+            CameraCommands = new CameraCommandClient(NatsService, Settings.RecipeEngine.BiasAttemptTimeoutSeconds);
 
             if (IsSimulated(Settings, s => s.Plc))
             {
@@ -192,18 +198,7 @@ namespace HeatingCameraSystem.Master.Services
         /// </summary>
         public static async Task TryConnectServicesAsync()
         {
-            try
-            {
-                await NatsService!.ConnectAsync(Settings.Nats.Url);
-                System.Diagnostics.Debug.WriteLine("[AppServices] NATS connected.");
-                await NatsService.SubscribeAgentStatusAsync(msg => AgentDirectory.Note(msg));
-                await NatsService.SubscribeCaptureResultAsync(msg => _ = _captureRecorder!.RecordAsync(msg));
-            }
-            catch (Exception ex)
-            {
-                AlarmSink.Raise(AlarmSeverity.Warning, "NATS", $"연결 실패: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"[AppServices] NATS connect failed: {ex.Message}");
-            }
+            _natsConnectionTask ??= ConnectNatsWithRetryAsync();
 
             try
             {
@@ -228,6 +223,44 @@ namespace HeatingCameraSystem.Master.Services
             }
         }
 
+        private static async Task ConnectNatsWithRetryAsync()
+        {
+            if (NatsService is not { } nats) return;
+            bool warned = false;
+            while (!_subscriptions.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    await nats.ConnectAsync(Settings.Nats.Url).WaitAsync(_subscriptions.Token).ConfigureAwait(false);
+                    await _subscriptions.AddAsync(ct => nats.SubscribeAgentStatusScopedAsync(AgentDirectory.Note, ct)).ConfigureAwait(false);
+                    await _subscriptions.AddAsync(ct => nats.SubscribeCaptureResultScopedAsync(msg =>
+                    {
+                        if (_captureRecorder is { } recorder) _ = recorder.RecordAsync(msg);
+                    }, ct)).ConfigureAwait(false);
+                    System.Diagnostics.Debug.WriteLine("[AppServices] NATS connected; essential subscriptions ready.");
+                    return;
+                }
+                catch (OperationCanceledException) when (_subscriptions.Token.IsCancellationRequested) { return; }
+                catch (Exception ex)
+                {
+                    if (!warned) AlarmSink.Raise(AlarmSeverity.Warning, "NATS", $"연결 실패, 재접속 대기: {ex.Message}");
+                    warned = true;
+                    System.Diagnostics.Debug.WriteLine($"[AppServices] NATS connect retry: {ex.Message}");
+                    try { await Task.Delay(TimeSpan.FromSeconds(2), _subscriptions.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { return; }
+                }
+            }
+        }
+
+        /// <summary>화면을 닫기 전 UI 디스패처와 NATS가 살아 있는 동안 원격 작업 취소를 마친다.</summary>
+        public static async Task CancelActiveOperationsAsync(TimeSpan timeout)
+        {
+            Task recipe = RecipeEngine?.CancelActiveRunAsync(timeout) ?? Task.CompletedTask;
+            Task camera = CameraCommands?.StopAsync(timeout) ?? Task.CompletedTask;
+            try { await Task.WhenAll(recipe, camera).WaitAsync(timeout).ConfigureAwait(false); }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[AppServices] operation drain: {ex.Message}"); }
+        }
+
         /// <summary>
         /// 앱 종료 시 챔버 정지 후 서비스들을 순차 정리한다. <c>_disposed</c> 가드로
         /// 재진입해도 한 번만 수행한다. 실제 시퀀스는 <see cref="RunShutdownAsync"/>에 있다.
@@ -236,10 +269,10 @@ namespace HeatingCameraSystem.Master.Services
         {
             if (_disposed) return;
             _disposed = true;
+            await CancelActiveOperationsAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            await _subscriptions.DisposeAsync().ConfigureAwait(false);
 
-            // 실행 중이던 챔버 제어를 PLC 종료 전에 먼저 정지 → 앱을 닫아도 히터가 무인 가열되지
-            // 않게 한다. 레시피 취소 경로는 StopChamberAsync를 타지 않으므로(정상 완료 시에만 호출)
-            // 여기가 유일한 안전망이다.
+            // 레시피 finally의 정지와 별개로 수동 챔버 가동도 PLC 종료 전에 정지한다.
             Func<Task>? stopChamber = null;
             if (PlcController is { } plc) stopChamber = plc.StopChamberAsync;
 

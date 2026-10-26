@@ -477,6 +477,7 @@ namespace HeatingCameraSystem.Tests
                             cb(new CaptureResultMessage
                             {
                                 AgentId      = m.TargetAgentId,
+                                CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(m),
                                 RecipeStepId = m.RecipeStepId,
                                 IsSuccess    = true,
                                 Timestamp    = DateTime.UtcNow,
@@ -527,6 +528,7 @@ namespace HeatingCameraSystem.Tests
                             cb(new CaptureResultMessage
                             {
                                 AgentId      = m.TargetAgentId,
+                                CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(m),
                                 RecipeStepId = m.RecipeStepId,
                                 IsSuccess    = true,
                                 Timestamp    = DateTime.UtcNow,
@@ -572,6 +574,7 @@ namespace HeatingCameraSystem.Tests
                             cb(new CaptureResultMessage
                             {
                                 AgentId      = m.TargetAgentId,
+                                CameraIndex = CaptureReplyFixtureDeepAudit.CameraIndex(m),
                                 RecipeStepId = m.RecipeStepId,
                                 IsSuccess    = true,
                                 Timestamp    = DateTime.UtcNow,

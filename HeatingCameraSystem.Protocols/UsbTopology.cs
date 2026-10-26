@@ -7,43 +7,49 @@ namespace HeatingCameraSystem.Protocols
 {
     /// <summary>
     /// USB 복합 장치의 부모 식별 키를 유도한다. Windows ContainerID(하나의 물리
-    /// 장치의 모든 기능 — UVC 비디오 + USB-serial — 이 공유)를 우선 사용하고,
-    /// 조회 불가 시 PNPDeviceID 정규화로 폴백한다.
+    /// 장치의 모든 기능 — UVC 비디오 + USB-serial — 이 공유)만 사용한다.
+    /// 조회 불가 시 빈 값을 반환해 다른 물리 장치를 자동으로 짝짓지 않는다.
     /// WmiCameraEnumerator 와 WmiUsbSerialEnumerator 가 공유.
     /// </summary>
     public static class UsbTopology
     {
         private static readonly Regex MiToken = new(@"&MI_[0-9A-Fa-f]{2}", RegexOptions.Compiled);
-        private const string ZeroGuid = "{00000000-0000-0000-0000-000000000000}";
 
         /// <summary>
         /// PNPDeviceID로 레지스트리 ContainerID를 조회한다. 유효한 non-zero GUID면
         /// 대문자로 반환(하나의 물리 복합 장치의 모든 기능이 동일 → 올바른 페어링 키).
-        /// 없거나 실패하면 <see cref="NormalizeParent"/> 폴백. 절대 예외를 던지지 않는다.
+        /// 없거나 실패하면 빈 값을 반환한다. VID/PID만 같은 장치를 물리적 동일성의 근거로
+        /// 사용하지 않는다. 절대 예외를 던지지 않는다.
         /// </summary>
         [SupportedOSPlatform("windows")]
         public static string DeriveContainerId(string pnpDeviceId)
+            => ResolvePhysicalContainerId(pnpDeviceId, instanceId =>
+            {
+                using var key = Registry.LocalMachine.OpenSubKey(
+                    $@"SYSTEM\CurrentControlSet\Enum\{instanceId}");
+                return key?.GetValue("ContainerID") as string;
+            });
+
+        // 조회 실패와 GUID 검증을 같은 경로로 처리한다. 내부 조회 seam은 실제 레지스트리나
+        // 카메라를 건드리지 않고 물리 식별자 실패 처리를 검증하는 데도 사용한다.
+        internal static string ResolvePhysicalContainerId(string pnpDeviceId, Func<string, string?> readContainerId)
         {
-            if (string.IsNullOrEmpty(pnpDeviceId)) return string.Empty;
+            if (string.IsNullOrWhiteSpace(pnpDeviceId)) return string.Empty;
 
             try
             {
-                using var key = Registry.LocalMachine.OpenSubKey(
-                    $@"SYSTEM\CurrentControlSet\Enum\{pnpDeviceId}");
-                var value = key?.GetValue("ContainerID") as string;
-                if (!string.IsNullOrEmpty(value)
-                    && Guid.TryParse(value, out _)
-                    && !string.Equals(value, ZeroGuid, StringComparison.OrdinalIgnoreCase))
+                string? value = readContainerId(pnpDeviceId);
+                if (Guid.TryParse(value, out Guid containerId) && containerId != Guid.Empty)
                 {
-                    return value.ToUpperInvariant();
+                    return containerId.ToString("B").ToUpperInvariant();
                 }
             }
             catch
             {
-                // 레지스트리 접근 실패(권한/경로) → 폴백
+                // 레지스트리 접근 실패(권한/경로) → 물리 식별자를 확정할 수 없음
             }
 
-            return NormalizeParent(pnpDeviceId);
+            return string.Empty;
         }
 
         /// <summary>
@@ -51,8 +57,8 @@ namespace HeatingCameraSystem.Protocols
         /// 인터페이스 토큰(&amp;MI_xx) 제거 → 마지막 백슬래시 인스턴스 구획 삭제.
         /// 복합 장치의 여러 인터페이스가 동일 키로 수렴한다.
         /// </summary>
-        // ponytail: ContainerID를 얻을 수 없을 때의 폴백. 동일 VID/PID인 두 물리 장치를
-        // 구분하지 못한다 — 실제 하드웨어 페어링은 DeriveContainerId(ContainerID)에 의존한다.
+        // 기존 표시/분류용 정규화 API다. 동일 VID/PID인 서로 다른 물리 장치를 구분하지 못하므로
+        // 자동 페어링이나 영상 인덱스 바인딩의 식별자로 사용하지 않는다.
         public static string NormalizeParent(string pnpDeviceId)
         {
             if (string.IsNullOrEmpty(pnpDeviceId)) return string.Empty;

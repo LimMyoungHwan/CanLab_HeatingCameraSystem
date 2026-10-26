@@ -33,6 +33,8 @@ namespace HeatingCameraSystem.AgentManager.Services
 
         private readonly ConcurrentDictionary<string, bool> _loaded = new();
         private readonly ConcurrentDictionary<string, DateTime> _heartbeatUtc = new();
+        private readonly ConcurrentDictionary<string, bool> _runtimeOnline = new();
+        private readonly ConcurrentDictionary<string, byte> _loadAfterHeartbeat = new();
 
         /// <summary>NATS 없이 생성하는 테스트용 편의 생성자. 런타임 명령 발행은 조용히 무시된다.</summary>
         public AgentSupervisor(ManagerSettings settings, ManagerStateStore store,
@@ -60,10 +62,38 @@ namespace HeatingCameraSystem.AgentManager.Services
             }
         }
 
+        /// <summary>Manager 재기동은 AgentUI의 실행과 BIAS를 건드리지 않고 원하는 상태만 복원한다.</summary>
+        public void RestoreDesiredState()
+        {
+            foreach (CameraEntry entry in _store.GetAll())
+                RequestLoadAfterHeartbeat(entry);
+        }
+
+        /// <summary>WMI 순번으로 로드하지 않고 AgentUI가 확인한 실제 신원·상태·인덱스를 기다린다.</summary>
+        public void RequestLoadAfterHeartbeat(CameraEntry entry)
+        {
+            bool desired = entry.IsApproved && !entry.IsDisabled;
+            _loaded[entry.HardwareId] = desired;
+            if (desired) _loadAfterHeartbeat[entry.HardwareId] = 0;
+            else _loadAfterHeartbeat.TryRemove(entry.HardwareId, out _);
+        }
+
         /// <summary>카메라를 원하는-로드 상태로 표시하고 AgentUI에 runtimeLoad를 발행한다. 이름과 달리 프로세스를 만들지 않는다.</summary>
         public void Spawn(CameraEntry entry)
         {
+            _loadAfterHeartbeat.TryRemove(entry.HardwareId, out _);
+            if (!entry.IsApproved || entry.IsDisabled)
+            {
+                _loaded[entry.HardwareId] = false;
+                return;
+            }
             _loaded[entry.HardwareId] = true;
+            if (string.IsNullOrWhiteSpace(entry.AgentId) || entry.OpenCvIndex < 0)
+            {
+                _loadAfterHeartbeat[entry.HardwareId] = 0;
+                _logger.LogInformation("Waiting for physical AgentUI identity: {HwId}", entry.HardwareId);
+                return;
+            }
             PublishRuntime(entry.AgentId, CameraControlOps.RuntimeLoad, entry.OpenCvIndex);
             _logger.LogInformation("Runtime load requested: {AgentId} (hw={HwId})", entry.AgentId, entry.HardwareId);
         }
@@ -72,6 +102,7 @@ namespace HeatingCameraSystem.AgentManager.Services
         public void Kill(string hardwareId)
         {
             _loaded[hardwareId] = false;
+            _loadAfterHeartbeat.TryRemove(hardwareId, out _);
             var entry = _store.GetByHardwareId(hardwareId);
             if (entry is not null)
             {
@@ -91,7 +122,8 @@ namespace HeatingCameraSystem.AgentManager.Services
         {
             if (!_loaded.TryGetValue(hardwareId, out bool loaded) || !loaded) return false;
             var entry = _store.GetByHardwareId(hardwareId);
-            return entry is not null && HeartbeatFresh(entry.AgentId);
+            return entry is not null && HeartbeatFresh(entry.AgentId)
+                && (!_runtimeOnline.TryGetValue(entry.AgentId, out bool online) || online);
         }
 
         public IReadOnlyCollection<string> RunningHardwareIds =>
@@ -111,6 +143,74 @@ namespace HeatingCameraSystem.AgentManager.Services
             var entry = _store.GetByAgentId(agentId);
             if (entry is not null && (entry.IsDisabled || !entry.IsApproved))
                 PublishRuntime(agentId, CameraControlOps.RuntimeUnload, entry.OpenCvIndex);
+        }
+
+        /// <summary>인덱스나 모델명이 아닌 같은 호스트의 유일 USB ContainerId로 AgentUI의 실제 AgentId를 채택한다.</summary>
+        public CameraEntry? NoteHeartbeat(AgentStatusMessage status)
+        {
+            if (string.IsNullOrWhiteSpace(status.AgentId)
+                || (!string.IsNullOrWhiteSpace(status.HostName) && !string.Equals(status.HostName, Environment.MachineName, StringComparison.OrdinalIgnoreCase))) return null;
+            if (string.IsNullOrWhiteSpace(status.UsbContainerId))
+            {
+                // 구버전/콘솔 송신자는 새 신원을 추정하지 않고 이미 저장된 정확한 AgentId만 갱신한다.
+                CameraEntry? legacy = _store.GetByAgentId(status.AgentId);
+                if (legacy is null) return null;
+                _runtimeOnline[status.AgentId] = status.CameraStatus is CameraStatus.Connected or CameraStatus.Streaming;
+                NoteHeartbeat(status.AgentId);
+                ReconcileLoadAfterHeartbeat(legacy, status, bindingChanged: false);
+                return legacy;
+            }
+            if (!string.Equals(status.HostName, Environment.MachineName, StringComparison.OrdinalIgnoreCase)) return null;
+            CameraEntry[] candidates = _store.GetAll().Where(candidate =>
+                string.Equals(candidate.UsbContainerId, status.UsbContainerId, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (candidates.Length != 1) return null;
+            CameraEntry entry = candidates[0];
+            if (!string.IsNullOrWhiteSpace(entry.CameraSerialNumber) && !string.IsNullOrWhiteSpace(status.CameraSerialNumber)
+                && !string.Equals(entry.CameraSerialNumber, status.CameraSerialNumber, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("Camera identity changed at {Container}; existing approval will not transfer", status.UsbContainerId);
+                return null;
+            }
+            CameraEntry? collision = _store.GetByAgentId(status.AgentId);
+            if (collision is not null && collision.HardwareId != entry.HardwareId) return null;
+            bool bindingChanged = entry.AgentId != status.AgentId || entry.OpenCvIndex != status.CameraIndex;
+            bool changed = bindingChanged;
+            entry.AgentId = status.AgentId;
+            entry.OpenCvIndex = status.CameraIndex;
+            if (string.IsNullOrWhiteSpace(entry.Alias)) { entry.Alias = status.Alias; changed = true; }
+            if (entry.CameraSerialNumber != status.CameraSerialNumber && !string.IsNullOrWhiteSpace(status.CameraSerialNumber))
+            {
+                entry.CameraSerialNumber = status.CameraSerialNumber;
+                changed = true;
+            }
+            if (AgentLogFiles.IsTrustedAgentUiDirectory(status.LogDirectory, _settings) && entry.AgentLogDirectory != status.LogDirectory)
+            {
+                entry.AgentLogDirectory = status.LogDirectory;
+                changed = true;
+            }
+            if (changed) _store.Upsert(entry);
+            // 재시작 후 이미 실행 중인 AgentUI를 다시 load해 보정을 지우지 않는다.
+            if (entry.IsApproved && !entry.IsDisabled) _loaded[entry.HardwareId] = true;
+            _runtimeOnline[status.AgentId] = status.CameraStatus is CameraStatus.Connected or CameraStatus.Streaming;
+            NoteHeartbeat(status.AgentId);
+            ReconcileLoadAfterHeartbeat(entry, status, bindingChanged);
+            return entry;
+        }
+
+        private void ReconcileLoadAfterHeartbeat(CameraEntry entry, AgentStatusMessage status, bool bindingChanged)
+        {
+            bool desired = entry.IsApproved && !entry.IsDisabled;
+            _loaded[entry.HardwareId] = desired;
+            if (!desired || status.CameraStatus is CameraStatus.Connected or CameraStatus.Streaming)
+            {
+                _loadAfterHeartbeat.TryRemove(entry.HardwareId, out _);
+                return;
+            }
+            // 구형 보고도 이미 저장된 정확한 인덱스가 일치할 때만 채택한다.
+            if (status.CameraStatus != CameraStatus.Offline || status.CameraIndex < 0 || status.CameraIndex != entry.OpenCvIndex) return;
+            bool scheduled = _loadAfterHeartbeat.TryRemove(entry.HardwareId, out _);
+            if (scheduled || bindingChanged)
+                PublishRuntime(entry.AgentId, CameraControlOps.RuntimeLoad, status.CameraIndex);
         }
 
         private bool HeartbeatFresh(string agentId) =>
@@ -133,6 +233,8 @@ namespace HeatingCameraSystem.AgentManager.Services
         {
             _loaded.Clear();
             _heartbeatUtc.Clear();
+            _runtimeOnline.Clear();
+            _loadAfterHeartbeat.Clear();
         }
     }
 }

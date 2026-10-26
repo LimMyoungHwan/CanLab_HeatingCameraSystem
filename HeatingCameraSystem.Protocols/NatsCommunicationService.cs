@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Interfaces;
@@ -16,14 +15,18 @@ namespace HeatingCameraSystem.Protocols
     /// 구독은 자체 복구 루프(<see cref="RunSubscribeWithRetryAsync"/>)로 돌며 Dispose 시 일괄 취소된다.
     /// 접속 재연결은 NATS.Net이 내부에서 처리한다.
     /// </summary>
-    public class NatsCommunicationService : INatsCommunicationService
+    public class NatsCommunicationService : INatsCommunicationService, INatsScopedSubscriptions
     {
         private INatsConnection? _connection;
         private readonly NatsOpts _baseOpts;
 
         // 구독 수명: Dispose 시 취소되어 모든 자체 복구 재시도 루프가 깨끗하게 멈춘다.
         private readonly CancellationTokenSource _subscriptionCts = new();
-        private readonly List<Task> _subscriptionTasks = new();
+        private readonly HashSet<IAsyncDisposable> _subscriptions = new();
+        private readonly SemaphoreSlim _connectionGate = new(1, 1);
+        private int _disposed;
+        private Task? _disposeTask;
+        private string? _connectedUrl;
         private readonly object _subscriptionLock = new();
 
         public NatsCommunicationService()
@@ -32,186 +35,286 @@ namespace HeatingCameraSystem.Protocols
             _baseOpts = NatsOpts.Default with { SerializerRegistry = NatsJsonSerializerRegistry.Default };
         }
 
+        internal NatsCommunicationService(INatsConnection connection) : this()
+        {
+            _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+        }
+
+        internal int ActiveSubscriptionCount
+        {
+            get { lock (_subscriptionLock) return _subscriptions.Count; }
+        }
+
         public async Task ConnectAsync(string natsUrl = "nats://127.0.0.1:4222")
         {
-            var opts = _baseOpts with { Url = natsUrl };
-            _connection = new NatsConnection(opts);
-            await _connection.ConnectAsync();
+            await _connectionGate.WaitAsync(_subscriptionCts.Token).ConfigureAwait(false);
+            try
+            {
+                ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+                if (_connection is not null)
+                {
+                    if (_connectedUrl is not null && !string.Equals(_connectedUrl, natsUrl, StringComparison.Ordinal))
+                        throw new InvalidOperationException("NATS 주소 변경은 서비스 재시작이 필요합니다.");
+                    return;
+                }
+                var candidate = new NatsConnection(_baseOpts with { Url = natsUrl });
+                try
+                {
+                    await candidate.ConnectAsync().ConfigureAwait(false);
+                    _subscriptionCts.Token.ThrowIfCancellationRequested();
+                    _connection = candidate;
+                    _connectedUrl = natsUrl;
+                }
+                catch
+                {
+                    await candidate.DisposeAsync().ConfigureAwait(false);
+                    throw;
+                }
+            }
+            finally { _connectionGate.Release(); }
         }
 
         public async Task PublishCaptureCommandAsync(CaptureCommandMessage message)
         {
-            CheckConnection();
             string subject = $"master.cmd.capture.{message.TargetAgentId}";
-            await _connection!.PublishAsync(subject, message);
+            await GetConnection().PublishAsync(subject, message);
         }
 
-        public Task SubscribeCaptureCommandAsync(string agentId, Action<CaptureCommandMessage> onMessageReceived)
+        public async Task SubscribeCaptureCommandAsync(string agentId, Action<CaptureCommandMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"master.cmd.capture.{agentId}", onMessageReceived);
-            RunSubscriptionLoop("master.cmd.capture.all", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeCaptureCommandScopedAsync(agentId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishAgentStatusAsync(AgentStatusMessage message)
         {
-            CheckConnection();
             string subject = $"agent.status.{message.AgentId}";
-            await _connection!.PublishAsync(subject, message);
+            await GetConnection().PublishAsync(subject, message);
         }
 
-        public Task SubscribeAgentStatusAsync(Action<AgentStatusMessage> onMessageReceived)
+        public async Task SubscribeAgentStatusAsync(Action<AgentStatusMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop("agent.status.>", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeAgentStatusScopedAsync(onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishCaptureResultAsync(CaptureResultMessage message)
         {
-            CheckConnection();
             string subject = $"agent.result.capture.{message.AgentId}";
-            await _connection!.PublishAsync(subject, message);
+            await GetConnection().PublishAsync(subject, message);
         }
 
-        public Task SubscribeCaptureResultAsync(Action<CaptureResultMessage> onMessageReceived)
+        public async Task SubscribeCaptureResultAsync(Action<CaptureResultMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop("agent.result.capture.>", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeCaptureResultScopedAsync(onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishLiveFrameAsync(LiveFrameMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"agent.live.{message.AgentId}", message);
+            await GetConnection().PublishAsync($"agent.live.{message.AgentId}", message);
         }
 
-        public Task SubscribeLiveFrameAsync(Action<LiveFrameMessage> onMessageReceived)
+        public async Task SubscribeLiveFrameAsync(Action<LiveFrameMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop("agent.live.>", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeLiveFrameScopedAsync(onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishSerialConfigAsync(SerialConfigMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"master.config.serial.{message.AgentId}", message);
+            await GetConnection().PublishAsync($"master.config.serial.{message.AgentId}", message);
         }
 
-        public Task SubscribeSerialConfigAsync(string agentId, Action<SerialConfigMessage> onMessageReceived)
+        public async Task SubscribeSerialConfigAsync(string agentId, Action<SerialConfigMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"master.config.serial.{agentId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeSerialConfigScopedAsync(agentId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishSerialConfigAckAsync(SerialConfigAckMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"agent.config.serial.ack.{message.AgentId}", message);
+            await GetConnection().PublishAsync($"agent.config.serial.ack.{message.AgentId}", message);
         }
 
-        public Task SubscribeSerialConfigAckAsync(string agentId, Action<SerialConfigAckMessage> onMessageReceived)
+        public async Task SubscribeSerialConfigAckAsync(string agentId, Action<SerialConfigAckMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"agent.config.serial.ack.{agentId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeSerialConfigAckScopedAsync(agentId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishAgentConfigRequestAsync(AgentConfigRequestMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"master.config.agent.get.{message.AgentId}", message);
+            await GetConnection().PublishAsync($"master.config.agent.get.{message.AgentId}", message);
         }
 
-        public Task SubscribeAgentConfigRequestAsync(string agentId, Action<AgentConfigRequestMessage> onMessageReceived)
+        public async Task SubscribeAgentConfigRequestAsync(string agentId, Action<AgentConfigRequestMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"master.config.agent.get.{agentId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeAgentConfigRequestScopedAsync(agentId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishAgentConfigSnapshotAsync(AgentConfigSnapshotMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"agent.config.agent.snapshot.{message.AgentId}", message);
+            await GetConnection().PublishAsync($"agent.config.agent.snapshot.{message.AgentId}", message);
         }
 
-        public Task SubscribeAgentConfigSnapshotAsync(string agentId, Action<AgentConfigSnapshotMessage> onMessageReceived)
+        public async Task SubscribeAgentConfigSnapshotAsync(string agentId, Action<AgentConfigSnapshotMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"agent.config.agent.snapshot.{agentId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeAgentConfigSnapshotScopedAsync(agentId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishAgentConfigApplyAsync(AgentConfigApplyMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"master.config.agent.set.{message.AgentId}", message);
+            await GetConnection().PublishAsync($"master.config.agent.set.{message.AgentId}", message);
         }
 
-        public Task SubscribeAgentConfigApplyAsync(string agentId, Action<AgentConfigApplyMessage> onMessageReceived)
+        public async Task SubscribeAgentConfigApplyAsync(string agentId, Action<AgentConfigApplyMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"master.config.agent.set.{agentId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeAgentConfigApplyScopedAsync(agentId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishAgentConfigAckAsync(AgentConfigAckMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"agent.config.agent.ack.{message.AgentId}", message);
+            await GetConnection().PublishAsync($"agent.config.agent.ack.{message.AgentId}", message);
         }
 
-        public Task SubscribeAgentConfigAckAsync(string agentId, Action<AgentConfigAckMessage> onMessageReceived)
+        public async Task SubscribeAgentConfigAckAsync(string agentId, Action<AgentConfigAckMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"agent.config.agent.ack.{agentId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeAgentConfigAckScopedAsync(agentId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishCameraControlAsync(CameraControlMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"master.cmd.camera.{message.AgentId}", message);
+            await GetConnection().PublishAsync($"master.cmd.camera.{message.AgentId}", message);
         }
 
-        public Task SubscribeCameraControlAsync(string agentId, Action<CameraControlMessage> onMessageReceived)
+        public async Task SubscribeCameraControlAsync(string agentId, Action<CameraControlMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"master.cmd.camera.{agentId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeCameraControlScopedAsync(agentId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishCameraControlAckAsync(CameraControlAckMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"agent.ack.camera.{message.AgentId}", message);
+            await GetConnection().PublishAsync($"agent.ack.camera.{message.AgentId}", message);
         }
 
-        public Task SubscribeCameraControlAckAsync(string agentId, Action<CameraControlAckMessage> onMessageReceived)
+        public async Task SubscribeCameraControlAckAsync(string agentId, Action<CameraControlAckMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"agent.ack.camera.{agentId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeCameraControlAckScopedAsync(agentId, onMessageReceived).ConfigureAwait(false);
         }
 
-        /// <summary>구독 하나를 자체 복구 루프로 백그라운드 실행하고 Dispose 대기 목록에 등록한다.</summary>
-        private void RunSubscriptionLoop<T>(string subject, Action<T> onMessageReceived)
+        /// <summary>SUB와 PONG 확인까지 기다려 첫 ACK가 구독 시작 전에 유실되지 않게 한다.</summary>
+        public async Task<IAsyncDisposable> SubscribeAsync<T>(string subject, Action<T> onMessageReceived,
+            CancellationToken cancellationToken = default)
         {
-            CancellationToken ct = _subscriptionCts.Token;
-            Task task = Task.Run(() => RunSubscribeWithRetryAsync<T>(
-                token => UnwrapAsync(_connection!.SubscribeAsync<T>(subject, cancellationToken: token), token),
-                onMessageReceived,
-                attempt => TimeSpan.FromMilliseconds(Math.Min(500 * (1 << Math.Min(attempt, 4)), 8000)),
-                ct));
-
+            ArgumentNullException.ThrowIfNull(onMessageReceived);
+            cancellationToken.ThrowIfCancellationRequested();
+            INatsConnection connection = GetConnection();
+            Subscription<T> subscription;
             lock (_subscriptionLock)
             {
-                _subscriptionTasks.Add(task);
+                ObjectDisposedException.ThrowIf(_disposed != 0, this);
+                subscription = new Subscription<T>(connection, subject, onMessageReceived,
+                    _subscriptionCts.Token, cancellationToken, RemoveSubscription);
+                _subscriptions.Add(subscription);
+                subscription.Start();
+            }
+            try
+            {
+                await subscription.Ready.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+                return subscription;
+            }
+            catch
+            {
+                await subscription.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
+
+        private void RemoveSubscription(IAsyncDisposable subscription)
+        {
+            lock (_subscriptionLock) _subscriptions.Remove(subscription);
+        }
+
+        private sealed class Subscription<T> : IAsyncDisposable
+        {
+            private readonly INatsConnection _connection;
+            private readonly string _subject;
+            private Action<T>? _callback;
+            private readonly CancellationTokenSource _cts;
+            private readonly Action<IAsyncDisposable> _removed;
+            private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private Task _loop = Task.CompletedTask;
+            private int _disposed;
+
+            public Subscription(INatsConnection connection, string subject, Action<T> callback,
+                CancellationToken lifetime, CancellationToken caller, Action<IAsyncDisposable> removed)
+            {
+                _connection = connection;
+                _subject = subject;
+                _callback = callback;
+                _cts = CancellationTokenSource.CreateLinkedTokenSource(lifetime, caller);
+                _removed = removed;
+            }
+            public Task Ready => _ready.Task;
+            public void Start() => _loop = RunAsync();
+
+            private async Task RunAsync()
+            {
+                CancellationToken ct = _cts.Token;
+                int attempt = 0;
+                try
+                {
+                    while (!ct.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            await using var sub = await _connection.SubscribeCoreAsync<T>(
+                                _subject, cancellationToken: ct).ConfigureAwait(false);
+                            // 서버가 SUB 다음의 PING을 처리한 뒤 반환한다. 단순 Task.Run/로컬 enqueue는
+                            // 다른 연결에서 즉시 오는 응답의 준비 완료 증거가 아니다.
+                            await _connection.PingAsync(ct).ConfigureAwait(false);
+                            ct.ThrowIfCancellationRequested();
+                            _ready.TrySetResult();
+                            await foreach (var msg in sub.Msgs.ReadAllAsync(ct).ConfigureAwait(false))
+                            {
+                                if (ct.IsCancellationRequested) break;
+                                if (msg.Data is not T item) continue;
+                                try { Volatile.Read(ref _callback)?.Invoke(item); }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[NATS] callback {_subject}: {ex}");
+                                }
+                                attempt = 0;
+                            }
+                        }
+                        catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+                        catch (Exception ex)
+                        {
+                            if (!_ready.Task.IsCompleted)
+                            {
+                                _ready.TrySetException(ex);
+                                return;
+                            }
+                            System.Diagnostics.Debug.WriteLine($"[NATS] resubscribe {_subject}: {ex}");
+                        }
+                        await Task.Delay(TimeSpan.FromMilliseconds(Math.Min(500 * (1 << Math.Min(attempt, 4)), 8000)), ct).ConfigureAwait(false);
+                        attempt++;
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+                finally
+                {
+                    _ready.TrySetCanceled(ct.IsCancellationRequested ? ct : new CancellationToken(true));
+                    Interlocked.Exchange(ref _callback, null);
+                    _removed(this);
+                    _cts.Dispose();
+                }
+            }
+
+            public async ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                {
+                    Interlocked.Exchange(ref _callback, null);
+                    try { _cts.Cancel(); } catch (ObjectDisposedException) { }
+                }
+                try { await _loop.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false); }
+                catch (TimeoutException) { /* 연결 종료 경로에서도 취소·참조 해제는 이미 완료됐다. */ }
             }
         }
 
@@ -264,145 +367,116 @@ namespace HeatingCameraSystem.Protocols
             }
         }
 
-        /// <summary>NatsMsg 껍데기를 벗겨 Data만 흘린다. 역직렬화 결과가 null인 메시지는 버린다.</summary>
-        private static async IAsyncEnumerable<T> UnwrapAsync<T>(
-            IAsyncEnumerable<NatsMsg<T>> src,
-            [EnumeratorCancellation] CancellationToken ct)
+        private INatsConnection GetConnection()
         {
-            await foreach (NatsMsg<T> msg in src.WithCancellation(ct).ConfigureAwait(false))
-            {
-                T? data = msg.Data;
-                if (data is null) continue;
-                yield return data;
-            }
-        }
-
-        private void CheckConnection()
-        {
-            if (_connection == null)
-            {
-                throw new InvalidOperationException("NATS connection is not initialized. Call ConnectAsync first.");
-            }
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            return _connection ?? throw new InvalidOperationException("NATS connection is not initialized. Call ConnectAsync first.");
         }
 
         public async Task PublishRawImageRequestAsync(RawImageRequestMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"master.req.raw.{message.AgentId}", message);
+            await GetConnection().PublishAsync($"master.req.raw.{message.AgentId}", message);
         }
 
-        public Task SubscribeRawImageRequestAsync(string agentId, Action<RawImageRequestMessage> onMessageReceived)
+        public async Task SubscribeRawImageRequestAsync(string agentId, Action<RawImageRequestMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"master.req.raw.{agentId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeRawImageRequestScopedAsync(agentId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishRawImageResponseAsync(RawImageResponseMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"agent.res.raw.{message.AgentId}", message);
+            await GetConnection().PublishAsync($"agent.res.raw.{message.AgentId}", message);
         }
 
-        public Task SubscribeRawImageResponseAsync(string agentId, Action<RawImageResponseMessage> onMessageReceived)
+        public async Task SubscribeRawImageResponseAsync(string agentId, Action<RawImageResponseMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"agent.res.raw.{agentId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeRawImageResponseScopedAsync(agentId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishCameraInventoryAsync(CameraInventoryMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"agent-mgr.inventory.{message.PCId}", message);
+            await GetConnection().PublishAsync($"agent-mgr.inventory.{message.PCId}", message);
         }
 
-        public Task SubscribeCameraInventoryAsync(Action<CameraInventoryMessage> onMessageReceived)
+        public async Task SubscribeCameraInventoryAsync(Action<CameraInventoryMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop("agent-mgr.inventory.>", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeCameraInventoryScopedAsync(onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishManagerCommandAsync(ManagerCommandMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"server.cmd.mgr.{message.PCId}", message);
+            await GetConnection().PublishAsync($"server.cmd.mgr.{message.PCId}", message);
         }
 
-        public Task SubscribeManagerCommandAsync(string pcId, Action<ManagerCommandMessage> onMessageReceived)
+        public async Task SubscribeManagerCommandAsync(string pcId, Action<ManagerCommandMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"server.cmd.mgr.{pcId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeManagerCommandScopedAsync(pcId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishLogAlertAsync(LogAlertMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"agent-mgr.log.alert.{message.PCId}", message);
+            await GetConnection().PublishAsync($"agent-mgr.log.alert.{message.PCId}", message);
         }
 
-        public Task SubscribeLogAlertAsync(Action<LogAlertMessage> onMessageReceived)
+        public async Task SubscribeLogAlertAsync(Action<LogAlertMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop("agent-mgr.log.alert.>", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeLogAlertScopedAsync(onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishLogDumpRequestAsync(LogDumpRequestMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"server.req.log.{message.PCId}", message);
+            await GetConnection().PublishAsync($"server.req.log.{message.PCId}", message);
         }
 
-        public Task SubscribeLogDumpRequestAsync(string pcId, Action<LogDumpRequestMessage> onMessageReceived)
+        public async Task SubscribeLogDumpRequestAsync(string pcId, Action<LogDumpRequestMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"server.req.log.{pcId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeLogDumpRequestScopedAsync(pcId, onMessageReceived).ConfigureAwait(false);
         }
 
         public async Task PublishLogDumpAsync(LogDumpMessage message)
         {
-            CheckConnection();
-            await _connection!.PublishAsync($"agent-mgr.log.dump.{message.PCId}", message);
+            await GetConnection().PublishAsync($"agent-mgr.log.dump.{message.PCId}", message);
         }
 
-        public Task SubscribeLogDumpAsync(string pcId, Action<LogDumpMessage> onMessageReceived)
+        public async Task SubscribeLogDumpAsync(string pcId, Action<LogDumpMessage> onMessageReceived)
         {
-            CheckConnection();
-            RunSubscriptionLoop($"agent-mgr.log.dump.{pcId}", onMessageReceived);
-            return Task.CompletedTask;
+            await this.SubscribeLogDumpScopedAsync(pcId, onMessageReceived).ConfigureAwait(false);
         }
 
-        /// <summary>구독 루프를 모두 취소하고 최대 3초 대기한 뒤, 성패와 무관하게 연결을 정리한다.</summary>
-        public async ValueTask DisposeAsync()
+        /// <summary>구독 수명을 먼저 종료한 뒤 연결을 해제한다. 중복 Dispose도 같은 완료를 기다린다.</summary>
+        public ValueTask DisposeAsync()
         {
-            _subscriptionCts.Cancel();
-
-            Task[] pending;
             lock (_subscriptionLock)
             {
-                pending = _subscriptionTasks.ToArray();
+                if (_disposeTask is not null) return new ValueTask(_disposeTask);
+                Volatile.Write(ref _disposed, 1);
+                _disposeTask = DisposeCoreAsync();
+                return new ValueTask(_disposeTask);
             }
+        }
 
+        private async Task DisposeCoreAsync()
+        {
+            _subscriptionCts.Cancel();
+            IAsyncDisposable[] pending;
+            lock (_subscriptionLock) pending = _subscriptions.ToArray();
             try
             {
-                await Task.WhenAll(pending).WaitAsync(TimeSpan.FromSeconds(3));
+                await Task.WhenAll(pending.Select(item => item.DisposeAsync().AsTask()))
+                    .WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
             }
-            catch
+            catch (Exception ex)
             {
-                // 최선 노력: 종료 중 루프가 제한 시간을 넘기거나 잡음 오류를 낼 수 있다.
-                // 어느 쪽이든 연결은 반드시 정리해 종료 시 멈추거나 누수되지 않게 한다.
+                System.Diagnostics.Debug.WriteLine($"[NATS] subscription shutdown: {ex.Message}");
             }
-
-            if (_connection != null)
+            await _connectionGate.WaitAsync().ConfigureAwait(false);
+            try
             {
-                await _connection.DisposeAsync();
+                INatsConnection? connection = _connection;
                 _connection = null;
+                if (connection is not null) await connection.DisposeAsync().ConfigureAwait(false);
             }
-
+            finally { _connectionGate.Release(); }
             _subscriptionCts.Dispose();
         }
     }

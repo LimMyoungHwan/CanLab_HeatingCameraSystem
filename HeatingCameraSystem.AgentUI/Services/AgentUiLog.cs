@@ -48,6 +48,25 @@ namespace HeatingCameraSystem.AgentUI.Services
             }
         }
 
+        /// <summary>원격 BIAS 진단도 카메라별 AgentId 속성을 기록해 Manager가 다른 카메라 로그를 섞지 않게 한다.</summary>
+        public static void WriteBiasDiagnostic(string message)
+        {
+            ILogger logger = Logger;
+            int start = message.IndexOf("agent=", StringComparison.Ordinal);
+            if (start >= 0)
+            {
+                start += "agent=".Length;
+                int end = message.IndexOf(' ', start);
+                string agentId = end < 0 ? message.Substring(start) : message.Substring(start, end - start);
+                if (!string.IsNullOrWhiteSpace(agentId)) logger = logger.ForContext("AgentId", agentId);
+            }
+            if (message.StartsWith("[BIAS] NG", StringComparison.Ordinal) || message.StartsWith("[CAPTURE] NG", StringComparison.Ordinal))
+                logger.Error("{BiasDiagnostic}", message);
+            else if (message.StartsWith("[BIAS] FAIL", StringComparison.Ordinal))
+                logger.Warning("{BiasDiagnostic}", message);
+            else logger.Information("{BiasDiagnostic}", message);
+        }
+
         public static void CloseAndFlush()
         {
             lock (Gate)

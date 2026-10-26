@@ -98,6 +98,9 @@ namespace HeatingCameraSystem.AgentManager.State
     {
         public string   HardwareId    { get; set; } = string.Empty;
         public string   AgentId       { get; set; } = string.Empty;
+        public string   UsbContainerId { get; set; } = string.Empty;
+        public string   CameraSerialNumber { get; set; } = string.Empty;
+        public string   AgentLogDirectory { get; set; } = string.Empty;
         public string   Alias         { get; set; } = string.Empty;
         public int      OpenCvIndex   { get; set; }
         public string   StoragePath   { get; set; } = string.Empty;

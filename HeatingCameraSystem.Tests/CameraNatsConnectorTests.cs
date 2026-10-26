@@ -421,7 +421,7 @@ namespace HeatingCameraSystem.Tests
                 runtime.Setup(r => r.StopAsync()).Returns(Task.CompletedTask);
                 runtime.Setup(r => r.CaptureSnapshotAsync(It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
                        .Callback(() => cachedBias = null)
-                       .ReturnsAsync(GradientFrame());
+                       .ReturnsAsync(() => GradientFrame());
                 using var manager = new CameraRuntimeManager(_ => runtime.Object);
                 var descriptor = new CameraDescriptor("cam0", 0, "Camera 0", CameraSerialNumber: "S1");
                 manager.Add(descriptor);
@@ -496,7 +496,7 @@ namespace HeatingCameraSystem.Tests
                 var runtime = new Mock<ICameraRuntime>();
                 runtime.Setup(r => r.StopAsync()).Returns(Task.CompletedTask);
                 runtime.Setup(r => r.CaptureSnapshotAsync(It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
-                       .ReturnsAsync(GradientFrame());
+                       .ReturnsAsync(() => GradientFrame());
                 using var manager = new CameraRuntimeManager(_ => runtime.Object);
                 var descriptor = new CameraDescriptor("cam0", 0, "Camera 0", CameraSerialNumber: "S1");
                 manager.Add(descriptor);
@@ -613,8 +613,8 @@ namespace HeatingCameraSystem.Tests
         }
 
         [Theory]
-        [InlineData(17, 18)]
-        [InlineData(-9, 1)]
+        [InlineData(17, 17)]
+        [InlineData(-9, 0)]
         public async Task HandleCapture_ProductionRaw_FailedWritePublishesLastAttemptedShotPath(
             int offset, int expectedShotNumber)
         {
@@ -631,11 +631,9 @@ namespace HeatingCameraSystem.Tests
 
                 ThermalFrame nonRadiometric = GradientFrame() with { Bgr24 = new byte[64 * 64 * 3] };
                 var runtime = new Mock<ICameraRuntime>();
-                runtime.SetupSequence(r => r.CaptureSnapshotAsync(
+                runtime.Setup(r => r.CaptureSnapshotAsync(
                         It.IsAny<TimeSpan?>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
-                    .ReturnsAsync(nonRadiometric)
-                    .ReturnsAsync(nonRadiometric)
-                    .ReturnsAsync((ThermalFrame?)null);
+                    .ReturnsAsync(() => nonRadiometric with { Timestamp = DateTimeOffset.UtcNow });
                 using var manager = new CameraRuntimeManager(_ => runtime.Object);
                 var descriptor = new CameraDescriptor("cam7", 7, "Camera 7", CameraSerialNumber: "S17");
                 manager.Add(descriptor);
