@@ -1,7 +1,10 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeatingCameraSystem.Core.Models;
@@ -34,7 +37,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
         private static bool IsCaptureFile(string path)
             => path.EndsWith(".raw", StringComparison.OrdinalIgnoreCase)
-               || path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase);
+               || path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(Path.GetFileName(path), "bias.json", StringComparison.OrdinalIgnoreCase);
 
         public static bool IsEnabled(CaptureCommandMessage cmd)
             => !string.IsNullOrWhiteSpace(cmd.StorageRootUnc)
@@ -83,8 +87,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
         }
 
         /// <summary>
-        /// 아직 Master로 옮기지 못한 로컬 촬영 파일 수. JPEG 런도 세야 한다 — 확장자를 놓치면
-        /// 전송이 실패해도 0으로 읽혀 "완료"로 보고된다.
+        /// 아직 Master로 옮기지 못한 로컬 촬영·BIAS 파일 수. bias.json만 남은 전송 실패도
+        /// 0으로 읽혀 "완료"로 보고되지 않도록 포함한다.
         /// </summary>
         public int PendingFiles
         {
@@ -112,6 +116,167 @@ namespace HeatingCameraSystem.Protocols.Cameras
             string path = Path.Combine(directory, "bias.json");
             File.WriteAllText(path, biasJson);
             return path;
+        }
+
+        /// <summary>
+        /// 이번 BIAS 결과를 로컬 버퍼에 기록하고 최종 저장 위치의 내용까지 확인한다.
+        /// 재시도는 호출자가 맡는다. 예전 bias.json의 존재만으로 성공 처리하지 않으며,
+        /// 저장·전송 실패와 취소를 삼키지 않는다.
+        /// </summary>
+        public async Task<string> WriteAndVerifyBiasJsonAsync(
+            CameraDescriptor cam, CaptureCommandMessage cmd, string biasJson, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(cmd.StorageRootUnc))
+                throw new InvalidOperationException("BIAS 파일 저장 경로가 없습니다.");
+            if (string.IsNullOrWhiteSpace(cmd.ConditionFolder))
+                throw new InvalidOperationException("BIAS 파일 조건 폴더가 없습니다.");
+            ValidateBiasJson(biasJson);
+
+            string relative = ConditionRelativeDirectory(cam, cmd);
+            string localDirectory = Path.Combine(_bufferRoot, relative);
+            string destinationDirectory = Path.Combine(cmd.StorageRootUnc, relative);
+            string localPath = Path.Combine(localDirectory, "bias.json");
+            string destinationPath = Path.Combine(destinationDirectory, "bias.json");
+            string temporaryName = $"bias.{Guid.NewGuid():N}.tmp";
+            string localTransfer = Path.Combine(localDirectory, temporaryName);
+            string destinationTransfer = Path.Combine(destinationDirectory, temporaryName);
+
+            await _syncGate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await WriteAtomicallyAsync(localPath, biasJson, ct).ConfigureAwait(false);
+                await VerifyBiasContentsAsync(localPath, biasJson, ct).ConfigureAwait(false);
+
+                // 저장 루트가 로컬 버퍼와 같은 구성에서도 검증한 최종 파일을 지우지 않는다.
+                if (string.Equals(Path.GetFullPath(localPath), Path.GetFullPath(destinationPath),
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                    return destinationPath;
+
+                // 고유 임시 이름으로 전송하므로 예전 파일이나 복사 중인 파일을 성공 결과로
+                // 오인하지 않는다. /MOVE는 이 임시 파일만 옮기며 로컬 bias.json은 검증까지 보존한다.
+                await File.WriteAllTextAsync(localTransfer, biasJson, new UTF8Encoding(false), ct).ConfigureAwait(false);
+                await CopyBiasFileAsync(localDirectory, destinationDirectory, temporaryName, ct).ConfigureAwait(false);
+                await VerifyBiasContentsAsync(destinationTransfer, biasJson, ct).ConfigureAwait(false);
+
+                ct.ThrowIfCancellationRequested();
+                File.Move(destinationTransfer, destinationPath, overwrite: true);
+                await VerifyBiasContentsAsync(destinationPath, biasJson, ct).ConfigureAwait(false);
+
+                // 최종 위치 검증이 끝난 파일만 버퍼에서 제거한다. 정리 실패는 이미 검증된
+                // 최종 파일의 성공 여부를 바꾸지 않으며 PendingFiles에 그대로 드러난다.
+                TryDeleteBiasTemporaryFile(localPath);
+                return destinationPath;
+            }
+            finally
+            {
+                TryDeleteBiasTemporaryFile(localTransfer);
+                TryDeleteBiasTemporaryFile(destinationTransfer);
+                _syncGate.Release();
+            }
+        }
+
+        private static void ValidateBiasJson(string biasJson)
+        {
+            if (string.IsNullOrWhiteSpace(biasJson))
+                throw new InvalidDataException("이번 BIAS 보정 결과가 없어 bias.json을 저장할 수 없습니다.");
+
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(biasJson);
+                JsonElement root = document.RootElement;
+                if (root.ValueKind != JsonValueKind.Object
+                    || !IsHexRegister(root, "CINT", byte.MaxValue)
+                    || !IsHexRegister(root, "TINT", ushort.MaxValue)
+                    || !IsHexRegister(root, "GSK_LSB", byte.MaxValue)
+                    || !IsHexRegister(root, "GFID", byte.MaxValue)
+                    || !root.TryGetProperty("GSK_MSB", out JsonElement gskMsb)
+                    || gskMsb.ValueKind != JsonValueKind.Number
+                    || !gskMsb.TryGetInt32(out int msb)
+                    || msb < 0 || msb > byte.MaxValue)
+                    throw new InvalidDataException("bias.json의 필수 레지스터 값이 없거나 형식이 잘못되었습니다.");
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidDataException("BIAS 보정 결과가 올바른 JSON 형식이 아닙니다.", ex);
+            }
+        }
+
+        private static bool IsHexRegister(JsonElement root, string name, int maximum)
+            => root.TryGetProperty(name, out JsonElement value)
+                && value.ValueKind == JsonValueKind.String
+                && int.TryParse(value.GetString(), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out int parsed)
+                && parsed >= 0 && parsed <= maximum;
+
+        private static async Task WriteAtomicallyAsync(string path, string contents, CancellationToken ct)
+        {
+            string? directory = Path.GetDirectoryName(path);
+            if (string.IsNullOrWhiteSpace(directory))
+                throw new InvalidOperationException($"BIAS 파일 디렉터리를 확인할 수 없습니다: {path}");
+
+            Directory.CreateDirectory(directory);
+            string temporary = Path.Combine(directory, $"bias.{Guid.NewGuid():N}.tmp");
+            try
+            {
+                await File.WriteAllTextAsync(temporary, contents, new UTF8Encoding(false), ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+                File.Move(temporary, path, overwrite: true);
+            }
+            finally
+            {
+                TryDeleteBiasTemporaryFile(temporary);
+            }
+        }
+
+        private static async Task VerifyBiasContentsAsync(string path, string expected, CancellationToken ct)
+        {
+            string actual = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (!string.Equals(actual, expected, StringComparison.Ordinal))
+                throw new IOException($"BIAS 파일 내용이 이번 보정 결과와 다릅니다: {path}");
+        }
+
+        private static async Task CopyBiasFileAsync(string source, string destination, string fileName, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            Directory.CreateDirectory(destination);
+            var startInfo = new ProcessStartInfo("robocopy")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            foreach (string argument in new[] { source, destination, fileName, "/MOVE", "/R:0", "/W:0", "/NJH", "/NJS", "/NP", "/NFL", "/NDL" })
+                startInfo.ArgumentList.Add(argument);
+
+            using Process process = Process.Start(startInfo)
+                ?? throw new IOException($"BIAS 파일 전송을 시작하지 못했습니다: {destination}");
+            try
+            {
+                await process.WaitForExitAsync(ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // WaitForExitAsync의 취소만으로는 robocopy가 멈추지 않는다. 다음 시도가
+                // 이전 전송과 겹치지 않게 프로세스 종료까지 확인한 뒤 실패를 전달한다.
+                if (!process.HasExited)
+                {
+                    try { process.Kill(entireProcessTree: true); }
+                    catch (InvalidOperationException) { /* 종료 확인과 Kill 사이에 이미 끝난 경우. */ }
+                    await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                throw;
+            }
+
+            ct.ThrowIfCancellationRequested();
+            if (process.ExitCode >= 8)
+                throw new IOException($"BIAS 파일 전송 실패(robocopy {process.ExitCode}): {source} -> {destination}");
+        }
+
+        private static void TryDeleteBiasTemporaryFile(string path)
+        {
+            try { File.Delete(path); }
+            catch (IOException ex) { Debug.WriteLine($"[ProductionSink] BIAS 파일 정리 실패 {path}: {ex.Message}"); }
+            catch (UnauthorizedAccessException ex) { Debug.WriteLine($"[ProductionSink] BIAS 파일 정리 실패 {path}: {ex.Message}"); }
         }
 
         public async Task SyncFolderAsync(CameraDescriptor cam, CaptureCommandMessage cmd, CancellationToken ct = default)

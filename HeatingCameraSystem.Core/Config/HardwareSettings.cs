@@ -269,6 +269,9 @@ namespace HeatingCameraSystem.Core.Config
         public float TemperatureTolerance { get; set; } = 0.5f;
         public int CaptureResultTimeoutSeconds { get; set; } = 30;
 
+        /// <summary>BIAS 보정과 필수 파일 저장 한 시도의 제한 시간(초). 최초 포함 최대 4회.</summary>
+        public int BiasAttemptTimeoutSeconds { get; set; } = 120;
+
         /// <summary>
         /// 온도 램프 스텝 간격(초). 현재온도→타겟온도를 도달시간에 걸쳐 선형으로 나눠 SV를 갱신한다.
         /// 기본 60초(예: 10→20℃, 도달시간 10분 → 분당 1℃).

@@ -38,9 +38,38 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly Func<CameraDescriptor, Task<double?>>? _readCameraTemperature;
         private readonly Func<CameraDescriptor, Task<short?>>? _readFpaRaw;
         private readonly Func<CameraDescriptor, string?>? _readBiasJson;
+        private readonly Func<CameraDescriptor, AppliedBiasResult?>? _readAppliedBias;
         private readonly ProductionCaptureSink? _productionSink;
+        private readonly Func<CameraDescriptor, CameraControlMessage, CancellationToken, Task>? _biasControlHandler;
+        private readonly Action<string>? _diagnosticLog;
 
-        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, CancellationTokenSource> _captureAborts = new(StringComparer.Ordinal);
+        private sealed record VerifiedBias(string RequestId, string Json, string FilePath, int AttemptTimeoutSeconds,
+            string ApplicationId, string SourceOperation);
+        private sealed class ActiveCameraOperation : IDisposable
+        {
+            public ActiveCameraOperation(string requestId, CancellationToken token)
+            {
+                RequestId = requestId;
+                Cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+            }
+            public string RequestId { get; }
+            public CancellationTokenSource Cancellation { get; }
+            public TaskCompletionSource Finished { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public void Dispose() => Cancellation.Dispose();
+        }
+
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ActiveCameraOperation> _activeBias = new(StringComparer.Ordinal);
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ActiveCameraOperation> _activeCaptures = new(StringComparer.Ordinal);
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, VerifiedBias> _verifiedBias = new(StringComparer.Ordinal);
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> _cameraOperationGates = new(StringComparer.Ordinal);
+        private sealed record CaptureOutcome(bool Success, string ImagePath, byte[]? ImageBytes, double? CameraTemperature, string FailureCode = "", string Message = "");
+
+        // 전송 지연으로 취소가 원본보다 먼저 도착해도 뒤늦은 작업을 시작하지 않는다.
+        // 최대 BIAS 실행 예산(4시간)보다 길게 보관하되 개수와 수명을 모두 제한한다.
+        private const int MaximumCancelledRequests = 1024;
+        private static readonly TimeSpan CancelledRequestRetention = TimeSpan.FromHours(5);
+        private readonly object _cancelledRequestsSync = new();
+        private readonly Dictionary<(string AgentId, string Operation, string RequestId), DateTime> _cancelledRequests = new();
         private readonly CancellationTokenSource _cts = new();
         private readonly SemaphoreSlim _subscriptionGate = new(1, 1);
         private readonly HashSet<string> _subscribedAgentIds = new(StringComparer.Ordinal);
@@ -62,7 +91,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
             Func<CameraDescriptor, Task<double?>>? readCameraTemperature = null,
             Func<CameraDescriptor, Task<short?>>? readFpaRaw = null,
             Func<CameraDescriptor, string?>? readBiasJson = null,
-            ProductionCaptureSink? productionSink = null)
+            ProductionCaptureSink? productionSink = null,
+            Func<CameraDescriptor, CameraControlMessage, CancellationToken, Task>? biasControlHandler = null,
+            Action<string>? diagnosticLog = null,
+            Func<CameraDescriptor, AppliedBiasResult?>? readAppliedBias = null)
         {
             _nats = nats ?? throw new ArgumentNullException(nameof(nats));
             _manager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -78,7 +110,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _readCameraTemperature = readCameraTemperature;
             _readFpaRaw = readFpaRaw;
             _readBiasJson = readBiasJson;
+            _readAppliedBias = readAppliedBias;
             _productionSink = productionSink;
+            _biasControlHandler = biasControlHandler;
+            _diagnosticLog = diagnosticLog;
         }
 
         public bool IsConnected => _connected;
@@ -219,6 +254,53 @@ namespace HeatingCameraSystem.Protocols.Cameras
         /// </summary>
         public async Task HandleCaptureAsync(CameraDescriptor descriptor, CaptureCommandMessage cmd)
         {
+            SemaphoreSlim gate = _cameraOperationGates.GetOrAdd(descriptor.AgentId, _ => new SemaphoreSlim(1, 1));
+            using var active = new ActiveCameraOperation(cmd.RecipeStepId, _cts.Token);
+            if (!_activeCaptures.TryAdd(descriptor.AgentId, active))
+            {
+                await PublishCaptureResultAsync(descriptor, cmd, false, string.Empty, null, null,
+                    RequiresBiasFile(cmd) ? BiasExecutionPolicy.FileFailureCode : string.Empty,
+                    "NG: 이전 촬영 작업이 종료되지 않았습니다.").ConfigureAwait(false);
+                return;
+            }
+
+            bool entered = false;
+            CaptureOutcome? outcome = null;
+            try
+            {
+                if (IsRequestCancelled(descriptor.AgentId, CameraControlOps.Capture, cmd.RecipeStepId))
+                    active.Cancellation.Cancel();
+                entered = await gate.WaitAsync(TimeSpan.FromSeconds(3), active.Cancellation.Token).ConfigureAwait(false);
+                if (!entered)
+                    throw new InvalidOperationException("이전 BIAS 또는 촬영 작업이 종료되지 않았습니다.");
+
+                active.Cancellation.Token.ThrowIfCancellationRequested();
+                outcome = await HandleCaptureCoreAsync(descriptor, cmd, active.Cancellation.Token).ConfigureAwait(false);
+                active.Cancellation.Token.ThrowIfCancellationRequested();
+            }
+            catch (Exception ex)
+            {
+                LogBias($"[CAPTURE] NG agent={descriptor.AgentId} step={cmd.RecipeStepId} reason={ex}");
+                outcome = new CaptureOutcome(false, string.Empty, null, null,
+                    RequiresBiasFile(cmd) ? BiasExecutionPolicy.FileFailureCode : string.Empty,
+                    $"NG: {ex.Message}");
+            }
+            finally
+            {
+                _activeCaptures.TryRemove(descriptor.AgentId, out _);
+                if (entered) gate.Release();
+                active.Finished.TrySetResult();
+            }
+            if (outcome is not null)
+                await PublishCaptureResultAsync(descriptor, cmd, outcome.Success, outcome.ImagePath, outcome.ImageBytes,
+                    outcome.CameraTemperature, outcome.FailureCode, outcome.Message).ConfigureAwait(false);
+        }
+
+        private static bool RequiresBiasFile(CaptureCommandMessage cmd)
+            => cmd.WriteBiasJson || !string.IsNullOrWhiteSpace(cmd.RequiredBiasRequestId);
+
+        private async Task<CaptureOutcome?> HandleCaptureCoreAsync(CameraDescriptor descriptor, CaptureCommandMessage cmd, CancellationToken cancellationToken)
+        {
             int shots = cmd.ShotCount > 0 ? cmd.ShotCount : _captureBurstCount;
             if (shots < 1) shots = 1;
 
@@ -231,6 +313,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
             bool production = _productionSink is not null && ProductionCaptureSink.IsEnabled(cmd);
 
+            // 필수 결과를 먼저 확인한다. JSON 없이 장수만 채워 성공을 보내지 않는다.
+            if (RequiresBiasFile(cmd))
+                await EnsureBiasForCaptureAsync(descriptor, cmd, production, cancellationToken).ConfigureAwait(false);
+
             // FPA는 시리얼 왕복이라 장마다 읽으면 촬영이 멈춘다. AISEN 원본처럼 배치당 한 번만 읽어
             // 모든 장의 픽셀(0,0)에 같은 값을 심는다.
             short? fpaRaw = null;
@@ -240,24 +326,21 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 catch (Exception ex) { Debug.WriteLine($"[CameraNats] FPA raw read failed for {descriptor.AgentId}: {ex.Message}"); }
             }
 
-            using var abort = new CancellationTokenSource();
-            _captureAborts[descriptor.AgentId] = abort;
-
             // 규칙 저장에서는 .raw가 방사 측정 원본이므로 .y16을 장마다 또 쓰지 않는다. 결과 화면용으로
             // 마지막 성공 프레임 한 장만 남기고, 결과도 배치당 1건만 발행한다(장마다 JPEG을 붙이면
             // 100장 x 카메라수 만큼의 미리보기가 Master 메모리에 쌓인다).
             ThermalFrame? representative = null;
             int captured = 0;
 
-            try
-            {
             for (int i = 0; i < shots; i++)
             {
-                if (abort.IsCancellationRequested)
+                if (cancellationToken.IsCancellationRequested)
                 {
                     Debug.WriteLine($"[CameraNats] capture aborted for {descriptor.AgentId} at shot {i + 1}/{shots}");
                     break;
                 }
+
+                EnsureRequiredBiasIsCurrent(descriptor, cmd);
 
                 bool success = false;
                 string imagePath = string.Empty;
@@ -270,7 +353,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
                         bool forceFreshFrame = i > 0;
                         ThermalFrame? snap = await shotRuntime.CaptureSnapshotAsync(
                             maxAge: forceFreshFrame ? TimeSpan.Zero : TimeSpan.FromSeconds(1),
-                            nextFrameTimeout: TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                            nextFrameTimeout: TimeSpan.FromSeconds(2),
+                            ct: cancellationToken).ConfigureAwait(false);
+                        cancellationToken.ThrowIfCancellationRequested();
 
                         if (snap is not null)
                         {
@@ -315,14 +400,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
                 if (!production) await PublishCaptureResultAsync(descriptor, cmd, success, imagePath, bytes, cameraTemperature).ConfigureAwait(false);
             }
-            }
-            finally
-            {
-                _captureAborts.TryRemove(descriptor.AgentId, out _);
-            }
-
             if (production)
             {
+                EnsureRequiredBiasIsCurrent(descriptor, cmd);
                 string imagePath = string.Empty;
                 byte[]? bytes = null;
                 if (representative is not null)
@@ -332,20 +412,152 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     bytes = ThermalPreviewEncoder.EncodeJpeg(representative);
                 }
 
-                await PublishCaptureResultAsync(descriptor, cmd, captured == shots, imagePath, bytes, cameraTemperature).ConfigureAwait(false);
+                // 같은 카메라의 다음 작업은 파일 전송 루틴까지 종료한 뒤에만 시작할 수 있다.
+                await _productionSink!.SyncFolderAsync(descriptor, cmd, cancellationToken).ConfigureAwait(false);
+                EnsureRequiredBiasIsCurrent(descriptor, cmd);
+                return new CaptureOutcome(captured == shots, imagePath, bytes, cameraTemperature);
             }
+            return null;
+        }
 
-            if (production && cmd.WriteBiasJson)
+        private async Task EnsureBiasForCaptureAsync(CameraDescriptor cam, CaptureCommandMessage cmd, bool production, CancellationToken ct)
+        {
+            VerifiedBias? verified = null;
+            string? prerequisiteError = null;
+            bool isRecipe = cmd.Source == CaptureSource.Recipe || !string.IsNullOrWhiteSpace(cmd.RecipeStepId);
+            if (!production)
+                prerequisiteError = "BIAS 필수 파일의 생산 저장 경로가 없습니다.";
+            else if (!string.IsNullOrWhiteSpace(cmd.RequiredBiasRequestId))
             {
-                string? biasJson = _readBiasJson?.Invoke(descriptor);
-                if (string.IsNullOrWhiteSpace(biasJson))
-                    Debug.WriteLine($"[CameraNats] bias.json skipped for {descriptor.AgentId}: no bias result yet");
+                if (!_verifiedBias.TryGetValue(cam.AgentId, out verified)
+                    || !string.Equals(verified.RequestId, cmd.RequiredBiasRequestId, StringComparison.Ordinal))
+                    prerequisiteError = "이번 레시피의 BIAS 성공 결과가 없습니다. 보정부터 다시 실행해 주세요.";
                 else
-                    _productionSink!.WriteBiasJson(descriptor, cmd, biasJson!);
+                {
+                    string expected = Path.GetFullPath(Path.Combine(cmd.StorageRootUnc,
+                        ProductionCaptureSink.ConditionRelativeDirectory(cam, cmd), "bias.json"));
+                    if (!string.Equals(expected, Path.GetFullPath(verified.FilePath), StringComparison.OrdinalIgnoreCase))
+                        prerequisiteError = "BIAS 결과의 센서·제품·온도 조건 또는 저장 경로가 이번 촬영과 다릅니다.";
+                }
             }
+            else if (isRecipe)
+                prerequisiteError = "레시피의 필수 BIAS 요청 식별자가 없습니다. Master와 AgentUI를 함께 업데이트해 주세요.";
 
-            // 폴더가 완성된 뒤에만 전송한다 — 파일 단위로 옮기면 후처리 툴이 복사 도중인 파일을 읽는다.
-            if (production) await _productionSink!.SyncFolderAsync(descriptor, cmd, _cts.Token).ConfigureAwait(false);
+            int timeout = verified?.AttemptTimeoutSeconds ?? BiasExecutionPolicy.DefaultAttemptTimeoutSeconds;
+            string context = $"agent={cam.AgentId} step={cmd.RecipeStepId} biasRequest={cmd.RequiredBiasRequestId}";
+            // 이미 보정한 촬영의 파일 복구는 보정을 다시 하지 않는다. 해당 요청의 불변 결과만 저장한다.
+            BiasOperationResult result = await BiasOperationRunner.RunAsync(
+                _ => prerequisiteError is null ? Task.CompletedTask : Task.FromException(new InvalidOperationException(prerequisiteError)),
+                () => verified is not null ? ReadCurrentVerifiedBiasJson(cam, verified) : (isRecipe ? null : _readBiasJson?.Invoke(cam)),
+                async (json, token) =>
+                {
+                    if (verified is not null)
+                    {
+                        ReadCurrentVerifiedBiasJson(cam, verified);
+                        bool matches = false;
+                        try
+                        {
+                            matches = string.Equals(await File.ReadAllTextAsync(verified.FilePath, token).ConfigureAwait(false), json, StringComparison.Ordinal);
+                            if (!matches)
+                                LogBias($"[BIAS FILE] REWRITE {context} path={verified.FilePath} reason=내용 불일치");
+                        }
+                        catch (OperationCanceledException) { throw; }
+                        catch (Exception ex) { LogBias($"[BIAS FILE] REWRITE {context} path={verified.FilePath} reason={ex.Message}"); }
+                        ReadCurrentVerifiedBiasJson(cam, verified);
+                        if (matches)
+                        {
+                            LogBias($"[BIAS FILE] VERIFIED {context} path={verified.FilePath}");
+                            return verified.FilePath;
+                        }
+                    }
+                    token.ThrowIfCancellationRequested();
+                    if (_productionSink is null)
+                        throw new InvalidOperationException("생산 저장 처리가 연결되지 않았습니다.");
+                    string path = await _productionSink.WriteAndVerifyBiasJsonAsync(cam, cmd, json, token).ConfigureAwait(false);
+                    if (verified is not null) ReadCurrentVerifiedBiasJson(cam, verified);
+                    return path;
+                },
+                true, timeout, context, LogBias, ct).ConfigureAwait(false);
+            if (!result.IsSuccess)
+                throw new InvalidOperationException(result.Message);
+        }
+
+        private string ReadCurrentVerifiedBiasJson(CameraDescriptor cam, VerifiedBias verified)
+        {
+            if (!_verifiedBias.TryGetValue(cam.AgentId, out VerifiedBias? current) || !ReferenceEquals(current, verified))
+                throw new InvalidOperationException("이번 레시피의 BIAS 결과가 무효화되었습니다. 보정부터 다시 실행해 주세요.");
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(verified.ApplicationId))
+                {
+                    AppliedBiasResult applied = ReadCurrentAppliedBias(cam, verified.SourceOperation);
+                    EnsureSameBiasApplication(applied, verified.ApplicationId, verified.SourceOperation, verified.Json);
+                }
+                else EnsureBiasJsonMatchesCurrent(cam, verified.Json);
+            }
+            catch
+            {
+                _verifiedBias.TryRemove(cam.AgentId, out _);
+                throw;
+            }
+            return verified.Json;
+        }
+
+        private void EnsureBiasJsonMatchesCurrent(CameraDescriptor cam, string json)
+        {
+            // 수동 BIAS 또는 카메라 재연결은 패널 결과를 변경/초기화한다. 디스크의 이전 JSON만으로
+            // 통과시키면 실제 카메라 설정과 다른 보정 결과로 후속 촬영을 진행하게 된다.
+            if (!string.Equals(_readBiasJson?.Invoke(cam), json, StringComparison.Ordinal))
+                throw new InvalidOperationException("카메라의 현재 BIAS 결과가 이번 보정 결과와 다릅니다. 수동 보정 또는 재연결 후 보정을 다시 실행해 주세요.");
+        }
+
+        private AppliedBiasResult ReadCurrentAppliedBias(CameraDescriptor cam, string sourceOperation)
+        {
+            if (!BiasExecutionPolicy.IsBiasOperation(sourceOperation))
+                throw new InvalidOperationException("현재 BIAS를 사용할 대역이 올바르지 않습니다.");
+            AppliedBiasResult applied = _readAppliedBias?.Invoke(cam)
+                ?? throw new InvalidOperationException("현재 카메라에 적용하고 확인한 BIAS가 없습니다. BIAS를 먼저 적용해 주세요.");
+            if (string.IsNullOrWhiteSpace(applied.ApplicationId) || string.IsNullOrWhiteSpace(applied.Json))
+                throw new InvalidOperationException("현재 BIAS의 적용 식별자 또는 결과가 없습니다.");
+            if (!string.Equals(applied.Operation, sourceOperation, StringComparison.Ordinal))
+                throw new InvalidOperationException($"현재 BIAS 대역({applied.Operation})이 요청 대역({sourceOperation})과 다릅니다.");
+
+            EnsureBiasJsonMatchesCurrent(cam, applied.Json);
+            // 패널 조회와 JSON 조회 사이에 수동 적용이 시작/완료된 경우도 이전 세대로 통과시키지 않는다.
+            AppliedBiasResult confirmed = _readAppliedBias?.Invoke(cam)
+                ?? throw new InvalidOperationException("BIAS 확인 중 현재 적용 상태가 초기화되었습니다.");
+            EnsureSameBiasApplication(confirmed, applied.ApplicationId, applied.Operation, applied.Json);
+            return applied;
+        }
+
+        private static void EnsureSameBiasApplication(AppliedBiasResult applied, string applicationId, string sourceOperation, string json)
+        {
+            if (!string.Equals(applied.ApplicationId, applicationId, StringComparison.Ordinal)
+                || !string.Equals(applied.Operation, sourceOperation, StringComparison.Ordinal)
+                || !string.Equals(applied.Json, json, StringComparison.Ordinal))
+                throw new InvalidOperationException("BIAS 적용 세대가 변경되었습니다. 현재 적용값 확인부터 다시 실행해 주세요.");
+        }
+
+        private void EnsureBiasApplicationMatchesCurrent(CameraDescriptor cam, AppliedBiasResult? applied, string json)
+        {
+            if (applied is null)
+            {
+                if (_readAppliedBias is not null)
+                    throw new InvalidOperationException("이번 BIAS 처리의 적용 상태를 확인하지 못했습니다.");
+                EnsureBiasJsonMatchesCurrent(cam, json); // readBiasJson만 제공하는 기존 자동 연결의 호환 경로
+                return;
+            }
+            AppliedBiasResult current = ReadCurrentAppliedBias(cam, applied.Operation);
+            EnsureSameBiasApplication(current, applied.ApplicationId, applied.Operation, json);
+        }
+
+        private void EnsureRequiredBiasIsCurrent(CameraDescriptor cam, CaptureCommandMessage cmd)
+        {
+            if (string.IsNullOrWhiteSpace(cmd.RequiredBiasRequestId)) return;
+            if (!_verifiedBias.TryGetValue(cam.AgentId, out VerifiedBias? verified)
+                || !string.Equals(verified.RequestId, cmd.RequiredBiasRequestId, StringComparison.Ordinal))
+                throw new InvalidOperationException("이번 레시피의 BIAS 성공 결과가 없습니다. 보정부터 다시 실행해 주세요.");
+            ReadCurrentVerifiedBiasJson(cam, verified);
         }
 
         private async Task PublishCaptureResultAsync(
@@ -354,7 +566,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
             bool success,
             string imagePath,
             byte[]? bytes,
-            double? cameraTemperature)
+            double? cameraTemperature,
+            string failureCode = "",
+            string message = "")
         {
             try
             {
@@ -369,6 +583,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
                         : (string.IsNullOrEmpty(cmd.RecipeStepId) ? CaptureSource.Manual : CaptureSource.Recipe),
                     CaptureId = Guid.NewGuid().ToString(),
                     IsSuccess = success,
+                    FailureCode = failureCode,
+                    Message = message,
                     ImagePath = imagePath,
                     ImageBytes = bytes,
                     Timestamp = DateTime.UtcNow,
@@ -381,24 +597,80 @@ namespace HeatingCameraSystem.Protocols.Cameras
             }
         }
 
-        /// <summary>진행 중인 버스트를 취소한다. 취소할 것이 없어도 성공으로 응답한다(멱등).</summary>
-        private bool AbortCapture(string agentId)
+        private void RememberCancelledRequest(string agentId, string operation, string requestId)
         {
-            if (!_captureAborts.TryGetValue(agentId, out CancellationTokenSource? abort)) return false;
-            try { abort.Cancel(); } catch (ObjectDisposedException) { }
+            if (string.IsNullOrWhiteSpace(requestId)) return;
+            DateTime now = DateTime.UtcNow;
+            var key = (agentId, operation, requestId);
+            lock (_cancelledRequestsSync)
+            {
+                foreach (var expired in _cancelledRequests.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToArray())
+                    _cancelledRequests.Remove(expired);
+
+                if (!_cancelledRequests.ContainsKey(key) && _cancelledRequests.Count >= MaximumCancelledRequests)
+                    _cancelledRequests.Remove(_cancelledRequests.OrderBy(pair => pair.Value).First().Key);
+                _cancelledRequests[key] = now + CancelledRequestRetention;
+            }
+        }
+
+        private bool IsRequestCancelled(string agentId, string operation, string requestId)
+        {
+            if (string.IsNullOrWhiteSpace(requestId)) return false;
+            var key = (agentId, operation, requestId);
+            lock (_cancelledRequestsSync)
+            {
+                if (!_cancelledRequests.TryGetValue(key, out DateTime expires)) return false;
+                if (expires > DateTime.UtcNow) return true;
+                _cancelledRequests.Remove(key);
+                return false;
+            }
+        }
+
+        /// <summary>요청을 특정한 취소는 그 요청만 끝낸다. 빈 요청은 기존 수동 캡처 중단에만 허용한다.</summary>
+        private async Task<bool> AbortCameraOperationAsync(
+            System.Collections.Concurrent.ConcurrentDictionary<string, ActiveCameraOperation> operations,
+            string agentId, string operation, string targetRequestId, bool allowCurrentWithoutTarget)
+        {
+            // 먼저 기록하고 그 뒤 현재 작업을 읽는다. 등록 직전·직후 어느 쪽으로 경합해도
+            // 작업의 시작 검사 또는 아래 Cancel 중 하나가 반드시 해당 요청을 취소한다.
+            RememberCancelledRequest(agentId, operation, targetRequestId);
+            if (!operations.TryGetValue(agentId, out ActiveCameraOperation? active)) return false;
+            bool matches = (!string.IsNullOrWhiteSpace(targetRequestId)
+                    && string.Equals(active.RequestId, targetRequestId, StringComparison.Ordinal))
+                || (allowCurrentWithoutTarget && string.IsNullOrWhiteSpace(targetRequestId));
+            if (!matches) return false;
+
+            RememberCancelledRequest(agentId, operation, active.RequestId);
+            try { active.Cancellation.Cancel(); } catch (ObjectDisposedException) { }
+            await active.Finished.Task.ConfigureAwait(false);
             return true;
         }
 
         /// <summary>카메라 제어 명령을 주입된 핸들러에 위임하고 성패를 ACK로 발행한다.</summary>
         public async Task HandleCameraControlAsync(CameraDescriptor cam, CameraControlMessage msg)
         {
+            if (msg.Op == CameraControlOps.BiasAbort)
+            {
+                bool matched = await AbortCameraOperationAsync(_activeBias, cam.AgentId, CameraControlOps.Bias,
+                    msg.TargetRequestId, allowCurrentWithoutTarget: false).ConfigureAwait(false);
+                await PublishControlAckAsync(cam, msg, true, matched ? "BIAS 작업 종료 확인" : "해당 BIAS 작업이 실행 중이지 않습니다.").ConfigureAwait(false);
+                return;
+            }
+
+            if (BiasExecutionPolicy.IsBiasOperation(msg.Op) || msg.Op == CameraControlOps.BiasUseCurrent)
+            {
+                await HandleBiasAsync(cam, msg).ConfigureAwait(false);
+                return;
+            }
+
             bool success = false;
             string message = "control handler not wired";
 
             // 중단은 패널 명령이 아니라 커넥터가 직접 처리한다 — 진행 중인 버스트 루프를 아는 곳이 여기다.
             if (msg.Op == CameraControlOps.CaptureAbort)
             {
-                bool aborted = AbortCapture(cam.AgentId);
+                bool aborted = await AbortCameraOperationAsync(_activeCaptures, cam.AgentId, CameraControlOps.Capture,
+                    msg.TargetRequestId, allowCurrentWithoutTarget: true).ConfigureAwait(false);
                 await PublishControlAckAsync(cam, msg, true, aborted ? "capture aborted" : "no capture in progress").ConfigureAwait(false);
                 return;
             }
@@ -419,7 +691,133 @@ namespace HeatingCameraSystem.Protocols.Cameras
             await PublishControlAckAsync(cam, msg, success, message).ConfigureAwait(false);
         }
 
-        private async Task PublishControlAckAsync(CameraDescriptor cam, CameraControlMessage msg, bool success, string message)
+        private async Task HandleBiasAsync(CameraDescriptor cam, CameraControlMessage msg)
+        {
+            SemaphoreSlim gate = _cameraOperationGates.GetOrAdd(cam.AgentId, _ => new SemaphoreSlim(1, 1));
+            using var active = new ActiveCameraOperation(msg.RequestId, _cts.Token);
+            if (!_activeBias.TryAdd(cam.AgentId, active))
+            {
+                await PublishControlAckAsync(cam, msg, false, "NG: 이전 BIAS 작업이 아직 종료되지 않았습니다.").ConfigureAwait(false);
+                return;
+            }
+
+            bool entered = false;
+            BiasOperationResult result;
+            bool useCurrent = msg.Op == CameraControlOps.BiasUseCurrent;
+            string sourceOperation = useCurrent ? msg.BiasSourceOperation : msg.Op;
+            AppliedBiasResult? appliedForAttempt = null;
+            string context = $"agent={cam.AgentId} request={msg.RequestId} op={msg.Op} sourceOp={sourceOperation} target={msg.BiasTargetLevel}";
+            try
+            {
+                if (IsRequestCancelled(cam.AgentId, CameraControlOps.Bias, msg.RequestId))
+                    active.Cancellation.Cancel();
+                entered = await gate.WaitAsync(TimeSpan.FromSeconds(3), active.Cancellation.Token).ConfigureAwait(false);
+                if (!entered)
+                    throw new InvalidOperationException("이전 BIAS 또는 촬영 작업이 아직 종료되지 않았습니다.");
+
+                active.Cancellation.Token.ThrowIfCancellationRequested();
+                _verifiedBias.TryRemove(cam.AgentId, out _);
+                AppliedBiasResult? selectedApplication = null;
+                string? prerequisiteError = null;
+                if (useCurrent)
+                {
+                    if (!msg.RequireBiasFile)
+                        prerequisiteError = "현재 BIAS 사용 요청은 필수 파일 저장을 포함해야 합니다.";
+                    else if (_readAppliedBias is null)
+                        prerequisiteError = "현재 BIAS 적용 상태 조회가 연결되지 않았습니다. AgentUI를 업데이트해 주세요.";
+                    else
+                    {
+                        try { selectedApplication = ReadCurrentAppliedBias(cam, sourceOperation); }
+                        catch (Exception ex) { prerequisiteError = ex.Message; }
+                    }
+                }
+                result = await BiasOperationRunner.RunAsync(
+                    async ct =>
+                    {
+                        if (prerequisiteError is not null)
+                            throw new InvalidOperationException(prerequisiteError);
+                        if (_biasControlHandler is null)
+                            throw new InvalidOperationException("취소 가능한 BIAS 처리기가 없습니다. AgentUI를 업데이트해 주세요.");
+
+                        appliedForAttempt = null;
+                        if (useCurrent && selectedApplication is not null)
+                            EnsureBiasApplicationMatchesCurrent(cam, selectedApplication, selectedApplication.Json);
+                        // biasUseCurrent는 Op를 그대로 전달한다. App은 현재 레지스터 읽기만 검증하며
+                        // 자동 보정 탐색으로 바꾸지 않는다. 파일 재시도도 선택한 적용 세대를 유지한다.
+                        await _biasControlHandler(cam, msg, ct).ConfigureAwait(false);
+                        ct.ThrowIfCancellationRequested();
+                        if (_readAppliedBias is not null)
+                        {
+                            AppliedBiasResult applied = ReadCurrentAppliedBias(cam, sourceOperation);
+                            if (useCurrent && selectedApplication is not null)
+                                EnsureSameBiasApplication(applied, selectedApplication.ApplicationId, selectedApplication.Operation, selectedApplication.Json);
+                            appliedForAttempt = applied;
+                            LogBias($"[BIAS APPLIED] VERIFIED {context} applicationId={applied.ApplicationId} source={applied.Source}");
+                        }
+                    },
+                    () =>
+                    {
+                        string? json = appliedForAttempt?.Json ?? _readBiasJson?.Invoke(cam);
+                        if (json is not null) EnsureBiasApplicationMatchesCurrent(cam, appliedForAttempt, json);
+                        return json;
+                    },
+                    async (json, ct) =>
+                    {
+                        if (_productionSink is null || msg.BiasStorage is null)
+                            throw new InvalidOperationException("BIAS 저장 경로 또는 생산 저장 설정이 없습니다.");
+                        EnsureBiasApplicationMatchesCurrent(cam, appliedForAttempt, json);
+                        string path = await _productionSink.WriteAndVerifyBiasJsonAsync(cam, msg.BiasStorage, json, ct).ConfigureAwait(false);
+                        EnsureBiasApplicationMatchesCurrent(cam, appliedForAttempt, json);
+                        return path;
+                    },
+                    msg.RequireBiasFile,
+                    msg.BiasAttemptTimeoutSeconds,
+                    context,
+                    LogBias,
+                    active.Cancellation.Token).ConfigureAwait(false);
+                active.Cancellation.Token.ThrowIfCancellationRequested();
+                if (result.IsSuccess)
+                {
+                    EnsureBiasApplicationMatchesCurrent(cam, appliedForAttempt, result.BiasJson);
+                    if (msg.RequireBiasFile)
+                        _verifiedBias[cam.AgentId] = new VerifiedBias(msg.RequestId, result.BiasJson, result.FilePath, msg.BiasAttemptTimeoutSeconds,
+                            appliedForAttempt?.ApplicationId ?? string.Empty, sourceOperation);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                result = new BiasOperationResult(false, 0, "NG: BIAS 작업이 취소되었습니다.", string.Empty, string.Empty);
+                LogBias($"[BIAS] CANCELLED {context}");
+            }
+            catch (Exception ex)
+            {
+                result = new BiasOperationResult(false, 0, $"NG: BIAS 처리 오류: {ex.Message}", string.Empty, string.Empty);
+                LogBias($"[BIAS] NG {context} error={ex}");
+            }
+            finally
+            {
+                _activeBias.TryRemove(cam.AgentId, out _);
+                if (entered) gate.Release();
+                active.Finished.TrySetResult();
+            }
+
+            // 작업이 끝나고 파일 확인 결과가 확정된 뒤에만 ACK한다.
+            await PublishControlAckAsync(cam, msg, result.IsSuccess, result.Message,
+                result.IsSuccess && msg.RequireBiasFile, result.FilePath, result.Attempts,
+                result.IsSuccess ? appliedForAttempt?.ApplicationId ?? string.Empty : string.Empty,
+                result.IsSuccess ? sourceOperation : string.Empty).ConfigureAwait(false);
+        }
+
+        private void LogBias(string message)
+        {
+            try { _diagnosticLog?.Invoke(message); }
+            catch (Exception ex) { Debug.WriteLine($"[BIAS] diagnostic log failed: {ex.Message}"); }
+            Debug.WriteLine(message);
+        }
+
+        private async Task PublishControlAckAsync(CameraDescriptor cam, CameraControlMessage msg, bool success, string message,
+            bool biasFileSaved = false, string biasFilePath = "", int attempts = 0,
+            string biasApplicationId = "", string biasSourceOperation = "")
         {
             try
             {
@@ -431,12 +829,17 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     RequestId = msg.RequestId,
                     IsSuccess = success,
                     Message = message,
+                    BiasFileSaved = biasFileSaved,
+                    BiasFilePath = biasFilePath,
+                    Attempts = attempts,
+                    BiasApplicationId = biasApplicationId,
+                    BiasSourceOperation = biasSourceOperation,
                     Timestamp = DateTime.UtcNow
                 }).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[CameraNats] camera control ack publish failed for {cam.AgentId}: {ex.Message}");
+                LogBias($"[CameraNats] camera control ack publish failed agent={cam.AgentId} request={msg.RequestId}: {ex.Message}");
             }
         }
 
