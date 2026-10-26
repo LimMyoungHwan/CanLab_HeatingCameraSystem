@@ -20,6 +20,21 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>BIAS 계열 <see cref="Op"/>에서만 쓰는 목표 레벨. 0이면 Agent 기본값을 쓴다.</summary>
         public double BiasTargetLevel { get; set; }
 
+        /// <summary>레시피 BIAS는 보정과 이번 bias.json의 최종 저장까지 성공해야 한다.</summary>
+        public bool RequireBiasFile { get; set; }
+
+        /// <summary>기존 생산 저장 규칙을 그대로 쓰는 BIAS 결과 저장 문맥.</summary>
+        public CaptureCommandMessage? BiasStorage { get; set; }
+
+        /// <summary>biasUseCurrent가 확인할 기존 보정 대역(biasLow/biasMid/biasHigh).</summary>
+        public string BiasSourceOperation { get; set; } = string.Empty;
+
+        /// <summary>BIAS 한 시도의 제한 시간. 재시도는 Agent에서 최초 포함 최대 4회 수행한다.</summary>
+        public int BiasAttemptTimeoutSeconds { get; set; } = BiasExecutionPolicy.DefaultAttemptTimeoutSeconds;
+
+        /// <summary>biasAbort가 취소할 원본 요청. 늦은 취소가 새 실행을 중단하지 않도록 비교한다.</summary>
+        public string TargetRequestId { get; set; } = string.Empty;
+
         public DateTime Timestamp { get; set; }
     }
 
@@ -52,6 +67,12 @@ namespace HeatingCameraSystem.Core.Models
         /// Master는 이후 모터/흑체/챔버 동작을 진행해서는 안 된다.
         /// </summary>
         public const string CaptureAbort = "captureAbort";
+
+        /// <summary>지정한 요청의 BIAS 보정·파일 저장·재시도를 함께 취소한다.</summary>
+        public const string BiasAbort = "biasAbort";
+
+        /// <summary>현재 적용한 BIAS를 읽어 확인하고 이번 레시피 저장 문맥에 채택한다. 자동 탐색하지 않는다.</summary>
+        public const string BiasUseCurrent = "biasUseCurrent";
 
         // [S7] 카메라 단위 런타임 로드/언로드 — 위의 시리얼 Run/Stop과는 다른 개념이다.
         // Manager(재정의된 AgentSupervisor)가 AgentUI 프로세스를 죽이지 않고 그 안의 카메라
@@ -99,6 +120,13 @@ namespace HeatingCameraSystem.Core.Models
         public string RequestId { get; set; } = string.Empty;
         public bool IsSuccess { get; set; }
         public string Message { get; set; } = string.Empty;
+
+        /// <summary>이번 요청의 bias.json을 최종 목적지에 쓰고 내용을 확인했을 때만 true.</summary>
+        public bool BiasFileSaved { get; set; }
+        public string BiasFilePath { get; set; } = string.Empty;
+        public int Attempts { get; set; }
+        public string BiasApplicationId { get; set; } = string.Empty;
+        public string BiasSourceOperation { get; set; } = string.Empty;
         public DateTime Timestamp { get; set; }
     }
 }

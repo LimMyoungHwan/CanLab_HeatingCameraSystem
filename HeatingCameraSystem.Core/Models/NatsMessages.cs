@@ -141,6 +141,9 @@ namespace HeatingCameraSystem.Core.Models
 
         /// <summary>true면 <see cref="ConditionFolder"/> 계층에 bias.json을 남긴다(cold 조건).</summary>
         public bool WriteBiasJson { get; set; }
+
+        /// <summary>이 촬영이 의존하는 이번 실행의 성공한 BIAS 요청. 과거 결과 재사용을 막는다.</summary>
+        public string RequiredBiasRequestId { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -149,6 +152,9 @@ namespace HeatingCameraSystem.Core.Models
     /// </summary>
     public class CaptureResultMessage
     {
+        /// <summary>biasFileFailed는 필수 BIAS 결과 누락으로, 레시피가 후속 작업을 중단해야 한다.</summary>
+        public string FailureCode { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
         public string AgentId { get; set; } = string.Empty;
         public string Alias { get; set; } = string.Empty;
         public int CameraIndex { get; set; }

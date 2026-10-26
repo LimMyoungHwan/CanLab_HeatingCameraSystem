@@ -1125,6 +1125,11 @@ namespace HeatingCameraSystem.Master.ViewModels
             {
                 RecipeStatus = LocalizationManager.Instance["Dash_RecipeStopped"];
             }
+            catch (RecipeNgException ex)
+            {
+                RecipeStatus = Localize("Dash_RecipeNg", ex.Message);
+                RecipePhaseText = RecipeStatus;
+            }
             catch (Exception ex)
             {
                 string reason = recipe.Plan is { } plan ? CapturePlanLabels.ValidationReason(plan, ex.Message) : ex.Message;

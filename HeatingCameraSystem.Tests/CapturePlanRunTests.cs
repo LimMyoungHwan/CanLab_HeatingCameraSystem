@@ -19,10 +19,22 @@ public class CapturePlanRunTests
             using var db = new LiteDatabase(new MemoryStream()); var positions = new LiteDbCameraPositionRepository(db);
             foreach (var row in TemplatePlanTestData.Positions()) await positions.SaveAsync(row);
             var source = ExecutableTemplate(); var plan = TemplatePlanTestData.Plan(source); var recipes = new FileRecipeRepository(root); await recipes.SaveAsync(source);
+            plan.SaveRootPath = Path.Combine(root, "captures");
             var runs = new LiteDbCapturePlanRunRepository(db); var service = new CapturePlanRunService(runs, positions, recipes, () => TemplatePlanTestData.Cameras);
             var first = await service.PrepareAsync(plan, CapturePlanRunMode.New);
             bool failed = false;
-            await service.ExecuteAsync(first, Engine(cmd => { if (!failed && cmd.TargetAgentId == TemplatePlanTestData.Cameras[1].AgentId) { failed = true; return false; } return true; }), CancellationToken.None);
+            int failedCameraCaptures = 0;
+            await Assert.ThrowsAsync<RecipeNgException>(() => service.ExecuteAsync(first, Engine(cmd =>
+            {
+                if (cmd.TargetAgentId == TemplatePlanTestData.Cameras[1].AgentId)
+                {
+                    failedCameraCaptures++;
+                    if (!failed) { failed = true; return false; }
+                }
+                return true;
+            }), CancellationToken.None));
+            Assert.Equal(1, failedCameraCaptures);
+            Assert.Equal(CapturePlanRunOutcome.Failed, first.Run.Outcome);
             Assert.Equal(1, first.Run.Cells.Count(c => c.State == CapturePlanCellState.Done)); Assert.Equal(1, first.Run.Cells.Count(c => c.State == CapturePlanCellState.Failed));
             var retry = await service.PrepareAsync(plan, CapturePlanRunMode.FailedOnly); Assert.Equal(1, retry.CellCount); Assert.Equal(10, retry.Recipe.Steps.Count);
             Assert.Equal(RecipeStepKind.ChamberControl, retry.Recipe.Steps[0].Kind); Assert.Equal(RecipeStepKind.BlackBodyControl, retry.Recipe.Steps[1].Kind);
@@ -80,7 +92,21 @@ public class CapturePlanRunTests
         var nats = new Mock<INatsCommunicationService>(); Action<CaptureResultMessage>? callback = null; var acks = new Dictionary<string, Action<CameraControlAckMessage>>();
         nats.Setup(s => s.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Callback<Action<CaptureResultMessage>>(handler => callback = handler).Returns(Task.CompletedTask);
         nats.Setup(s => s.SubscribeCameraControlAckAsync(It.IsAny<string>(), It.IsAny<Action<CameraControlAckMessage>>())).Callback<string, Action<CameraControlAckMessage>>((id, handler) => acks[id] = handler).Returns(Task.CompletedTask);
-        nats.Setup(s => s.PublishCameraControlAsync(It.IsAny<CameraControlMessage>())).Callback<CameraControlMessage>(cmd => { if (acks.TryGetValue(cmd.AgentId, out var ack)) ack(new() { AgentId = cmd.AgentId, CameraIndex = cmd.CameraIndex, RequestId = cmd.RequestId, IsSuccess = true }); }).Returns(Task.CompletedTask);
+        nats.Setup(s => s.PublishCameraControlAsync(It.IsAny<CameraControlMessage>())).Callback<CameraControlMessage>(cmd =>
+        {
+            if (!acks.TryGetValue(cmd.AgentId, out var ack)) return;
+            bool bias = BiasExecutionPolicy.IsBiasOperation(cmd.Op) || cmd.Op == CameraControlOps.BiasUseCurrent;
+            var storage = cmd.BiasStorage;
+            ack(new CameraControlAckMessage
+            {
+                AgentId = cmd.AgentId, CameraIndex = cmd.CameraIndex, Op = cmd.Op, RequestId = cmd.RequestId, IsSuccess = true,
+                BiasFileSaved = bias, Attempts = bias ? 1 : 0,
+                BiasFilePath = bias && storage is not null
+                    ? Path.Combine(storage.StorageRootUnc, $"544112136_{storage.ProductNumber}", storage.ConditionFolder, "bias.json") : string.Empty,
+                BiasApplicationId = bias ? $"applied-{cmd.AgentId}" : string.Empty,
+                BiasSourceOperation = cmd.Op == CameraControlOps.BiasUseCurrent ? cmd.BiasSourceOperation : cmd.Op
+            });
+        }).Returns(Task.CompletedTask);
         nats.Setup(s => s.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>())).Callback<CaptureCommandMessage>(cmd => callback?.Invoke(new() { AgentId = cmd.TargetAgentId, RecipeStepId = cmd.RecipeStepId, IsSuccess = succeeds(cmd), ImagePath = "/test/image.jpg", Timestamp = DateTime.UtcNow })).Returns(Task.CompletedTask);
         return new RecipeEngine(plc.Object, nats.Object, history.Object, new RecipeEngineSettings { CaptureResultTimeoutSeconds = 1 });
     }

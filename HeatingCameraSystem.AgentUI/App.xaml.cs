@@ -246,9 +246,39 @@ namespace HeatingCameraSystem.AgentUI
                     .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.HasSerialControl ?? false,
                 readCameraTemperature: ReadCameraTemperatureForAsync,
                 readFpaRaw: ReadFpaRawForAsync,
-                readBiasJson: descriptor => _mainViewModel?.Cameras
-                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.LastBiasJson,
+                readBiasJson: descriptor => dispatcher.Invoke(() => _mainViewModel?.Cameras
+                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.LastBiasJson),
                 productionSink: new ProductionCaptureSink(Path.Combine(storageDir, "production")),
+                biasControlHandler: async (descriptor, controlMessage, cancellationToken) =>
+                {
+                    await dispatcher.InvokeAsync(async () =>
+                    {
+                        CameraPanelViewModel? panel = _mainViewModel?.Cameras
+                            .FirstOrDefault(candidate => candidate.AgentId == descriptor.AgentId);
+                        if (panel is null)
+                            throw new InvalidOperationException($"카메라 패널이 없습니다: {descriptor.AgentId}");
+
+                        if (controlMessage.Op == CameraControlOps.BiasUseCurrent)
+                        {
+                            await panel.VerifyAppliedBiasAsync(controlMessage.BiasSourceOperation, cancellationToken);
+                            return;
+                        }
+
+                        double? target = controlMessage.BiasTargetLevel > 0 ? controlMessage.BiasTargetLevel : null;
+                        await panel.RunBiasOperationAsync(controlMessage.Op, target, cancellationToken);
+                    }).Task.Unwrap();
+                },
+                diagnosticLog: message =>
+                {
+                    if (message.StartsWith("[BIAS] NG", StringComparison.Ordinal))
+                        AgentUiLog.Logger.Error("{BiasDiagnostic}", message);
+                    else if (message.StartsWith("[BIAS] FAIL", StringComparison.Ordinal))
+                        AgentUiLog.Logger.Warning("{BiasDiagnostic}", message);
+                    else
+                        AgentUiLog.Logger.Information("{BiasDiagnostic}", message);
+                },
+                readAppliedBias: descriptor => dispatcher.Invoke(() => _mainViewModel?.Cameras
+                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.LastAppliedBias),
                 reportCaptureWarning: (descriptor, warning) =>
                 {
                     AgentUiLog.Logger.Warning("[{AgentId}] {CaptureWarning}", descriptor.AgentId, warning);
