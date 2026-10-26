@@ -1,5 +1,21 @@
 # FoxMainPC Bias·결과 화면 수정 통합 및 검증 기록
 
+## 최신 검증 — 카메라·시리얼·AgentUI·Master 전체 연동 재검토
+
+- 최종 소스 커밋: [`1f292ec`](https://github.com/LimMyoungHwan/CanLab_HeatingCameraSystem/commit/1f292ecd1a593b98c72f58f102d3d0db942f035f)
+- GitHub 기준 `0addabb`의 제품·시뮬레이터·테스트 C# 323개를 확보하고 카메라 연동 경로를 심층·교차 검토했다.
+- 이번 수정은 소스·리소스·테스트 84개 파일이다. 시리얼 오류 ACK, 실제 카메라 식별, 원격/로컬 작업 충돌, 오래된 프레임, NATS 구독 준비·정리, Master NG/취소, Manager 재시작·로그를 보완했다.
+- 최종 전체 솔루션 Debug 빌드: **오류 0, 경고 0**.
+- 최종 전체 테스트: **935개 통과, 실패 0, 건너뜀 0**, 표시 시간 **2분 35초**. 이전 808개에서 127개 증가했다.
+- 실제 NATS 2.10.24를 loopback 임의 포트로 격리해 명령·결과 왕복과 CL 오류 → Connector 실패 ACK → Master 수신을 검증했다. 바로 이어진 성공 요청 10회와 구독 정리도 통과했다. 테스트 후 서버는 종료했다.
+- 최종 결과: `tmp/foxmain-deep-audit-20261026/deep-audit-final.trx`. 환경변수 `HCS_TEST_NATS_URL`을 지정했으므로 NATS 연결 불가는 테스트 실패로 처리된다.
+- 최신 변경 소스 ZIP: `HeatingCameraSystem_modified_sources_1f292ec.zip` — **161개 파일**, 478,468바이트. 기준 `1f292ec`, 원본 비교 기준 `62bf111` 이후 변경분을 포함한다.
+- ZIP SHA-256: `aee61f7161e5bb5685f698b564bb8c04d15673e7b1373afb555c9c6b8845f9df`. 모든 ZIP 파일의 Git blob을 커밋과 대조했다.
+- 상세 원인·수정·테스트·장비 확인 항목: [카메라·Bias 연동 감사 보고서](CAMERA-INTEGRATION-AUDIT-20261026.md).
+- 실제 카메라·COM·USB 분리/재연결·챔버 운전은 실행하지 않았다. 장치별 펌웨어 응답과 영상/COM의 실물 대응은 현장에서 확인한다.
+
+아래는 이번 재검토 이전의 통합 및 808개 테스트 검증 이력이다.
+
 ## 적용 대상
 
 - 확인일: 2026-10-26 (한국 시간)
@@ -20,7 +36,7 @@
 
 기존 테스트 중 Bias 파일을 생략하고 계속 진행하거나 RAW 전송 전에 성공 결과를 받는 동작을 기대한 항목은 새 요구사항에 맞췄다. 실패 시 촬영 미실행·4회 확인·이전 파일 보존, 성공 결과 시점의 실제 RAW 바이트와 Bias 파일을 검증한다. 좌표 이동 성공 mock은 상태 조회에도 실제 요청 좌표를 반영하도록 수정했으며 도착 확인과 제한 시간을 완화하지 않았다.
 
-## 최종 검증 결과
+## 이전 단계 검증 결과
 
 | 항목 | 결과 |
 | --- | --- |
@@ -61,7 +77,7 @@ dotnet test HeatingCameraSystem.slnx --no-build --logger "trx;LogFileName=final-
 
 로컬 도구 상태(`.banyancode/`, `.opencode/`), 임시 검증·배포 산출물(`tmp/`), 이전 별도 체크아웃(`AnotherDevice/`)은 `.gitignore`로 제외하고 실제 파일은 유지한다. 최초 보존본은 stash `4b3ceb71d976be6bed4639e171f2e6dbef8272e1`에 남아 있다.
 
-## 최종 재검토와 현재 Bias 확인 상태 보완
+## 이전 재검토와 현재 Bias 확인 상태 보완
 
 `c6c530c`를 기준으로 재시도·NG 중단, 파일 증빙, 수동 Bias 입력·재사용 경로를 다시 검토했다. Agent의 최초 1회 및 추가 3회 시도, 최종 파일 확인 후 성공 응답, Master의 실패 이후 촬영·이동 차단을 확인했다.
 
