@@ -734,7 +734,8 @@ namespace HeatingCameraSystem.Master.Services
 
             if (step.CameraOperation == CameraControlOps.Capture)
             {
-                await RepeatCaptureAsync(recipe, step, runId, index, totalSteps, targets, captureWaiters, pending, skipState, cancellationToken, progress);
+                await RepeatCaptureAsync(recipe, step, runId, index, totalSteps, targets, captureWaiters,
+                    controlWaiters, subscribedControlAgents, pending, skipState, cancellationToken, progress);
                 return;
             }
 
@@ -747,23 +748,8 @@ namespace HeatingCameraSystem.Master.Services
                     throw new RecipeNgException(L("Alarm_Msg_BiasBandMissing", requestId, agentId));
                 bool isBias = BiasExecutionPolicy.IsBiasOperation(operation);
 
-                if (subscribedControlAgents.Add(agentId))
-                {
-                    try
-                    {
-                        Task subscribe = _natsService.SubscribeCameraControlAckAsync(agentId, ack =>
-                        {
-                            if (controlWaiters.TryGetValue(ack.RequestId, out var waiter))
-                                waiter.TrySetResult(ack);
-                        });
-                        if (isBias) await subscribe.WaitAsync(_biasResponseTimeout, cancellationToken);
-                        else await subscribe;
-                    }
-                    catch (Exception ex) when (isBias && ex is not OperationCanceledException)
-                    {
-                        throw new RecipeNgException(L("Alarm_Msg_BiasRequestFailed", requestId, agentId, ex.Message), innerException: ex);
-                    }
-                }
+                await EnsureControlAckSubscriptionAsync(agentId, requestId, isBias, controlWaiters,
+                    subscribedControlAgents, cancellationToken);
 
                 var controlWaiter = new TaskCompletionSource<CameraControlAckMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
                 controlWaiters[requestId] = controlWaiter;
@@ -810,6 +796,31 @@ namespace HeatingCameraSystem.Master.Services
             }
         }
 
+        private async Task EnsureControlAckSubscriptionAsync(
+            string agentId, string requestId, bool requiredBias,
+            ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>> controlWaiters,
+            HashSet<string> subscribedControlAgents, CancellationToken cancellationToken)
+        {
+            if (!subscribedControlAgents.Add(agentId)) return;
+            try
+            {
+                Task subscribe = _natsService.SubscribeCameraControlAckAsync(agentId, ack =>
+                {
+                    if (controlWaiters.TryGetValue(ack.RequestId, out var waiter))
+                        waiter.TrySetResult(ack);
+                });
+                if (requiredBias) await subscribe.WaitAsync(_biasResponseTimeout, cancellationToken);
+                else await subscribe;
+            }
+            catch (Exception ex)
+            {
+                subscribedControlAgents.Remove(agentId);
+                if (requiredBias && ex is not OperationCanceledException)
+                    throw new RecipeNgException(L("Alarm_Msg_BiasRequestFailed", requestId, agentId, ex.Message), innerException: ex);
+                throw;
+            }
+        }
+
         /// <summary>
         /// 재시도는 Agent가 한 요청 안에서 수행한다. Master가 요청을 반복 발행하면 아직 끝나지 않은
         /// 보정과 겹칠 수 있으므로 최종 결과와 이번 요청의 필수 파일 저장 증빙을 한 번만 기다린다.
@@ -817,9 +828,11 @@ namespace HeatingCameraSystem.Master.Services
         private async Task ExecuteRequiredBiasAsync(
             Recipe recipe, RecipeStep step, RecipeCameraTarget target, string agentId, string requestId,
             string operation, int index, int totalSteps, Task<CameraControlAckMessage> response,
-            CancellationToken cancellationToken, IProgress<RecipeProgress>? progress)
+            CancellationToken cancellationToken, IProgress<RecipeProgress>? progress,
+            string biasSourceOperation = "", ProductionNaming? naming = null)
         {
-            ProductionNaming? naming = await ResolveProductionNamingAsync(recipe, step, target);
+            bool useCurrent = operation == CameraControlOps.BiasUseCurrent;
+            naming ??= await ResolveProductionNamingAsync(recipe, step, target);
             CaptureCommandMessage? storage = naming is null ? null : new CaptureCommandMessage
             {
                 TargetAgentId = agentId,
@@ -835,11 +848,15 @@ namespace HeatingCameraSystem.Master.Services
             };
 
             progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps,
-                CurrentPhase = L("Recipe_Phase_BiasRequired", BiasExecutionPolicy.MaxAttempts, index + 1, totalSteps) });
-            AlarmSink.Raise(AlarmSeverity.Info, RecipeSource,
-                L("Alarm_Msg_BiasStarted", requestId, agentId, operation,
+                CurrentPhase = L(useCurrent ? "Recipe_Phase_BiasCurrentRequired" : "Recipe_Phase_BiasRequired",
+                    BiasExecutionPolicy.MaxAttempts, index + 1, totalSteps) });
+            string started = useCurrent
+                ? L("Alarm_Msg_BiasCurrentStarted", requestId, agentId, biasSourceOperation,
+                    BiasExecutionPolicy.MaxAttempts, _biasAttemptTimeoutSeconds, recipe.SaveRootPath)
+                : L("Alarm_Msg_BiasStarted", requestId, agentId, operation,
                     step.BiasTargetLevel > 0 ? step.BiasTargetLevel : CameraBiasDefaults.For(operation),
-                    BiasExecutionPolicy.MaxAttempts, _biasAttemptTimeoutSeconds, recipe.SaveRootPath));
+                    BiasExecutionPolicy.MaxAttempts, _biasAttemptTimeoutSeconds, recipe.SaveRootPath);
+            AlarmSink.Raise(AlarmSeverity.Info, RecipeSource, started);
 
             using var responseCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             responseCts.CancelAfter(_biasResponseTimeout);
@@ -854,6 +871,7 @@ namespace HeatingCameraSystem.Master.Services
                     BiasTargetLevel = step.BiasTargetLevel,
                     RequireBiasFile = true,
                     BiasStorage = storage,
+                    BiasSourceOperation = biasSourceOperation,
                     BiasAttemptTimeoutSeconds = _biasAttemptTimeoutSeconds,
                     Timestamp = DateTime.UtcNow
                 }).WaitAsync(responseCts.Token);
@@ -871,9 +889,21 @@ namespace HeatingCameraSystem.Master.Services
                     || !string.Equals(ack.Op, operation, StringComparison.Ordinal) || storage is null)
                     throw new RecipeNgException(L("Alarm_Msg_BiasFileNotConfirmed", requestId, agentId, ack.Message), AlarmCodes.BiasFileFailed);
 
+                if (useCurrent && (string.IsNullOrWhiteSpace(ack.BiasApplicationId)
+                    || !string.Equals(ack.BiasSourceOperation, biasSourceOperation, StringComparison.Ordinal)))
+                    throw new RecipeNgException(L("Alarm_Msg_BiasCurrentNotConfirmed", requestId, agentId,
+                        biasSourceOperation, ack.BiasSourceOperation, ack.Message), AlarmCodes.BiasFileFailed);
+
+                // Agent는 카메라당 현재 채택 요청 하나만 유지한다. 이전 조건으로 돌아갈 때도
+                // 새 요청으로 현재 적용값과 그 조건의 파일을 확인하도록 오래된 ID를 버린다.
+                foreach (var key in _successfulBiasRequests.Keys.Where(key => key.AgentId == agentId).ToArray())
+                    _successfulBiasRequests.Remove(key);
                 _successfulBiasRequests[(agentId, storage.ConditionFolder)] = requestId;
-                string message = L("Alarm_Msg_BiasSucceeded", requestId, agentId, ack.Attempts,
-                    BiasExecutionPolicy.MaxAttempts, ack.BiasFilePath);
+                string message = useCurrent
+                    ? L("Alarm_Msg_BiasCurrentSucceeded", requestId, agentId, ack.BiasSourceOperation,
+                        ack.BiasApplicationId, ack.Attempts, BiasExecutionPolicy.MaxAttempts, ack.BiasFilePath)
+                    : L("Alarm_Msg_BiasSucceeded", requestId, agentId, ack.Attempts,
+                        BiasExecutionPolicy.MaxAttempts, ack.BiasFilePath);
                 AlarmSink.Raise(AlarmSeverity.Info, RecipeSource, message);
                 progress?.Report(new RecipeProgress { CurrentStep = index, TotalSteps = totalSteps, CurrentPhase = message });
             }
@@ -950,6 +980,8 @@ namespace HeatingCameraSystem.Master.Services
             int totalSteps,
             List<RecipeCameraTarget> targets,
             ConcurrentDictionary<string, CaptureBatch> captureWaiters,
+            ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>> controlWaiters,
+            HashSet<string> subscribedControlAgents,
             List<PendingCapture> pending,
             CameraSkipState skipState,
             CancellationToken cancellationToken,
@@ -979,7 +1011,8 @@ namespace HeatingCameraSystem.Master.Services
                 foreach (var target in targets)
                 {
                     if (await IsSkippedAsync(step, target, skipState)) continue;
-                    await CaptureOnceAsync(recipe, step, runId, round, target, captureWaiters, pending, skipState, cancellationToken);
+                    await CaptureOnceAsync(recipe, step, runId, round, index, totalSteps, target, captureWaiters,
+                        controlWaiters, subscribedControlAgents, pending, skipState, cancellationToken, progress);
                 }
             }
         }
@@ -1181,11 +1214,16 @@ namespace HeatingCameraSystem.Master.Services
             RecipeStep step,
             string runId,
             int round,
+            int index,
+            int totalSteps,
             RecipeCameraTarget target,
             ConcurrentDictionary<string, CaptureBatch> captureWaiters,
+            ConcurrentDictionary<string, TaskCompletionSource<CameraControlAckMessage>> controlWaiters,
+            HashSet<string> subscribedControlAgents,
             List<PendingCapture> pending,
             CameraSkipState skipState,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            IProgress<RecipeProgress>? progress)
         {
             string agentId = await ResolveTargetAgentIdAsync(step, target);
 
@@ -1193,10 +1231,46 @@ namespace HeatingCameraSystem.Master.Services
             string requestId = $"{runId}:{step.StepId}:{agentId}:{target.CameraIndex}:{round}";
 
             ProductionNaming? production = await ResolveProductionNamingAsync(recipe, step, target);
-            string requiredBiasRequestId = production is not null
-                && _successfulBiasRequests.TryGetValue((agentId, production.ConditionFolder), out string? biasRequestId)
-                    ? biasRequestId : string.Empty;
-            bool requiresBias = production?.WriteBiasJson == true || !string.IsNullOrWhiteSpace(requiredBiasRequestId);
+            if (production is null && !string.IsNullOrWhiteSpace(recipe.SaveRootPath)
+                && target.TargetChamber.HasValue && target.TargetBlackBody.HasValue)
+                throw new RecipeNgException(L("Alarm_Msg_BiasStorageNotResolved", requestId, agentId, recipe.SaveRootPath),
+                    AlarmCodes.BiasFileFailed);
+            string requiredBiasRequestId = string.Empty;
+            if (production is not null)
+            {
+                if (_successfulBiasRequests.TryGetValue((agentId, production.ConditionFolder), out string? biasRequestId))
+                {
+                    requiredBiasRequestId = biasRequestId;
+                }
+                else
+                {
+                    // -30에서 찾은 Low 값은 -10/+10에서도 사용하지만, 각 조건과 새 실행의
+                    // 저장 증빙은 따로 받는다. 탐색 명령으로 대체하거나 과거 파일만 믿지 않는다.
+                    string sourceOperation = target.TargetChamber switch
+                    {
+                        ChamberRange.Low => CameraControlOps.BiasLow,
+                        ChamberRange.Mid => CameraControlOps.BiasMid,
+                        ChamberRange.High => CameraControlOps.BiasHigh,
+                        _ => throw new RecipeNgException(L("Alarm_Msg_BiasBandMissing", requestId, agentId))
+                    };
+                    requiredBiasRequestId = $"{requestId}:biasreuse";
+                    await EnsureControlAckSubscriptionAsync(agentId, requiredBiasRequestId, true,
+                        controlWaiters, subscribedControlAgents, cancellationToken);
+                    var biasWaiter = new TaskCompletionSource<CameraControlAckMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    controlWaiters[requiredBiasRequestId] = biasWaiter;
+                    try
+                    {
+                        await ExecuteRequiredBiasAsync(recipe, step, target, agentId, requiredBiasRequestId,
+                            CameraControlOps.BiasUseCurrent, index, totalSteps, biasWaiter.Task, cancellationToken,
+                            progress, sourceOperation, production);
+                    }
+                    finally
+                    {
+                        controlWaiters.TryRemove(requiredBiasRequestId, out _);
+                    }
+                }
+            }
+            bool requiresBias = production is not null;
 
             // 장수는 규칙 저장 여부와 무관하게 운영자가 스텝에 입력한 값만 쓴다.
             int shots = step.ShotCount > 0 ? step.ShotCount : 1;

@@ -1,10 +1,12 @@
 using System;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HeatingCameraSystem.AgentUI.Localization;
 using HeatingCameraSystem.AgentUI.Services;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
@@ -31,6 +33,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private readonly SemaphoreSlim _biasGate = new(1, 1);
         private readonly CancellationTokenSource _biasLifetimeCts = new();
         private string? _lastTemperatureFailure;
+        private AppliedBiasResult? _lastAppliedBias;
+        private bool _disposed;
 
         private const string Unknown = "—";
         private static readonly TimeSpan InfoPollInterval = TimeSpan.FromSeconds(1);
@@ -58,6 +62,32 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
         [ObservableProperty]
         private string _captureStatus = string.Empty;
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(CanEditBias))]
+        [NotifyCanExecuteChangedFor(nameof(RunBiasLowCommand))]
+        [NotifyCanExecuteChangedFor(nameof(RunBiasMidCommand))]
+        [NotifyCanExecuteChangedFor(nameof(RunBiasHighCommand))]
+        [NotifyCanExecuteChangedFor(nameof(RestoreManualBiasCommand))]
+        private bool _isBiasBusy;
+
+        [ObservableProperty]
+        [NotifyCanExecuteChangedFor(nameof(RestoreManualBiasCommand))]
+        private string _manualBiasOperation = CameraControlOps.BiasLow;
+
+        [ObservableProperty]
+        [NotifyPropertyChangedFor(nameof(ManualBiasValuePreview))]
+        [NotifyCanExecuteChangedFor(nameof(RestoreManualBiasCommand))]
+        private string _manualBiasValueText = string.Empty;
+
+        public bool CanEditBias => HasSerialControl && !IsBiasBusy && !_disposed;
+
+        public string ManualBiasValuePreview => TryParseManualBiasValue(ManualBiasValueText, out byte value)
+            ? $"0x{value:X2} ({value})" : string.Empty;
+
+        private bool CanRestoreManualBias => CanEditBias
+            && BiasExecutionPolicy.IsBiasOperation(ManualBiasOperation)
+            && TryParseManualBiasValue(ManualBiasValueText, out _);
 
         /// <summary>시리얼 제어 가능 여부. 하트비트의 시리얼 건강 플래그(IsSerialConnected)가 이 값을 읽는다.</summary>
         public bool HasSerialControl => _serial is not null;
@@ -464,18 +494,21 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private const byte GfidValue = 0xAE;
 
         /// <summary>
-        /// 이번 BIAS 보정에서 최종 검증까지 마친 결과만 담는다. 시작·실패·취소 시에는 null로
-        /// 무효화하여 이전 성공 결과가 다음 레시피의 bias.json에 재사용되지 않게 한다.
+        /// 현재 적용한 BIAS 결과. 자동 탐색과 수동 복원을 구분하며 같은 값의 재적용도 새 ID를
+        /// 발급한다. 적용 시작·실패·취소 시 이전 결과를 무효화한다.
         /// </summary>
-        public string? LastBiasJson { get; private set; }
+        public AppliedBiasResult? LastAppliedBias => _lastAppliedBias;
 
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
+        /// <summary>기존 저장 경로용 호환 getter. 결과의 출처·세대는 LastAppliedBias를 확인한다.</summary>
+        public string? LastBiasJson => LastAppliedBias?.Json;
+
+        [RelayCommand(CanExecute = nameof(CanEditBias))]
         private Task RunBiasLowAsync(double? targetOverride) => RunManualBiasAsync(CameraControlOps.BiasLow, targetOverride);
 
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
+        [RelayCommand(CanExecute = nameof(CanEditBias))]
         private Task RunBiasMidAsync(double? targetOverride) => RunManualBiasAsync(CameraControlOps.BiasMid, targetOverride);
 
-        [RelayCommand(CanExecute = nameof(HasSerialControl))]
+        [RelayCommand(CanExecute = nameof(CanEditBias))]
         private Task RunBiasHighAsync(double? targetOverride) => RunManualBiasAsync(CameraControlOps.BiasHigh, targetOverride);
 
         /// <summary>
@@ -485,9 +518,9 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         public Task RunBiasOperationAsync(string operation, double? targetOverride, CancellationToken cancellationToken)
             => operation switch
             {
-                CameraControlOps.BiasLow => RunAutoBiasAsync("LOW", targetOverride ?? CameraBiasDefaults.Low, 0x93, cancellationToken),
-                CameraControlOps.BiasMid => RunAutoBiasAsync("MID", targetOverride ?? CameraBiasDefaults.Mid, 0xA3, cancellationToken),
-                CameraControlOps.BiasHigh => RunAutoBiasAsync("HIGH", targetOverride ?? CameraBiasDefaults.High, 0xD3, cancellationToken),
+                CameraControlOps.BiasLow => RunAutoBiasAsync(operation, "LOW", targetOverride ?? CameraBiasDefaults.Low, 0x93, cancellationToken),
+                CameraControlOps.BiasMid => RunAutoBiasAsync(operation, "MID", targetOverride ?? CameraBiasDefaults.Mid, 0xA3, cancellationToken),
+                CameraControlOps.BiasHigh => RunAutoBiasAsync(operation, "HIGH", targetOverride ?? CameraBiasDefaults.High, 0xD3, cancellationToken),
                 _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "지원하지 않는 BIAS 명령입니다.")
             };
 
@@ -504,23 +537,227 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             }
         }
 
+        internal static bool TryParseManualBiasValue(string? text, out byte value)
+        {
+            value = 0;
+            string hex = text?.Trim() ?? string.Empty;
+            if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) hex = hex.Substring(2);
+            return hex.Length is >= 1 and <= 2
+                && byte.TryParse(hex, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out value);
+        }
+
+        private static (string Mode, byte Cint) BiasMode(string operation) => operation switch
+        {
+            CameraControlOps.BiasLow => ("LOW", 0x93),
+            CameraControlOps.BiasMid => ("MID", 0xA3),
+            CameraControlOps.BiasHigh => ("HIGH", 0xD3),
+            _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "지원하지 않는 BIAS 대역입니다.")
+        };
+
+        private static string BiasText(string key, params object[] arguments)
+            => string.Format(CultureInfo.CurrentCulture, LocalizationManager.Instance[key], arguments);
+
+        private void SetAppliedBias(AppliedBiasResult? result)
+        {
+            _lastAppliedBias = result;
+            OnPropertyChanged(nameof(LastAppliedBias));
+            OnPropertyChanged(nameof(LastBiasJson));
+        }
+
+        private async Task EnterBiasAsync()
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(CameraPanelViewModel));
+            if (!await _biasGate.WaitAsync(0))
+            {
+                const string message = "이 카메라는 이미 BIAS 적용 또는 확인 중입니다.";
+                AgentUiLog.Logger.Warning("[{AgentId}] BIAS 중복 실행 거부: {Reason}", _agentId, message);
+                throw new InvalidOperationException(message);
+            }
+            IsBiasBusy = true;
+        }
+
+        private void ExitBias()
+        {
+            IsBiasBusy = false;
+            _biasGate.Release();
+        }
+
+        /// <summary>입력한 GSK_LSB를 한 번 복원한다. 현재 온도에서 픽셀 목표를 다시 탐색하지 않는다.</summary>
+        public async Task RestoreBiasAsync(string operation, byte value, CancellationToken cancellationToken)
+        {
+            await EnterBiasAsync();
+            SetAppliedBias(null);
+            try
+            {
+                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token);
+                await RestoreBiasCoreAsync(operation, value, linkedCancellation.Token);
+            }
+            finally
+            {
+                ExitBias();
+            }
+        }
+
+        [RelayCommand(CanExecute = nameof(CanRestoreManualBias))]
+        private async Task RestoreManualBiasAsync(CancellationToken cancellationToken)
+        {
+            if (!TryParseManualBiasValue(ManualBiasValueText, out byte value)
+                || !BiasExecutionPolicy.IsBiasOperation(ManualBiasOperation))
+            {
+                SerialStatus = BiasText("Cam_ManualBiasInvalidInput");
+                return;
+            }
+
+            string operation = ManualBiasOperation;
+            bool entered = false;
+            try
+            {
+                // 재시도 사이의 500ms에도 게이트를 유지해 다른 보정이 끼어들지 않게 한다.
+                await EnterBiasAsync();
+                entered = true;
+                SetAppliedBias(null);
+                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token);
+                BiasOperationResult result = await BiasOperationRunner.RunAsync(
+                    ct => _dispatcher.InvokeAsync(() => RestoreBiasCoreAsync(operation, value, ct)).Task.Unwrap(),
+                    () => LastBiasJson, null, false, BiasExecutionPolicy.DefaultAttemptTimeoutSeconds,
+                    $"agent={_agentId} source=manual op={operation} GSK_LSB=0x{value:X2}",
+                    message =>
+                    {
+                        if (message.StartsWith("[BIAS] NG", StringComparison.Ordinal))
+                            AgentUiLog.Logger.Error("{BiasDiagnostic}", message);
+                        else if (message.StartsWith("[BIAS] FAIL", StringComparison.Ordinal))
+                            AgentUiLog.Logger.Warning("{BiasDiagnostic}", message);
+                        else
+                            AgentUiLog.Logger.Information("{BiasDiagnostic}", message);
+                    },
+                    linkedCancellation.Token);
+                if (!result.IsSuccess)
+                    SerialStatus = BiasText("Cam_ManualBiasRetryFailed", result.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                if (entered) SetAppliedBias(null);
+                SerialStatus = BiasText("Cam_ManualBiasCancelled");
+            }
+            catch (Exception ex)
+            {
+                if (entered) SetAppliedBias(null);
+                SerialStatus = BiasText("Cam_ManualBiasFailed", ex.Message);
+                AgentUiLog.Logger.Error(ex, "[{AgentId}] 수동 BIAS 복원 명령 실패: 모드={Operation}, 요청={Requested}", _agentId, operation, value);
+            }
+            finally
+            {
+                if (entered) ExitBias();
+            }
+        }
+
+        private async Task RestoreBiasCoreAsync(string operation, byte value, CancellationToken ct)
+        {
+            SetAppliedBias(null);
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                ICameraSerialClient serial = _serial ?? throw new InvalidOperationException("BIAS 제어용 시리얼 연결이 없습니다.");
+                (string mode, byte cint) = BiasMode(operation);
+                SerialStatus = BiasText("Cam_ManualBiasApplying", mode, value);
+                AgentUiLog.Logger.Information("[{AgentId}] 수동 BIAS 복원 시작: 모드={Mode}, GSK_LSB=0x{Requested:X2}", _agentId, mode, value);
+                await serial.SetBiasRegisterAsync(CameraBiasRegister.TintMsb, TintMsbValue, ct);
+                ct.ThrowIfCancellationRequested();
+                await serial.SetBiasRegisterAsync(CameraBiasRegister.TintLsb, TintLsbValue, ct);
+                ct.ThrowIfCancellationRequested();
+                await serial.SetBiasRegisterAsync(CameraBiasRegister.Cint, cint, ct);
+                ct.ThrowIfCancellationRequested();
+                await serial.SetBiasRegisterAsync(CameraBiasRegister.GskMsb, GskMsbValue, ct);
+                ct.ThrowIfCancellationRequested();
+                await serial.SetBiasRegisterAsync(CameraBiasRegister.Gfid, GfidValue, ct);
+                ct.ThrowIfCancellationRequested();
+                await serial.SetBiasAsync(value, ct);
+                ct.ThrowIfCancellationRequested();
+                byte actual = await serial.ReadBiasAsync(ct);
+                ct.ThrowIfCancellationRequested();
+                BiasLsb = $"0x{actual:X2}";
+                if (actual != value)
+                    throw new InvalidOperationException($"GSK_LSB 읽기 불일치: 요청 0x{value:X2}, 실제 0x{actual:X2}");
+
+                var applied = new AppliedBiasResult(Guid.NewGuid().ToString("N"), operation, value,
+                    BuildBiasJson(cint, value), BiasApplicationSource.Manual, DateTimeOffset.UtcNow);
+                SetAppliedBias(applied);
+                ct.ThrowIfCancellationRequested();
+                SerialStatus = BiasText("Cam_ManualBiasApplied", mode, value, actual);
+                AgentUiLog.Logger.Information("[{AgentId}] 수동 BIAS 복원 확인 완료: 적용ID={ApplicationId}, 모드={Mode}, 요청=0x{Requested:X2}, 읽기=0x{Actual:X2}",
+                    _agentId, applied.ApplicationId, mode, value, actual);
+            }
+            catch (OperationCanceledException)
+            {
+                SetAppliedBias(null);
+                SerialStatus = BiasText("Cam_ManualBiasCancelled");
+                AgentUiLog.Logger.Warning("[{AgentId}] 수동 BIAS 복원 취소: 모드={Operation}, 요청=0x{Requested:X2}", _agentId, operation, value);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                SetAppliedBias(null);
+                SerialStatus = BiasText("Cam_ManualBiasFailed", ex.Message);
+                AgentUiLog.Logger.Error(ex, "[{AgentId}] 수동 BIAS 복원 실패: 모드={Operation}, 요청=0x{Requested:X2}, 원인={Reason}", _agentId, operation, value, ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>현재 적용 기록과 GSK_LSB 읽기값을 확인한다. 성공해도 적용 ID는 바꾸지 않는다.</summary>
+        public async Task VerifyAppliedBiasAsync(string operation, CancellationToken cancellationToken)
+        {
+            await EnterBiasAsync();
+            try
+            {
+                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token);
+                CancellationToken ct = linkedCancellation.Token;
+                ct.ThrowIfCancellationRequested();
+                AppliedBiasResult applied = LastAppliedBias ?? throw new InvalidOperationException("확인할 현재 BIAS 적용 기록이 없습니다.");
+                if (!string.Equals(applied.Operation, operation, StringComparison.Ordinal))
+                {
+                    SetAppliedBias(null);
+                    throw new InvalidOperationException($"BIAS 대역 불일치: 적용 {applied.Operation}, 요청 {operation}");
+                }
+                ICameraSerialClient serial = _serial ?? throw new InvalidOperationException("BIAS 제어용 시리얼 연결이 없습니다.");
+                byte actual = await serial.ReadBiasAsync(ct);
+                ct.ThrowIfCancellationRequested();
+                BiasLsb = $"0x{actual:X2}";
+                if (actual != applied.GskLsb)
+                {
+                    SetAppliedBias(null);
+                    throw new InvalidOperationException($"GSK_LSB 읽기 불일치: 기록 0x{applied.GskLsb:X2}, 실제 0x{actual:X2}");
+                }
+                AgentUiLog.Logger.Information("[{AgentId}] 현재 BIAS 읽기 확인: 적용ID={ApplicationId}, 모드={Operation}, 출처={Source}, GSK_LSB=0x{Actual:X2}",
+                    _agentId, applied.ApplicationId, operation, applied.Source, actual);
+            }
+            catch (OperationCanceledException)
+            {
+                SetAppliedBias(null);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // 읽기 통신 실패는 재시도할 수 있도록 기록을 유지한다. 확정 불일치는 위에서 무효화한다.
+                AgentUiLog.Logger.Warning(ex, "[{AgentId}] 현재 BIAS 확인 실패: 모드={Operation}, 원인={Reason}", _agentId, operation, ex.Message);
+                throw;
+            }
+            finally
+            {
+                ExitBias();
+            }
+        }
+
         /// <summary>
         /// 목표 레벨 ±<see cref="BiasTargetTolerance"/> 안에 드는 바이어스 값을 탐색해 적용한다.
         /// 레시피 스텝이 목표를 지정하면 그 값이, 없으면 모드별 기본값이 들어온다.
         /// Cint는 카메라 특성이라 목표와 무관하게 모드별로 고정한다.
         /// </summary>
-        private async Task RunAutoBiasAsync(string mode, double target, byte cint, CancellationToken cancellationToken)
+        private async Task RunAutoBiasAsync(string operation, string mode, double target, byte cint, CancellationToken cancellationToken)
         {
             // 수동 버튼과 원격 명령이 같은 카메라의 레지스터를 동시에 변경하지 못하게 한다.
             // 대기열을 만들지 않아 취소된 이전 요청이 뒤늦게 보정을 시작하는 것도 막는다.
-            if (!await _biasGate.WaitAsync(0))
-            {
-                const string message = "이 카메라는 이미 BIAS 보정 중입니다.";
-                AgentUiLog.Logger.Warning("[{AgentId}] BIAS 중복 실행 거부: {Reason}", _agentId, message);
-                throw new InvalidOperationException(message);
-            }
-
-            LastBiasJson = null;
+            await EnterBiasAsync();
+            SetAppliedBias(null);
             try
             {
                 using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token);
@@ -552,28 +789,30 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 if (!double.IsFinite(finalLevel) || finalLevel < targetMin || finalLevel > targetMax)
                     throw new InvalidOperationException($"BIAS 최종 검증 실패: 목표 {target:F0}±{BiasTargetTolerance:F0}, 측정 {finalLevel:F0}, GSK_LSB=0x{best:X2}");
 
-                LastBiasJson = BuildBiasJson(cint, best);
+                SetAppliedBias(new AppliedBiasResult(Guid.NewGuid().ToString("N"), operation, best,
+                    BuildBiasJson(cint, best), BiasApplicationSource.Automatic, DateTimeOffset.UtcNow));
+                ct.ThrowIfCancellationRequested();
                 SerialStatus = $"BIAS 완료: 0x{best:X2} (측정 {finalLevel:F0}, 오차 {Math.Abs(finalLevel - target):F0})";
                 AgentUiLog.Logger.Information("[{AgentId}] BIAS 보정 검증 완료: 모드={Mode}, 목표={Target}, 측정={Measured}, GSK_LSB={Bias}, 오차={Error}",
                     _agentId, mode, target, finalLevel, best, Math.Abs(finalLevel - target));
             }
             catch (OperationCanceledException)
             {
-                LastBiasJson = null;
+                SetAppliedBias(null);
                 SerialStatus = "BIAS 보정 취소";
                 AgentUiLog.Logger.Warning("[{AgentId}] BIAS 보정 취소: 모드={Mode}, 목표={Target}", _agentId, mode, target);
                 throw;
             }
             catch (Exception ex)
             {
-                LastBiasJson = null;
+                SetAppliedBias(null);
                 SerialStatus = $"BIAS NG: {ex.Message}";
                 AgentUiLog.Logger.Error(ex, "[{AgentId}] BIAS 보정 실패: 모드={Mode}, 목표={Target}, 원인={Reason}", _agentId, mode, target, ex.Message);
                 throw;
             }
             finally
             {
-                _biasGate.Release();
+                ExitBias();
             }
         }
 
@@ -772,6 +1011,14 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
         public void Dispose()
         {
+            if (_disposed) return;
+            _disposed = true;
+            SetAppliedBias(null);
+            OnPropertyChanged(nameof(CanEditBias));
+            RunBiasLowCommand.NotifyCanExecuteChanged();
+            RunBiasMidCommand.NotifyCanExecuteChanged();
+            RunBiasHighCommand.NotifyCanExecuteChanged();
+            RestoreManualBiasCommand.NotifyCanExecuteChanged();
             _biasLifetimeCts.Cancel();
             _infoPollCts?.Cancel();
             _infoPollCts?.Dispose();

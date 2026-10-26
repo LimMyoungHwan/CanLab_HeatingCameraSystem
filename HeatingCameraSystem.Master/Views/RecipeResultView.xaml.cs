@@ -15,6 +15,7 @@ namespace HeatingCameraSystem.Master.Views
     public partial class RecipeResultView : UserControl
     {
         private RecipeResultViewModel? _boundViewModel;
+        private const string ChartFontName = "Malgun Gothic";
 
         public RecipeResultView()
         {
@@ -56,6 +57,8 @@ namespace HeatingCameraSystem.Master.Views
                 Histogram.Plot.Axes.AutoScale();
             }
 
+            // ScottPlot은 WPF FontFamily를 상속하지 않으므로 차트 글꼴을 직접 설정한다.
+            Histogram.Plot.Font.Set(ChartFontName);
             Histogram.Refresh();
         }
 
@@ -89,6 +92,7 @@ namespace HeatingCameraSystem.Master.Views
                 Chart.Plot.Axes.AutoScale();
             }
 
+            Chart.Plot.Font.Set(ChartFontName);
             Chart.Refresh();
         }
     }

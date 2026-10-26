@@ -38,11 +38,13 @@ namespace HeatingCameraSystem.Protocols.Cameras
         private readonly Func<CameraDescriptor, Task<double?>>? _readCameraTemperature;
         private readonly Func<CameraDescriptor, Task<short?>>? _readFpaRaw;
         private readonly Func<CameraDescriptor, string?>? _readBiasJson;
+        private readonly Func<CameraDescriptor, AppliedBiasResult?>? _readAppliedBias;
         private readonly ProductionCaptureSink? _productionSink;
         private readonly Func<CameraDescriptor, CameraControlMessage, CancellationToken, Task>? _biasControlHandler;
         private readonly Action<string>? _diagnosticLog;
 
-        private sealed record VerifiedBias(string RequestId, string Json, string FilePath, int AttemptTimeoutSeconds);
+        private sealed record VerifiedBias(string RequestId, string Json, string FilePath, int AttemptTimeoutSeconds,
+            string ApplicationId, string SourceOperation);
         private sealed class ActiveCameraOperation : IDisposable
         {
             public ActiveCameraOperation(string requestId, CancellationToken token)
@@ -91,7 +93,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
             Func<CameraDescriptor, string?>? readBiasJson = null,
             ProductionCaptureSink? productionSink = null,
             Func<CameraDescriptor, CameraControlMessage, CancellationToken, Task>? biasControlHandler = null,
-            Action<string>? diagnosticLog = null)
+            Action<string>? diagnosticLog = null,
+            Func<CameraDescriptor, AppliedBiasResult?>? readAppliedBias = null)
         {
             _nats = nats ?? throw new ArgumentNullException(nameof(nats));
             _manager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -107,6 +110,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
             _readCameraTemperature = readCameraTemperature;
             _readFpaRaw = readFpaRaw;
             _readBiasJson = readBiasJson;
+            _readAppliedBias = readAppliedBias;
             _productionSink = productionSink;
             _biasControlHandler = biasControlHandler;
             _diagnosticLog = diagnosticLog;
@@ -484,7 +488,12 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 throw new InvalidOperationException("이번 레시피의 BIAS 결과가 무효화되었습니다. 보정부터 다시 실행해 주세요.");
             try
             {
-                EnsureBiasJsonMatchesCurrent(cam, verified.Json);
+                if (!string.IsNullOrWhiteSpace(verified.ApplicationId))
+                {
+                    AppliedBiasResult applied = ReadCurrentAppliedBias(cam, verified.SourceOperation);
+                    EnsureSameBiasApplication(applied, verified.ApplicationId, verified.SourceOperation, verified.Json);
+                }
+                else EnsureBiasJsonMatchesCurrent(cam, verified.Json);
             }
             catch
             {
@@ -500,6 +509,46 @@ namespace HeatingCameraSystem.Protocols.Cameras
             // 통과시키면 실제 카메라 설정과 다른 보정 결과로 후속 촬영을 진행하게 된다.
             if (!string.Equals(_readBiasJson?.Invoke(cam), json, StringComparison.Ordinal))
                 throw new InvalidOperationException("카메라의 현재 BIAS 결과가 이번 보정 결과와 다릅니다. 수동 보정 또는 재연결 후 보정을 다시 실행해 주세요.");
+        }
+
+        private AppliedBiasResult ReadCurrentAppliedBias(CameraDescriptor cam, string sourceOperation)
+        {
+            if (!BiasExecutionPolicy.IsBiasOperation(sourceOperation))
+                throw new InvalidOperationException("현재 BIAS를 사용할 대역이 올바르지 않습니다.");
+            AppliedBiasResult applied = _readAppliedBias?.Invoke(cam)
+                ?? throw new InvalidOperationException("현재 카메라에 적용하고 확인한 BIAS가 없습니다. BIAS를 먼저 적용해 주세요.");
+            if (string.IsNullOrWhiteSpace(applied.ApplicationId) || string.IsNullOrWhiteSpace(applied.Json))
+                throw new InvalidOperationException("현재 BIAS의 적용 식별자 또는 결과가 없습니다.");
+            if (!string.Equals(applied.Operation, sourceOperation, StringComparison.Ordinal))
+                throw new InvalidOperationException($"현재 BIAS 대역({applied.Operation})이 요청 대역({sourceOperation})과 다릅니다.");
+
+            EnsureBiasJsonMatchesCurrent(cam, applied.Json);
+            // 패널 조회와 JSON 조회 사이에 수동 적용이 시작/완료된 경우도 이전 세대로 통과시키지 않는다.
+            AppliedBiasResult confirmed = _readAppliedBias?.Invoke(cam)
+                ?? throw new InvalidOperationException("BIAS 확인 중 현재 적용 상태가 초기화되었습니다.");
+            EnsureSameBiasApplication(confirmed, applied.ApplicationId, applied.Operation, applied.Json);
+            return applied;
+        }
+
+        private static void EnsureSameBiasApplication(AppliedBiasResult applied, string applicationId, string sourceOperation, string json)
+        {
+            if (!string.Equals(applied.ApplicationId, applicationId, StringComparison.Ordinal)
+                || !string.Equals(applied.Operation, sourceOperation, StringComparison.Ordinal)
+                || !string.Equals(applied.Json, json, StringComparison.Ordinal))
+                throw new InvalidOperationException("BIAS 적용 세대가 변경되었습니다. 현재 적용값 확인부터 다시 실행해 주세요.");
+        }
+
+        private void EnsureBiasApplicationMatchesCurrent(CameraDescriptor cam, AppliedBiasResult? applied, string json)
+        {
+            if (applied is null)
+            {
+                if (_readAppliedBias is not null)
+                    throw new InvalidOperationException("이번 BIAS 처리의 적용 상태를 확인하지 못했습니다.");
+                EnsureBiasJsonMatchesCurrent(cam, json); // readBiasJson만 제공하는 기존 자동 연결의 호환 경로
+                return;
+            }
+            AppliedBiasResult current = ReadCurrentAppliedBias(cam, applied.Operation);
+            EnsureSameBiasApplication(current, applied.ApplicationId, applied.Operation, json);
         }
 
         private void EnsureRequiredBiasIsCurrent(CameraDescriptor cam, CaptureCommandMessage cmd)
@@ -608,7 +657,7 @@ namespace HeatingCameraSystem.Protocols.Cameras
                 return;
             }
 
-            if (BiasExecutionPolicy.IsBiasOperation(msg.Op))
+            if (BiasExecutionPolicy.IsBiasOperation(msg.Op) || msg.Op == CameraControlOps.BiasUseCurrent)
             {
                 await HandleBiasAsync(cam, msg).ConfigureAwait(false);
                 return;
@@ -654,7 +703,10 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
             bool entered = false;
             BiasOperationResult result;
-            string context = $"agent={cam.AgentId} request={msg.RequestId} op={msg.Op} target={msg.BiasTargetLevel}";
+            bool useCurrent = msg.Op == CameraControlOps.BiasUseCurrent;
+            string sourceOperation = useCurrent ? msg.BiasSourceOperation : msg.Op;
+            AppliedBiasResult? appliedForAttempt = null;
+            string context = $"agent={cam.AgentId} request={msg.RequestId} op={msg.Op} sourceOp={sourceOperation} target={msg.BiasTargetLevel}";
             try
             {
                 if (IsRequestCancelled(cam.AgentId, CameraControlOps.Bias, msg.RequestId))
@@ -665,18 +717,57 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
                 active.Cancellation.Token.ThrowIfCancellationRequested();
                 _verifiedBias.TryRemove(cam.AgentId, out _);
+                AppliedBiasResult? selectedApplication = null;
+                string? prerequisiteError = null;
+                if (useCurrent)
+                {
+                    if (!msg.RequireBiasFile)
+                        prerequisiteError = "현재 BIAS 사용 요청은 필수 파일 저장을 포함해야 합니다.";
+                    else if (_readAppliedBias is null)
+                        prerequisiteError = "현재 BIAS 적용 상태 조회가 연결되지 않았습니다. AgentUI를 업데이트해 주세요.";
+                    else
+                    {
+                        try { selectedApplication = ReadCurrentAppliedBias(cam, sourceOperation); }
+                        catch (Exception ex) { prerequisiteError = ex.Message; }
+                    }
+                }
                 result = await BiasOperationRunner.RunAsync(
-                    ct => _biasControlHandler is null
-                        ? Task.FromException(new InvalidOperationException("취소 가능한 BIAS 처리기가 없습니다. AgentUI를 업데이트해 주세요."))
-                        : _biasControlHandler(cam, msg, ct),
-                    () => _readBiasJson?.Invoke(cam),
+                    async ct =>
+                    {
+                        if (prerequisiteError is not null)
+                            throw new InvalidOperationException(prerequisiteError);
+                        if (_biasControlHandler is null)
+                            throw new InvalidOperationException("취소 가능한 BIAS 처리기가 없습니다. AgentUI를 업데이트해 주세요.");
+
+                        appliedForAttempt = null;
+                        if (useCurrent && selectedApplication is not null)
+                            EnsureBiasApplicationMatchesCurrent(cam, selectedApplication, selectedApplication.Json);
+                        // biasUseCurrent는 Op를 그대로 전달한다. App은 현재 레지스터 읽기만 검증하며
+                        // 자동 보정 탐색으로 바꾸지 않는다. 파일 재시도도 선택한 적용 세대를 유지한다.
+                        await _biasControlHandler(cam, msg, ct).ConfigureAwait(false);
+                        ct.ThrowIfCancellationRequested();
+                        if (_readAppliedBias is not null)
+                        {
+                            AppliedBiasResult applied = ReadCurrentAppliedBias(cam, sourceOperation);
+                            if (useCurrent && selectedApplication is not null)
+                                EnsureSameBiasApplication(applied, selectedApplication.ApplicationId, selectedApplication.Operation, selectedApplication.Json);
+                            appliedForAttempt = applied;
+                            LogBias($"[BIAS APPLIED] VERIFIED {context} applicationId={applied.ApplicationId} source={applied.Source}");
+                        }
+                    },
+                    () =>
+                    {
+                        string? json = appliedForAttempt?.Json ?? _readBiasJson?.Invoke(cam);
+                        if (json is not null) EnsureBiasApplicationMatchesCurrent(cam, appliedForAttempt, json);
+                        return json;
+                    },
                     async (json, ct) =>
                     {
                         if (_productionSink is null || msg.BiasStorage is null)
                             throw new InvalidOperationException("BIAS 저장 경로 또는 생산 저장 설정이 없습니다.");
-                        EnsureBiasJsonMatchesCurrent(cam, json);
+                        EnsureBiasApplicationMatchesCurrent(cam, appliedForAttempt, json);
                         string path = await _productionSink.WriteAndVerifyBiasJsonAsync(cam, msg.BiasStorage, json, ct).ConfigureAwait(false);
-                        EnsureBiasJsonMatchesCurrent(cam, json);
+                        EnsureBiasApplicationMatchesCurrent(cam, appliedForAttempt, json);
                         return path;
                     },
                     msg.RequireBiasFile,
@@ -685,8 +776,13 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     LogBias,
                     active.Cancellation.Token).ConfigureAwait(false);
                 active.Cancellation.Token.ThrowIfCancellationRequested();
-                if (result.IsSuccess && msg.RequireBiasFile)
-                    _verifiedBias[cam.AgentId] = new VerifiedBias(msg.RequestId, result.BiasJson, result.FilePath, msg.BiasAttemptTimeoutSeconds);
+                if (result.IsSuccess)
+                {
+                    EnsureBiasApplicationMatchesCurrent(cam, appliedForAttempt, result.BiasJson);
+                    if (msg.RequireBiasFile)
+                        _verifiedBias[cam.AgentId] = new VerifiedBias(msg.RequestId, result.BiasJson, result.FilePath, msg.BiasAttemptTimeoutSeconds,
+                            appliedForAttempt?.ApplicationId ?? string.Empty, sourceOperation);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -707,7 +803,9 @@ namespace HeatingCameraSystem.Protocols.Cameras
 
             // 작업이 끝나고 파일 확인 결과가 확정된 뒤에만 ACK한다.
             await PublishControlAckAsync(cam, msg, result.IsSuccess, result.Message,
-                result.IsSuccess && msg.RequireBiasFile, result.FilePath, result.Attempts).ConfigureAwait(false);
+                result.IsSuccess && msg.RequireBiasFile, result.FilePath, result.Attempts,
+                result.IsSuccess ? appliedForAttempt?.ApplicationId ?? string.Empty : string.Empty,
+                result.IsSuccess ? sourceOperation : string.Empty).ConfigureAwait(false);
         }
 
         private void LogBias(string message)
@@ -718,7 +816,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
         }
 
         private async Task PublishControlAckAsync(CameraDescriptor cam, CameraControlMessage msg, bool success, string message,
-            bool biasFileSaved = false, string biasFilePath = "", int attempts = 0)
+            bool biasFileSaved = false, string biasFilePath = "", int attempts = 0,
+            string biasApplicationId = "", string biasSourceOperation = "")
         {
             try
             {
@@ -733,6 +832,8 @@ namespace HeatingCameraSystem.Protocols.Cameras
                     BiasFileSaved = biasFileSaved,
                     BiasFilePath = biasFilePath,
                     Attempts = attempts,
+                    BiasApplicationId = biasApplicationId,
+                    BiasSourceOperation = biasSourceOperation,
                     Timestamp = DateTime.UtcNow
                 }).ConfigureAwait(false);
             }

@@ -26,6 +26,9 @@ namespace HeatingCameraSystem.Core.Models
         /// <summary>기존 생산 저장 규칙을 그대로 쓰는 BIAS 결과 저장 문맥.</summary>
         public CaptureCommandMessage? BiasStorage { get; set; }
 
+        /// <summary>biasUseCurrent가 확인할 기존 보정 대역(biasLow/biasMid/biasHigh).</summary>
+        public string BiasSourceOperation { get; set; } = string.Empty;
+
         /// <summary>BIAS 한 시도의 제한 시간. 재시도는 Agent에서 최초 포함 최대 4회 수행한다.</summary>
         public int BiasAttemptTimeoutSeconds { get; set; } = BiasExecutionPolicy.DefaultAttemptTimeoutSeconds;
 
@@ -67,6 +70,9 @@ namespace HeatingCameraSystem.Core.Models
 
         /// <summary>지정한 요청의 BIAS 보정·파일 저장·재시도를 함께 취소한다.</summary>
         public const string BiasAbort = "biasAbort";
+
+        /// <summary>현재 적용한 BIAS를 읽어 확인하고 이번 레시피 저장 문맥에 채택한다. 자동 탐색하지 않는다.</summary>
+        public const string BiasUseCurrent = "biasUseCurrent";
 
         // [S7] 카메라 단위 런타임 로드/언로드 — 위의 시리얼 Run/Stop과는 다른 개념이다.
         // Manager(재정의된 AgentSupervisor)가 AgentUI 프로세스를 죽이지 않고 그 안의 카메라
@@ -119,6 +125,8 @@ namespace HeatingCameraSystem.Core.Models
         public bool BiasFileSaved { get; set; }
         public string BiasFilePath { get; set; } = string.Empty;
         public int Attempts { get; set; }
+        public string BiasApplicationId { get; set; } = string.Empty;
+        public string BiasSourceOperation { get; set; } = string.Empty;
         public DateTime Timestamp { get; set; }
     }
 }

@@ -319,6 +319,36 @@
                                                     <Button Command="{Binding RunBiasMidCommand}" Content="BIAS MID" Margin="0,0,4,4" Padding="8,3"/>
                                                     <Button Command="{Binding RunBiasHighCommand}" Content="BIAS HIGH" Margin="0,0,4,4" Padding="8,3"/>
                                                 </WrapPanel>
+                                                <Border Margin="2,6,2,2" Padding="8" BorderBrush="#3C3C3C" BorderThickness="1" CornerRadius="3">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{loc:Loc Cam_ManualBiasTitle}" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{loc:Loc Cam_ManualBiasBandHint}" FontSize="11" Foreground="#B0B0B0" TextWrapping="Wrap" Margin="0,4,0,6"/>
+                                                        <Grid IsEnabled="{Binding CanEditBias}">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="Auto"/>
+                                                                <RowDefinition Height="Auto"/>
+                                                            </Grid.RowDefinitions>
+                                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Cam_ManualBiasBand}" FontSize="11" Margin="0,0,4,3"/>
+                                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{loc:Loc Cam_ManualBiasValue}" FontSize="11" Margin="4,0,0,3"/>
+                                                            <ComboBox Grid.Row="1" Grid.Column="0" SelectedValuePath="Tag"
+                                                                      SelectedValue="{Binding ManualBiasOperation, Mode=TwoWay}" Margin="0,0,4,0">
+                                                                <ComboBoxItem Tag="biasLow" Content="{loc:Loc Cam_ManualBiasLow}"/>
+                                                                <ComboBoxItem Tag="biasMid" Content="{loc:Loc Cam_ManualBiasMid}"/>
+                                                                <ComboBoxItem Tag="biasHigh" Content="{loc:Loc Cam_ManualBiasHigh}"/>
+                                                            </ComboBox>
+                                                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ManualBiasValueText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                     ToolTip="{loc:Loc Cam_ManualBiasValueHint}" Margin="4,0,0,0" VerticalContentAlignment="Center"/>
+                                                        </Grid>
+                                                        <TextBlock Text="{loc:Loc Cam_ManualBiasValueHint}" FontSize="11" Foreground="#B0B0B0" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                                        <TextBlock Text="{Binding ManualBiasValuePreview}" FontSize="11" Foreground="#7CD97C" Margin="0,3,0,4"/>
+                                                        <Button Command="{Binding RestoreManualBiasCommand}" Content="{loc:Loc Cam_ManualBiasApply}"
+                                                                HorizontalAlignment="Left" Margin="0" Padding="8,3"/>
+                                                    </StackPanel>
+                                                </Border>
                                             </StackPanel>
                                         </Border>
                                         <TextBlock Text="{Binding SerialStatus}" Margin="2,4,0,0" TextWrapping="Wrap">

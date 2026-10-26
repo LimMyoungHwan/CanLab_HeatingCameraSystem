@@ -256,6 +256,12 @@ namespace HeatingCameraSystem.AgentUI
                         if (panel is null)
                             throw new InvalidOperationException($"카메라 패널이 없습니다: {descriptor.AgentId}");
 
+                        if (controlMessage.Op == CameraControlOps.BiasUseCurrent)
+                        {
+                            await panel.VerifyAppliedBiasAsync(controlMessage.BiasSourceOperation, cancellationToken);
+                            return;
+                        }
+
                         double? target = controlMessage.BiasTargetLevel > 0 ? controlMessage.BiasTargetLevel : null;
                         await panel.RunBiasOperationAsync(controlMessage.Op, target, cancellationToken);
                     }).Task.Unwrap();
@@ -268,7 +274,9 @@ namespace HeatingCameraSystem.AgentUI
                         AgentUiLog.Logger.Warning("{BiasDiagnostic}", message);
                     else
                         AgentUiLog.Logger.Information("{BiasDiagnostic}", message);
-                });
+                },
+                readAppliedBias: descriptor => dispatcher.Invoke(() => _mainViewModel?.Cameras
+                    .FirstOrDefault(panel => panel.AgentId == descriptor.AgentId)?.LastAppliedBias));
             _natsConnector.Start(config.NatsUrl);
 
             if (!config.SimulationMode)

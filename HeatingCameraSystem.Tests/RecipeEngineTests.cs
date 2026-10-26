@@ -1096,8 +1096,11 @@ namespace HeatingCameraSystem.Tests
             plc.Verify(service => service.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>()), Times.Never);
         }
 
-        [Fact]
-        public async Task ExecuteRecipeAsync_ColdCaptureWithoutBiasProof_IgnoresForkOptionAndStopsBeforeMove()
+        [Theory]
+        [InlineData(BlackBodyRole.Cold)]
+        [InlineData(BlackBodyRole.Hot)]
+        [InlineData(BlackBodyRole.Room)]
+        public async Task ExecuteRecipeAsync_CurrentBiasCaptureFailure_IgnoresForkOptionAndStopsBeforeMove(BlackBodyRole role)
         {
             var (plc, nats, history, controls) = WireRequiredBiasRoundTrip();
             Action<CaptureResultMessage>? receive = null;
@@ -1117,6 +1120,7 @@ namespace HeatingCameraSystem.Tests
             var recipe = RequiredBiasRecipe();
             recipe.Steps.RemoveAt(0);
             recipe.Steps[0].WaitForCaptureResult = false;
+            recipe.Steps[0].CameraTargets[0].TargetBlackBody = role;
 
             RecipeNgException error = await Assert.ThrowsAsync<RecipeNgException>(() =>
                 new RecipeEngine(plc.Object, nats.Object, history.Object)
@@ -1124,26 +1128,31 @@ namespace HeatingCameraSystem.Tests
 
             Assert.Equal(AlarmCodes.BiasFileFailed, error.AlarmCode);
             Assert.Contains("current BIAS result missing after 4 attempts", error.Message);
-            Assert.Empty(controls);
+            CameraControlMessage reuse = Assert.Single(controls);
+            Assert.Equal(CameraControlOps.BiasUseCurrent, reuse.Op);
             nats.Verify(service => service.PublishCaptureCommandAsync(It.Is<CaptureCommandMessage>(command =>
-                command.WriteBiasJson && command.RequiredBiasRequestId == string.Empty)), Times.Once);
+                command.WriteBiasJson == (role == BlackBodyRole.Cold) && command.RequiredBiasRequestId == reuse.RequestId)), Times.Once);
             plc.Verify(service => service.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>()), Times.Never);
             plc.Verify(service => service.MoveServoToPositionAsync(It.IsAny<int>()), Times.Never);
         }
 
-        [Fact]
-        public async Task ExecuteRecipeAsync_CancelledBias_SendsAbortForOriginalRequestAndDoesNotContinue()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task ExecuteRecipeAsync_CancelledBias_SendsAbortForOriginalRequestAndDoesNotContinue(bool useCurrent)
         {
             using var cancellation = new CancellationTokenSource();
             var (plc, nats, history, controls) = WireRequiredBiasRoundTrip(
                 respond: false, onBias: _ => cancellation.Cancel());
+            var recipe = RequiredBiasRecipe();
+            if (useCurrent) recipe.Steps.RemoveAt(0);
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
                 new RecipeEngine(plc.Object, nats.Object, history.Object)
-                    .ExecuteRecipeAsync(RequiredBiasRecipe(), cancellation.Token).WaitAsync(TimeSpan.FromSeconds(5)));
+                    .ExecuteRecipeAsync(recipe, cancellation.Token).WaitAsync(TimeSpan.FromSeconds(5)));
 
             Assert.Equal(2, controls.Count);
-            Assert.Equal(CameraControlOps.BiasLow, controls[0].Op);
+            Assert.Equal(useCurrent ? CameraControlOps.BiasUseCurrent : CameraControlOps.BiasLow, controls[0].Op);
             Assert.Equal(CameraControlOps.BiasAbort, controls[1].Op);
             Assert.Equal(controls[0].RequestId, controls[1].TargetRequestId);
             nats.Verify(service => service.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Never);
@@ -1186,6 +1195,167 @@ namespace HeatingCameraSystem.Tests
             Assert.NotEqual(controls[0].RequestId, controls[1].RequestId);
         }
 
+        [Fact]
+        public async Task ExecuteRecipeAsync_LowBiasAcrossConditions_AdoptsCurrentValueWithoutSearchingAgain()
+        {
+            var (plc, nats, history, controls) = WireRequiredBiasRoundTrip();
+            WireCaptureRoundTrip(nats);
+            var recipe = RequiredBiasRecipe();
+            RecipeStep bias = recipe.Steps[0];
+            RecipeStep capture = recipe.Steps[1];
+            RecipeStep move = recipe.Steps[2];
+            recipe.Steps = new List<RecipeStep>
+            {
+                ChamberConditionStep(-30), bias, capture,
+                ChamberConditionStep(-10), ProductionCaptureStep(ChamberRange.Low, BlackBodyRole.Cold),
+                ChamberConditionStep(10), ProductionCaptureStep(ChamberRange.Low, BlackBodyRole.Room),
+                ChamberConditionStep(-30), ProductionCaptureStep(ChamberRange.Low, BlackBodyRole.Hot),
+                move
+            };
+
+            await new RecipeEngine(plc.Object, nats.Object, history.Object)
+                .ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(new[] { CameraControlOps.BiasLow, CameraControlOps.BiasUseCurrent,
+                CameraControlOps.BiasUseCurrent, CameraControlOps.BiasUseCurrent }, controls.ConvertAll(command => command.Op));
+            Assert.All(controls.GetRange(1, 3), command => Assert.Equal(CameraControlOps.BiasLow, command.BiasSourceOperation));
+            var captures = nats.Invocations
+                .Where(invocation => invocation.Method.Name == nameof(INatsCommunicationService.PublishCaptureCommandAsync))
+                .Select(invocation => Assert.IsType<CaptureCommandMessage>(invocation.Arguments[0])).ToArray();
+            Assert.Equal(new[] { "LNN30", "LNN10", "LNP10", "LNN30" }, captures.Select(command => command.ConditionFolder).ToArray());
+            Assert.Equal(controls.ConvertAll(command => command.RequestId), captures.Select(command => command.RequiredBiasRequestId).ToArray());
+            Assert.Equal(4, controls.Select(command => command.RequestId).Distinct().Count());
+            nats.Verify(service => service.SubscribeCameraControlAckAsync("Agent_1", It.IsAny<Action<CameraControlAckMessage>>()), Times.Once);
+            plc.Verify(service => service.MoveToCoordinateAsync(10, 20), Times.Once);
+        }
+
+        [Theory]
+        [InlineData(ChamberRange.Low, -10f, CameraControlOps.BiasLow, "LNN10")]
+        [InlineData(ChamberRange.Low, 10f, CameraControlOps.BiasLow, "LNP10")]
+        [InlineData(ChamberRange.Mid, 25f, CameraControlOps.BiasMid, "RPP25")]
+        [InlineData(ChamberRange.High, 55f, CameraControlOps.BiasHigh, "H1PP55")]
+        public async Task ExecuteRecipeAsync_NewRunAdoptsAppliedBias_WithRequestedBandAndFreshProof(
+            ChamberRange range, float targetTemperature, string sourceOperation, string conditionFolder)
+        {
+            var (plc, nats, history, controls) = WireRequiredBiasRoundTrip();
+            plc.Setup(service => service.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { TargetTemperature = targetTemperature });
+            WireCaptureRoundTrip(nats);
+            var recipe = RequiredBiasRecipe();
+            recipe.Steps = new List<RecipeStep> { ProductionCaptureStep(range, BlackBodyRole.Room) };
+            var engine = new RecipeEngine(plc.Object, nats.Object, history.Object);
+
+            await engine.ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(5));
+            await engine.ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(2, controls.Count);
+            Assert.NotEqual(controls[0].RequestId, controls[1].RequestId);
+            Assert.All(controls, command =>
+            {
+                Assert.Equal(CameraControlOps.BiasUseCurrent, command.Op);
+                Assert.Equal(sourceOperation, command.BiasSourceOperation);
+                Assert.True(command.RequireBiasFile);
+                CaptureCommandMessage storage = Assert.IsType<CaptureCommandMessage>(command.BiasStorage);
+                Assert.Equal(conditionFolder, storage.ConditionFolder);
+                Assert.Equal(recipe.SaveRootPath, storage.StorageRootUnc);
+                Assert.True(storage.WriteBiasJson);
+                nats.Verify(service => service.PublishCaptureCommandAsync(It.Is<CaptureCommandMessage>(capture =>
+                    capture.RequiredBiasRequestId == command.RequestId && capture.ConditionFolder == conditionFolder)), Times.Once);
+            });
+            plc.Verify(service => service.SetTargetTemperatureAsync(It.IsAny<float>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData(false, "bias.json", 1, "applied", CameraControlOps.BiasLow)]
+        [InlineData(true, "", 1, "applied", CameraControlOps.BiasLow)]
+        [InlineData(true, "bias.json", 0, "applied", CameraControlOps.BiasLow)]
+        [InlineData(true, "bias.json", 1, "", CameraControlOps.BiasLow)]
+        [InlineData(true, "bias.json", 1, "applied", CameraControlOps.BiasHigh)]
+        public async Task ExecuteRecipeAsync_CurrentBiasMissingProofOrWrongBand_StopsBeforeCaptureAndMove(
+            bool fileSaved, string filePath, int attempts, string applicationId, string sourceOperation)
+        {
+            var (plc, nats, history, controls) = WireRequiredBiasRoundTrip(ack =>
+            {
+                ack.BiasFileSaved = fileSaved;
+                ack.BiasFilePath = filePath;
+                ack.Attempts = attempts;
+                ack.BiasApplicationId = applicationId;
+                ack.BiasSourceOperation = sourceOperation;
+            });
+            var recipe = RequiredBiasRecipe();
+            recipe.Steps.RemoveAt(0);
+            AlarmSink.Entries.Clear();
+
+            RecipeNgException error = await Assert.ThrowsAsync<RecipeNgException>(() =>
+                new RecipeEngine(plc.Object, nats.Object, history.Object)
+                    .ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(5)));
+
+            Assert.Equal(AlarmCodes.BiasFileFailed, error.AlarmCode);
+            Assert.Equal(CameraControlOps.BiasUseCurrent, Assert.Single(controls).Op);
+            nats.Verify(service => service.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Never);
+            plc.Verify(service => service.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>()), Times.Never);
+            Assert.Contains(AlarmSink.Entries, entry => entry.Code == AlarmCodes.BiasFileFailed && entry.Message.Contains("NG"));
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_CurrentBiasUnsupported_DoesNotFallBackToAutomaticSearch()
+        {
+            var (plc, nats, history, controls) = WireRequiredBiasRoundTrip(ack =>
+            {
+                ack.IsSuccess = false;
+                ack.Attempts = 0;
+                ack.Message = "unknown camera control op: biasUseCurrent";
+            });
+            var recipe = RequiredBiasRecipe();
+            recipe.Steps.RemoveAt(0);
+
+            RecipeNgException error = await Assert.ThrowsAsync<RecipeNgException>(() =>
+                new RecipeEngine(plc.Object, nats.Object, history.Object)
+                    .ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(5)));
+
+            Assert.Contains("unknown camera control op", error.Message);
+            Assert.Equal(CameraControlOps.BiasUseCurrent, Assert.Single(controls).Op);
+            nats.Verify(service => service.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Never);
+            plc.Verify(service => service.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ExecuteRecipeAsync_RequiredStorageCannotBeResolved_StopsBeforeCaptureAndMove()
+        {
+            var (plc, nats, history, controls) = WireRequiredBiasRoundTrip();
+            plc.Setup(service => service.ReadStatusAsync()).ThrowsAsync(new InvalidOperationException("PLC target unavailable"));
+            plc.Setup(service => service.GetCurrentTemperatureAsync()).ThrowsAsync(new InvalidOperationException("PLC temperature unavailable"));
+            var recipe = RequiredBiasRecipe();
+            recipe.Steps.RemoveAt(0);
+
+            RecipeNgException error = await Assert.ThrowsAsync<RecipeNgException>(() =>
+                new RecipeEngine(plc.Object, nats.Object, history.Object)
+                    .ExecuteRecipeAsync(recipe).WaitAsync(TimeSpan.FromSeconds(5)));
+
+            Assert.Equal(AlarmCodes.BiasFileFailed, error.AlarmCode);
+            Assert.Empty(controls);
+            nats.Verify(service => service.PublishCaptureCommandAsync(It.IsAny<CaptureCommandMessage>()), Times.Never);
+            plc.Verify(service => service.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>()), Times.Never);
+        }
+
+        private static RecipeStep ChamberConditionStep(double temperature) => new()
+        {
+            Kind = RecipeStepKind.ChamberControl,
+            TargetChamberTemperature = temperature,
+            WaitForChamberStabilization = false
+        };
+
+        private static RecipeStep ProductionCaptureStep(ChamberRange range, BlackBodyRole role) => new()
+        {
+            Kind = RecipeStepKind.CameraCommand,
+            CameraOperation = CameraControlOps.Capture,
+            ShotCount = 1,
+            WaitForCaptureResult = false,
+            CameraTargets = new List<RecipeCameraTarget>
+            {
+                new() { AgentId = "Agent_1", CameraIndex = 0, TargetChamber = range, TargetBlackBody = role }
+            }
+        };
+
         private static Recipe RequiredBiasRecipe() => new()
         {
             Name = "LN30 BIAS NG 회귀검증",
@@ -1214,31 +1384,43 @@ namespace HeatingCameraSystem.Tests
             var nats = new Mock<INatsCommunicationService>();
             var history = new Mock<ICaptureHistoryRepository>();
             var controls = new List<CameraControlMessage>();
-            var callbacks = new Dictionary<string, Action<CameraControlAckMessage>>();
             plc.Setup(service => service.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { TargetTemperature = -30 });
             plc.Setup(service => service.MoveToCoordinateAsync(It.IsAny<float>(), It.IsAny<float>())).Returns(Task.CompletedTask);
             history.Setup(service => service.InsertAsync(It.IsAny<CaptureHistoryRecord>())).Returns(Task.CompletedTask);
             nats.Setup(service => service.SubscribeCaptureResultAsync(It.IsAny<Action<CaptureResultMessage>>())).Returns(Task.CompletedTask);
+            WireBiasAcknowledgements(nats, controls, changeAck, respond, onBias);
+            return (plc, nats, history, controls);
+        }
+
+        private static void WireBiasAcknowledgements(
+            Mock<INatsCommunicationService> nats, List<CameraControlMessage>? controls = null,
+            Action<CameraControlAckMessage>? changeAck = null, bool respond = true, Action<CameraControlMessage>? onBias = null)
+        {
+            var callbacks = new Dictionary<string, Action<CameraControlAckMessage>>();
             nats.Setup(service => service.SubscribeCameraControlAckAsync(It.IsAny<string>(), It.IsAny<Action<CameraControlAckMessage>>()))
                 .Callback<string, Action<CameraControlAckMessage>>((agent, callback) => callbacks[agent] = callback)
                 .Returns(Task.CompletedTask);
             nats.Setup(service => service.PublishCameraControlAsync(It.IsAny<CameraControlMessage>()))
                 .Callback<CameraControlMessage>(command =>
                 {
-                    controls.Add(command);
-                    if (!BiasExecutionPolicy.IsBiasOperation(command.Op)) return;
+                    controls?.Add(command);
+                    if (!BiasExecutionPolicy.IsBiasOperation(command.Op) && command.Op != CameraControlOps.BiasUseCurrent) return;
                     onBias?.Invoke(command);
                     if (!respond) return;
+                    CaptureCommandMessage? storage = command.BiasStorage;
                     var ack = new CameraControlAckMessage
                     {
                         AgentId = command.AgentId, CameraIndex = command.CameraIndex, Op = command.Op, RequestId = command.RequestId,
-                        IsSuccess = true, BiasFileSaved = true, BiasFilePath = @"C:\BiasTest\544112136_LN30-test\LNN30\bias.json", Attempts = 1
+                        IsSuccess = true, BiasFileSaved = true, Attempts = 1,
+                        BiasFilePath = System.IO.Path.Combine(storage?.StorageRootUnc ?? System.IO.Path.GetTempPath(),
+                            $"544112136_{storage?.ProductNumber}", storage?.ConditionFolder ?? "unknown", "bias.json"),
+                        BiasApplicationId = $"applied-{command.AgentId}",
+                        BiasSourceOperation = command.Op == CameraControlOps.BiasUseCurrent ? command.BiasSourceOperation : command.Op
                     };
                     changeAck?.Invoke(ack);
                     callbacks[command.AgentId](ack);
                 })
                 .Returns(Task.CompletedTask);
-            return (plc, nats, history, controls);
         }
 
         [Fact]
@@ -1551,6 +1733,7 @@ namespace HeatingCameraSystem.Tests
             var mockNats = new Mock<INatsCommunicationService>();
             var mockHistory = new Mock<ICaptureHistoryRepository>();
             var mockMeasure = new Mock<IRecipeMeasurementRepository>();
+            WireBiasAcknowledgements(mockNats);
 
             mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { ServoXBusy = false, ServoYBusy = false, TargetTemperature = 25.0f });
             mockPlc.Setup(p => p.GetCurrentTemperatureAsync()).ReturnsAsync(25.0f);
@@ -1643,6 +1826,7 @@ namespace HeatingCameraSystem.Tests
             var mockPlc = new Mock<IPlcController>();
             var mockNats = new Mock<INatsCommunicationService>();
             var mockHistory = new Mock<ICaptureHistoryRepository>();
+            WireBiasAcknowledgements(mockNats);
 
             // 챔버 스텝이 없는 레시피라 조건 폴더는 PLC가 들고 있는 목표 온도를 쓴다(실측 24.8이 아니다).
             mockPlc.Setup(p => p.ReadStatusAsync()).ReturnsAsync(new PlcStatusSnapshot { TargetTemperature = 25.0f });
@@ -1724,6 +1908,7 @@ namespace HeatingCameraSystem.Tests
             var mockPlc = new Mock<IPlcController>();
             var mockNats = new Mock<INatsCommunicationService>();
             var mockHistory = new Mock<ICaptureHistoryRepository>();
+            WireBiasAcknowledgements(mockNats);
 
             // 승온이 아직 안 끝난 상황: 목표는 40이지만 실측은 26.6이다. 예전 규칙(실측 기준)이면
             // RPP25로 저장되고, 목표 기준이면 RPP40으로 저장된다.
