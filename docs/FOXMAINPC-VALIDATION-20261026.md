@@ -27,8 +27,8 @@
 | 빌드 환경 | Windows, .NET SDK 10.0.401, 솔루션의 기존 .NET 8 대상 |
 | 전체 Debug 빌드 | 성공, 오류 0개, 경고 0개 |
 | 최초 실패 항목 집중 재검증 | 13개 통과 |
-| 최종 전체 자동 테스트 | 803개 통과, 실패 0개, 건너뜀 0개 |
-| 최종 전체 테스트 표시 시간 | 2분 30초 |
+| 최종 전체 자동 테스트 | 808개 통과, 실패 0개, 건너뜀 0개 |
+| 최종 전체 테스트 표시 시간 | 2분 31초 |
 | 결과 화면 후속 빌드 | 성공, 오류 0개, 경고 0개 |
 | 결과 화면 후속 집중 테스트 | `RecipeResultRenderingTests` 5개 통과, 실패 0개, 건너뜀 0개 |
 | 실제 챔버·카메라 운전 | 실행하지 않음 |
@@ -36,7 +36,7 @@
 최종 전체 테스트는 아래 명령으로 실행했다.
 
 ```powershell
-dotnet test HeatingCameraSystem.slnx --no-build --logger "trx;LogFileName=bias-integration-full-final.trx" --results-directory tmp/foxmain-bias-integration-20261026 --verbosity minimal
+dotnet test HeatingCameraSystem.slnx --no-build --logger "trx;LogFileName=final-review.trx" --results-directory tmp/foxmain-final-review-20261026 --verbosity minimal
 ```
 
 로컬 검증 파일:
@@ -44,10 +44,11 @@ dotnet test HeatingCameraSystem.slnx --no-build --logger "trx;LogFileName=bias-i
 - `tmp/foxmain-bias-integration-20261026/bias-integration-focused.trx`
 - `tmp/foxmain-bias-integration-20261026/bias-integration-full-final.trx`
 - `tmp/foxmain-korean-publish-20261026/korean-histogram.trx`
+- `tmp/foxmain-final-review-20261026/final-review.trx`
 
 ## 한글·히스토그램 작업 반영
 
-작업 전 수정돼 있던 아래 4개 파일을 별도 보존 후 복원했다. 최초 통합 때 미커밋으로 남겼던 수정도 사용자의 추가 요청에 따라 검토·보완해 같은 통합 브랜치에 커밋한다. 위 전체 테스트 803개는 기존 수정이 포함된 작업 트리에서 통과했다. 이후에는 설명 주석과 범례 숨김 검증을 보완하고 전체 빌드 및 결과 화면 테스트 5개를 다시 실행했다.
+작업 전 수정돼 있던 아래 4개 파일을 별도 보존 후 복원했다. 최초 통합 때 미커밋으로 남겼던 수정도 사용자의 추가 요청에 따라 검토·보완해 같은 통합 브랜치의 `c6c530c`에 반영했다. 최초 통합 전체 테스트 803개는 기존 수정이 포함된 작업 트리에서 통과했다. 이후에는 설명 주석과 범례 숨김 검증을 보완하고 전체 빌드 및 결과 화면 테스트 5개를 다시 실행했다.
 
 - `.gitignore`
 - `HeatingCameraSystem.Master/ViewModels/RecipeResultViewModel.cs`
@@ -59,6 +60,14 @@ dotnet test HeatingCameraSystem.slnx --no-build --logger "trx;LogFileName=bias-i
 렌더링 테스트는 평균선의 위치·색·점선, 통계 범례, 실제 렌더링 이미지의 빨간 픽셀, RAW 읽기 실패 시 화면 초기화를 검증한다. 기존 프로젝트 인계 문서 8개도 함께 추적하며 과거 RAW 저장 정책의 설명을 현행 동작과 구분했다.
 
 로컬 도구 상태(`.banyancode/`, `.opencode/`), 임시 검증·배포 산출물(`tmp/`), 이전 별도 체크아웃(`AnotherDevice/`)은 `.gitignore`로 제외하고 실제 파일은 유지한다. 최초 보존본은 stash `4b3ceb71d976be6bed4639e171f2e6dbef8272e1`에 남아 있다.
+
+## 최종 재검토와 현재 Bias 확인 상태 보완
+
+`c6c530c`를 기준으로 재시도·NG 중단, 파일 증빙, 수동 Bias 입력·재사용 경로를 다시 검토했다. Agent의 최초 1회 및 추가 3회 시도, 최종 파일 확인 후 성공 응답, Master의 실패 이후 촬영·이동 차단을 확인했다.
+
+수동 Bias 복원 후 실제 GSK_LSB가 달라지면 기록을 무효화하고 NG로 중단하지만, AgentUI에는 이전 복원 성공 문구가 남는 표시 문제를 발견했다. `VerifyAppliedBiasAsync`가 확인 성공·실패·취소에 맞춰 현재 상태 문구를 갱신하도록 수정했다. 일시적 읽기 실패 뒤 재시도가 성공하면 정상 확인 문구로 바뀐다. 적용 ID와 기록 유지·무효화 정책, 예외 전파는 유지했다.
+
+AgentUI의 한국어·영어 리소스에 현재 Bias 확인 전용 문구를 추가했다. 대역 불일치, 실제 값 불일치, 통신 실패 후 복구, 취소를 실제 양 언어 표시 문구로 검증해 전체 테스트가 803개에서 808개로 늘었다. 수정 후 전체 빌드와 808개 테스트가 모두 통과했고 Visual Studio 진단도 오류 0개·경고 0개였다.
 
 ## 운용 안내
 

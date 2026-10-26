@@ -731,17 +731,20 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                     SetAppliedBias(null);
                     throw new InvalidOperationException($"GSK_LSB 읽기 불일치: 기록 0x{applied.GskLsb:X2}, 실제 0x{actual:X2}");
                 }
+                SerialStatus = BiasText("Cam_CurrentBiasVerified", BiasMode(operation).Mode, applied.GskLsb, actual);
                 AgentUiLog.Logger.Information("[{AgentId}] 현재 BIAS 읽기 확인: 적용ID={ApplicationId}, 모드={Operation}, 출처={Source}, GSK_LSB=0x{Actual:X2}",
                     _agentId, applied.ApplicationId, operation, applied.Source, actual);
             }
             catch (OperationCanceledException)
             {
                 SetAppliedBias(null);
+                SerialStatus = BiasText("Cam_CurrentBiasCancelled");
                 throw;
             }
             catch (Exception ex)
             {
                 // 읽기 통신 실패는 재시도할 수 있도록 기록을 유지한다. 확정 불일치는 위에서 무효화한다.
+                SerialStatus = BiasText("Cam_CurrentBiasFailed", ex.Message);
                 AgentUiLog.Logger.Warning(ex, "[{AgentId}] 현재 BIAS 확인 실패: 모드={Operation}, 원인={Reason}", _agentId, operation, ex.Message);
                 throw;
             }

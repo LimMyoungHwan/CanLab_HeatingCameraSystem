@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
+using HeatingCameraSystem.AgentUI.Localization;
 using HeatingCameraSystem.AgentUI.ViewModels;
 using HeatingCameraSystem.Core.Interfaces;
 using HeatingCameraSystem.Core.Models;
@@ -183,48 +184,83 @@ namespace HeatingCameraSystem.Tests
             Assert.Equal("0xFF (255)", fixture.Panel.ManualBiasValuePreview);
         }
 
-        [Fact]
-        public async Task Verify_WrongBand_InvalidatesRecordWithoutWriting()
+        [Theory]
+        [InlineData("ko", "현재 BIAS 확인 NG: ")]
+        [InlineData("en", "Current BIAS verification NG: ")]
+        public async Task Verify_WrongBand_InvalidatesRecordWithoutWriting(string language, string failurePrefix)
         {
+            using var localized = new BiasLanguageScope(language);
             using var fixture = new Fixture();
             await fixture.Panel.RestoreBiasAsync(CameraControlOps.BiasLow, 0x42, CancellationToken.None);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            InvalidOperationException failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 fixture.Panel.VerifyAppliedBiasAsync(CameraControlOps.BiasMid, CancellationToken.None));
 
             Assert.Null(fixture.Panel.LastAppliedBias);
+            Assert.Equal(failurePrefix + failure.Message, fixture.Panel.SerialStatus);
             Assert.Equal(1, fixture.BiasWrites);
             AssertNoPixelSearchOrPersistentSave(fixture);
         }
 
-        [Fact]
-        public async Task Verify_ChangedHardware_InvalidatesRecord()
+        [Theory]
+        [InlineData("ko", "현재 BIAS 확인 NG: ")]
+        [InlineData("en", "Current BIAS verification NG: ")]
+        public async Task Verify_ChangedHardware_InvalidatesRecord(string language, string failurePrefix)
         {
+            using var localized = new BiasLanguageScope(language);
             using var fixture = new Fixture();
             await fixture.Panel.RestoreBiasAsync(CameraControlOps.BiasLow, 0x42, CancellationToken.None);
             fixture.ReadOverride = 0x43;
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            InvalidOperationException failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 fixture.Panel.VerifyAppliedBiasAsync(CameraControlOps.BiasLow, CancellationToken.None));
 
             Assert.Null(fixture.Panel.LastAppliedBias);
+            Assert.Equal(failurePrefix + failure.Message, fixture.Panel.SerialStatus);
         }
 
-        [Fact]
-        public async Task Verify_TransientReadFailure_PreservesGenerationForRetry()
+        [Theory]
+        [InlineData("ko", "현재 BIAS 확인 NG: ", "현재 LOW BIAS 확인 완료: 기록 0x42, 읽기 0x42 일치.")]
+        [InlineData("en", "Current BIAS verification NG: ", "Current LOW BIAS verified: recorded 0x42, readback 0x42 matches.")]
+        public async Task Verify_TransientReadFailure_PreservesGenerationForRetry(string language, string failurePrefix, string successStatus)
         {
+            using var localized = new BiasLanguageScope(language);
             using var fixture = new Fixture();
             await fixture.Panel.RestoreBiasAsync(CameraControlOps.BiasLow, 0x42, CancellationToken.None);
             AppliedBiasResult applied = Assert.IsType<AppliedBiasResult>(fixture.Panel.LastAppliedBias);
             fixture.FailRead = true;
 
-            await Assert.ThrowsAsync<IOException>(() =>
+            IOException failure = await Assert.ThrowsAsync<IOException>(() =>
                 fixture.Panel.VerifyAppliedBiasAsync(CameraControlOps.BiasLow, CancellationToken.None));
 
             Assert.Same(applied, fixture.Panel.LastAppliedBias);
+            Assert.Equal(failurePrefix + failure.Message, fixture.Panel.SerialStatus);
             fixture.FailRead = false;
             await fixture.Panel.VerifyAppliedBiasAsync(CameraControlOps.BiasLow, CancellationToken.None);
             Assert.Same(applied, fixture.Panel.LastAppliedBias);
+            Assert.Equal(successStatus, fixture.Panel.SerialStatus);
+        }
+
+        [Theory]
+        [InlineData("ko", "현재 BIAS 확인 취소")]
+        [InlineData("en", "Current BIAS verification cancelled")]
+        public async Task Verify_Cancelled_InvalidatesRecordAndUpdatesStatus(string language, string cancelledStatus)
+        {
+            using var localized = new BiasLanguageScope(language);
+            using var fixture = new Fixture();
+            await fixture.Panel.RestoreBiasAsync(CameraControlOps.BiasLow, 0x42, CancellationToken.None);
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                fixture.Panel.VerifyAppliedBiasAsync(CameraControlOps.BiasLow, cancellation.Token));
+
+            Assert.Null(fixture.Panel.LastAppliedBias);
+            Assert.Null(fixture.Panel.LastBiasJson);
+            Assert.Equal(cancelledStatus, fixture.Panel.SerialStatus);
+            Assert.Equal(1, fixture.BiasWrites);
+            Assert.False(fixture.Panel.IsBiasBusy);
+            AssertNoPixelSearchOrPersistentSave(fixture);
         }
 
         [Fact]
@@ -341,6 +377,33 @@ namespace HeatingCameraSystem.Tests
             thread.SetApartmentState(ApartmentState.STA);
             thread.Start();
             return completed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        // 테스트 출력의 Resources/Lang에는 Master 번역이 들어간다. AgentUI의 실제 번역을
+        // 임시 언어 코드로 읽어 키 문자열이 아닌 표시 문구를 검증하고 사용자 선호는 저장하지 않는다.
+        private sealed class BiasLanguageScope : IDisposable
+        {
+            private readonly string _previousLanguage;
+            private readonly string _path;
+
+            public BiasLanguageScope(string language)
+            {
+                _previousLanguage = LocalizationManager.Instance.CurrentLanguage;
+                string code = "manual-bias-test-" + Guid.NewGuid().ToString("N");
+                _path = Path.Combine(AppContext.BaseDirectory, "Resources", "Lang", code + ".txt");
+                string source = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
+                    "..", "..", "..", "..", "HeatingCameraSystem.AgentUI", "Resources", "Lang", language + ".txt"));
+                Directory.CreateDirectory(Path.GetDirectoryName(_path)
+                    ?? throw new InvalidOperationException("Language directory missing."));
+                File.Copy(source, _path);
+                LocalizationManager.Instance.SetLanguage(code, persist: false);
+            }
+
+            public void Dispose()
+            {
+                try { LocalizationManager.Instance.SetLanguage(_previousLanguage, persist: false); }
+                finally { File.Delete(_path); }
+            }
         }
 
         private sealed class Fixture : IDisposable
