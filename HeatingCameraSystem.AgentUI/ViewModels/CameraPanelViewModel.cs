@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -13,8 +14,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 {
     /// <summary>
     /// 카메라 한 대의 패널 뷰모델: 라이브 열영상 표시와 시리얼(RUN/셔터/NUC) 제어를 담당한다.
-    /// 영상 출력은 시리얼과 의도적으로 분리되어 있다 — 시리얼이 null이면(포트 열기 실패 등)
-    /// 시리얼 명령은 no-op이 되고 시리얼 패널만 숨겨질 뿐, 영상 스트리밍은 계속된다.
+    /// 시리얼이 null이면(포트 열기 실패 등) 시리얼 패널을 숨기고 영상 스트리밍은 계속한다.
+    /// 보정이 필수인 원격 BIAS 명령은 시리얼 연결이 없으면 명시적으로 실패한다.
     /// </summary>
     public partial class CameraPanelViewModel : ObservableObject, IDisposable
     {
@@ -27,6 +28,8 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private readonly int _captureBurstCount;
         private readonly Func<CaptureResultMessage, Task>? _publishResult;
         private readonly CancellationTokenSource? _infoPollCts;
+        private readonly SemaphoreSlim _biasGate = new(1, 1);
+        private readonly CancellationTokenSource _biasLifetimeCts = new();
         private string? _lastTemperatureFailure;
 
         private const string Unknown = "—";
@@ -461,42 +464,117 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private const byte GfidValue = 0xAE;
 
         /// <summary>
-        /// 마지막 BIAS 보정 결과를 고객 규칙의 bias.json 형식으로 담아 둔다. cold 조건 캡처가
-        /// 이 문자열을 그대로 파일로 남긴다. 아직 보정한 적이 없으면 null이다.
+        /// 이번 BIAS 보정에서 최종 검증까지 마친 결과만 담는다. 시작·실패·취소 시에는 null로
+        /// 무효화하여 이전 성공 결과가 다음 레시피의 bias.json에 재사용되지 않게 한다.
         /// </summary>
         public string? LastBiasJson { get; private set; }
 
         [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task RunBiasLowAsync(double? targetOverride) => RunAutoBiasAsync("LOW", targetOverride ?? CameraBiasDefaults.Low, 0x93);
+        private Task RunBiasLowAsync(double? targetOverride) => RunManualBiasAsync(CameraControlOps.BiasLow, targetOverride);
 
         [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task RunBiasMidAsync(double? targetOverride) => RunAutoBiasAsync("MID", targetOverride ?? CameraBiasDefaults.Mid, 0xA3);
+        private Task RunBiasMidAsync(double? targetOverride) => RunManualBiasAsync(CameraControlOps.BiasMid, targetOverride);
 
         [RelayCommand(CanExecute = nameof(HasSerialControl))]
-        private Task RunBiasHighAsync(double? targetOverride) => RunAutoBiasAsync("HIGH", targetOverride ?? CameraBiasDefaults.High, 0xD3);
+        private Task RunBiasHighAsync(double? targetOverride) => RunManualBiasAsync(CameraControlOps.BiasHigh, targetOverride);
+
+        /// <summary>
+        /// 원격 레시피에서 호출하는 한 번의 보정 시도. 예외와 취소를 호출자에게 전달하며,
+        /// 재시도와 bias.json 저장은 Agent의 명령 처리기가 담당한다.
+        /// </summary>
+        public Task RunBiasOperationAsync(string operation, double? targetOverride, CancellationToken cancellationToken)
+            => operation switch
+            {
+                CameraControlOps.BiasLow => RunAutoBiasAsync("LOW", targetOverride ?? CameraBiasDefaults.Low, 0x93, cancellationToken),
+                CameraControlOps.BiasMid => RunAutoBiasAsync("MID", targetOverride ?? CameraBiasDefaults.Mid, 0xA3, cancellationToken),
+                CameraControlOps.BiasHigh => RunAutoBiasAsync("HIGH", targetOverride ?? CameraBiasDefaults.High, 0xD3, cancellationToken),
+                _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "지원하지 않는 BIAS 명령입니다.")
+            };
+
+        private async Task RunManualBiasAsync(string operation, double? targetOverride)
+        {
+            try
+            {
+                await RunBiasOperationAsync(operation, targetOverride, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                // 수동 버튼은 아래 상태·로그로 실패를 표시한다. 원격 실행은 위 메서드를 직접
+                // 호출하므로 예외가 ACK 처리까지 전파된다.
+            }
+        }
 
         /// <summary>
         /// 목표 레벨 ±<see cref="BiasTargetTolerance"/> 안에 드는 바이어스 값을 탐색해 적용한다.
         /// 레시피 스텝이 목표를 지정하면 그 값이, 없으면 모드별 기본값이 들어온다.
         /// Cint는 카메라 특성이라 목표와 무관하게 모드별로 고정한다.
         /// </summary>
-        private async Task RunAutoBiasAsync(string mode, double target, byte cint)
+        private async Task RunAutoBiasAsync(string mode, double target, byte cint, CancellationToken cancellationToken)
         {
-            double targetMin = target - BiasTargetTolerance;
-            double targetMax = target + BiasTargetTolerance;
+            // 수동 버튼과 원격 명령이 같은 카메라의 레지스터를 동시에 변경하지 못하게 한다.
+            // 대기열을 만들지 않아 취소된 이전 요청이 뒤늦게 보정을 시작하는 것도 막는다.
+            if (!await _biasGate.WaitAsync(0))
+            {
+                const string message = "이 카메라는 이미 BIAS 보정 중입니다.";
+                AgentUiLog.Logger.Warning("[{AgentId}] BIAS 중복 실행 거부: {Reason}", _agentId, message);
+                throw new InvalidOperationException(message);
+            }
 
-            if (_serial is null) return;
+            LastBiasJson = null;
+            try
+            {
+                using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _biasLifetimeCts.Token);
+                CancellationToken ct = linkedCancellation.Token;
+                ct.ThrowIfCancellationRequested();
+                ICameraSerialClient serial = _serial ?? throw new InvalidOperationException("BIAS 제어용 시리얼 연결이 없습니다.");
+                if (!double.IsFinite(target) || target <= 0 || target > 0x3FFF)
+                    throw new ArgumentOutOfRangeException(nameof(target), target, "BIAS 목표는 0보다 크고 16383 이하여야 합니다.");
 
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintMsb, TintMsbValue);
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.TintLsb, TintLsbValue);
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.Cint, cint);
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.GskMsb, GskMsbValue);
-            await _serial.SetBiasRegisterAsync(CameraBiasRegister.Gfid, GfidValue);
-            SerialStatus = $"BIAS: {target:F0} 탐색 중";
-            (byte best, double bestError) = await FindBiasInRangeAsync(targetMin, targetMax, MeasureBiasAsync);
-            await _serial.SetBiasAsync(best);
-            LastBiasJson = BuildBiasJson(cint, best);
-            SerialStatus = $"BIAS 완료: 0x{best:X2} (오차 {bestError:F0})";
+                double targetMin = target - BiasTargetTolerance;
+                double targetMax = target + BiasTargetTolerance;
+                AgentUiLog.Logger.Information("[{AgentId}] BIAS 보정 시작: 모드={Mode}, 목표={Target}, 허용범위={Minimum}~{Maximum}",
+                    _agentId, mode, target, targetMin, targetMax);
+                SerialStatus = $"BIAS: {target:F0} 탐색 중";
+
+                await serial.SetBiasRegisterAsync(CameraBiasRegister.TintMsb, TintMsbValue, ct);
+                await serial.SetBiasRegisterAsync(CameraBiasRegister.TintLsb, TintLsbValue, ct);
+                await serial.SetBiasRegisterAsync(CameraBiasRegister.Cint, cint, ct);
+                await serial.SetBiasRegisterAsync(CameraBiasRegister.GskMsb, GskMsbValue, ct);
+                await serial.SetBiasRegisterAsync(CameraBiasRegister.Gfid, GfidValue, ct);
+                (byte best, double bestError) = await FindBiasInRangeAsync(targetMin, targetMax,
+                    value => MeasureBiasAsync(serial, value, ct), ct);
+                if (!double.IsFinite(bestError) || bestError > 0)
+                    throw new InvalidOperationException($"BIAS 목표 범위 미달: 목표 {target:F0}±{BiasTargetTolerance:F0}, 최선 0x{best:X2}, 범위 밖 오차 {bestError:F0}");
+
+                // 탐색에서 본 값만 믿지 않고 최종 레지스터 적용 이후의 새 프레임으로 다시 확인한다.
+                double finalLevel = await MeasureBiasAsync(serial, best, ct);
+                ct.ThrowIfCancellationRequested();
+                if (!double.IsFinite(finalLevel) || finalLevel < targetMin || finalLevel > targetMax)
+                    throw new InvalidOperationException($"BIAS 최종 검증 실패: 목표 {target:F0}±{BiasTargetTolerance:F0}, 측정 {finalLevel:F0}, GSK_LSB=0x{best:X2}");
+
+                LastBiasJson = BuildBiasJson(cint, best);
+                SerialStatus = $"BIAS 완료: 0x{best:X2} (측정 {finalLevel:F0}, 오차 {Math.Abs(finalLevel - target):F0})";
+                AgentUiLog.Logger.Information("[{AgentId}] BIAS 보정 검증 완료: 모드={Mode}, 목표={Target}, 측정={Measured}, GSK_LSB={Bias}, 오차={Error}",
+                    _agentId, mode, target, finalLevel, best, Math.Abs(finalLevel - target));
+            }
+            catch (OperationCanceledException)
+            {
+                LastBiasJson = null;
+                SerialStatus = "BIAS 보정 취소";
+                AgentUiLog.Logger.Warning("[{AgentId}] BIAS 보정 취소: 모드={Mode}, 목표={Target}", _agentId, mode, target);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                LastBiasJson = null;
+                SerialStatus = $"BIAS NG: {ex.Message}";
+                AgentUiLog.Logger.Error(ex, "[{AgentId}] BIAS 보정 실패: 모드={Mode}, 목표={Target}, 원인={Reason}", _agentId, mode, target, ex.Message);
+                throw;
+            }
+            finally
+            {
+                _biasGate.Release();
+            }
         }
 
         // 키 이름과 값 표기(GSK_MSB만 정수, 나머지는 대문자 hex 문자열)는 후처리 툴이 파싱하는
@@ -514,22 +592,22 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
 
         private static async Task<(byte Value, double Error)> FindBiasInRangeAsync(
-            double targetMin, double targetMax, Func<byte, Task<double>> measure)
+            double targetMin, double targetMax, Func<byte, Task<double>> measure, CancellationToken ct)
         {
             var readings = new Dictionary<byte, double>();
             async Task<double> Read(byte value)
             {
+                ct.ThrowIfCancellationRequested();
                 if (!readings.TryGetValue(value, out double result))
                 {
                     result = await measure(value);
+                    ct.ThrowIfCancellationRequested();
+                    if (!double.IsFinite(result)) throw new InvalidOperationException("BIAS 측정값이 유효하지 않습니다.");
                     readings[value] = result;
                 }
                 return result;
             }
 
-            double atZero = await Read(0);
-            double atFull = await Read(byte.MaxValue);
-            bool increasing = atFull >= atZero;
             byte best = 0;
             double bestError = double.MaxValue;
             void Consider(byte value, double level)
@@ -538,11 +616,25 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 if (error < bestError) { best = value; bestError = error; }
             }
 
+            double atZero = await Read(0);
+            Consider(0, atZero);
+            if (bestError == 0) return (best, bestError);
+            double atFull = await Read(byte.MaxValue);
+            Consider(byte.MaxValue, atFull);
+            if (bestError == 0) return (best, bestError);
+            bool increasing = atFull >= atZero;
+
             for (int value = 0; value <= 0xF0; value += 0x10)
+            {
                 Consider((byte)value, await Read((byte)value));
+                if (bestError == 0) return (best, bestError);
+            }
             int coarse = best & 0xF0;
             for (int value = coarse; value <= Math.Min(coarse + 0x0F, 0xFF); value++)
+            {
                 Consider((byte)value, await Read((byte)value));
+                if (bestError == 0) return (best, bestError);
+            }
 
             int low = 0;
             int high = 0xFF;
@@ -591,27 +683,31 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             return (best, bestError);
         }
 
-        private async Task<double> MeasureBiasAsync(byte value)
+        private async Task<double> MeasureBiasAsync(ICameraSerialClient serial, byte value, CancellationToken ct)
         {
-            await _serial!.SetBiasAsync(value);
-            ThermalFrame frame = await _runtime.CaptureSnapshotAsync(
-                maxAge: TimeSpan.Zero,
-                nextFrameTimeout: TimeSpan.FromSeconds(2))
-                ?? throw new InvalidOperationException("BIAS 측정 프레임이 없습니다.");
+            ct.ThrowIfCancellationRequested();
+            await serial.SetBiasAsync(value, ct);
+            ct.ThrowIfCancellationRequested();
+            DateTimeOffset previousFrameAt = DateTimeOffset.Now;
             var measurements = new double[5];
             for (int sample = 0; sample < measurements.Length; sample++)
             {
-                if (sample > 0)
-                {
-                    frame = await _runtime.CaptureSnapshotAsync(
-                        maxAge: TimeSpan.Zero,
-                        nextFrameTimeout: TimeSpan.FromSeconds(2))
-                        ?? throw new InvalidOperationException("BIAS measurement frame is missing.");
-                }
+                ThermalFrame? frame = await _runtime.CaptureSnapshotAsync(
+                    maxAge: TimeSpan.Zero,
+                    nextFrameTimeout: TimeSpan.FromSeconds(2),
+                    ct: ct);
+                // CameraRuntime은 취소/시간 초과 때 과거 프레임을 반환할 수 있으므로 둘 다 직접 검증한다.
+                ct.ThrowIfCancellationRequested();
+                if (frame is null) throw new InvalidOperationException("BIAS 측정 프레임이 없습니다.");
+                if (frame.Timestamp <= previousFrameAt)
+                    throw new TimeoutException($"BIAS 새 프레임 대기 실패: GSK_LSB=0x{value:X2}, 마지막 프레임={frame.Timestamp:O}");
+                if (!frame.IsRadiometric || frame.Pixels.Length == 0)
+                    throw new InvalidOperationException("BIAS 측정에는 비어 있지 않은 Y16 원본 프레임이 필요합니다.");
+                previousFrameAt = frame.Timestamp;
                 long sum = 0;
                 foreach (ushort pixel in frame.Pixels) sum += pixel & 0x3FFF;
                 measurements[sample] = (double)sum / frame.Pixels.Length;
-                await Task.Delay(30);
+                await Task.Delay(30, ct);
             }
             Array.Sort(measurements);
             return measurements[2];
@@ -676,11 +772,13 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
         public void Dispose()
         {
+            _biasLifetimeCts.Cancel();
             _infoPollCts?.Cancel();
             _infoPollCts?.Dispose();
             _runtime.FrameReady -= OnFrameReady;
             _runtime.StatusChanged -= OnStatusChanged;
             _serial?.Dispose();
+            _biasLifetimeCts.Dispose();
         }
     }
 }
