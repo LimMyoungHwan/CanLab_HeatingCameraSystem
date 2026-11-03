@@ -42,6 +42,9 @@ namespace HeatingCameraSystem.AgentUI.Services
 
         public int CaptureBurstCount { get; set; } = 1;
 
+        /// <summary>다수 카메라 USB 부하 조정값. agentui.json에서만 편집하며 재시작 후 적용된다.</summary>
+        public AgentUiTuning Tuning { get; set; } = new();
+
         public string EffectiveStorageDir =>
             string.IsNullOrWhiteSpace(StoragePath)
                 ? Path.Combine(ConfigDir, "Captures")
@@ -97,6 +100,7 @@ namespace HeatingCameraSystem.AgentUI.Services
             HeartbeatSeconds = HeartbeatSeconds,
             CaptureImageFormat = CaptureImageFormat,
             CaptureBurstCount = CaptureBurstCount,
+            Tuning = Tuning,
             Cameras = Cameras.ToList()
         };
 
@@ -112,6 +116,8 @@ namespace HeatingCameraSystem.AgentUI.Services
         public bool SaveDraft(AgentUiConfig draft, bool requireRestart = false)
         {
             AgentUiConfig saved = draft.Copy();
+            // 설정 화면·원격 스냅샷은 Tuning을 싣지 않으므로 파일에서 편집한 값을 유지한다.
+            saved.Tuning = (_pendingRestart ?? this).Tuning;
             if (string.IsNullOrWhiteSpace(saved.NatsUrl)) throw new ArgumentException("NATS URL이 비어 있습니다.");
             if (saved.HeartbeatSeconds <= 0 || saved.CaptureBurstCount <= 0)
                 throw new ArgumentOutOfRangeException(nameof(draft), "하트비트 간격과 촬영 장수는 1 이상이어야 합니다.");
@@ -151,6 +157,9 @@ namespace HeatingCameraSystem.AgentUI.Services
             }
         }
 
+        /// <summary>LoadOrCreate 결과의 Tuning이 null이거나 범위 밖이면 기본값으로 되돌린다.</summary>
+        public AgentUiTuning EffectiveTuning => (Tuning ?? new AgentUiTuning()).Normalized();
+
         private static AgentUiConfig CreateDefaults() => new()
         {
             SimulationMode = true,
@@ -159,6 +168,40 @@ namespace HeatingCameraSystem.AgentUI.Services
                 new CameraDescriptor("SimCam_0", 0, "Camera 0"),
                 new CameraDescriptor("SimCam_1", 1, "Camera 1"),
             }
+        };
+    }
+}
+
+namespace HeatingCameraSystem.AgentUI.Services
+{
+    /// <summary>
+    /// PCIe USB 카드·연장 케이블 환경에서 동시 USB 트래픽을 줄이기 위한 현장 조정값(밀리초).
+    /// 기본값은 기존 동작과 같고, 0 이하·범위 밖 값은 기본값으로 대체한다.
+    /// </summary>
+    public sealed class AgentUiTuning
+    {
+        /// <summary>카메라별 S/N·FPA·LSB 시리얼 표시 갱신 주기. 기본 1000.</summary>
+        public int SerialPollIntervalMs { get; set; } = 1000;
+
+        /// <summary>카메라 라이브 시작 사이 간격. 0이면 동시에 시작한다. 기본 0.</summary>
+        public int CameraStartStaggerMs { get; set; } = 0;
+
+        /// <summary>USB 장치 추가·제거 이벤트를 모아 재열거하기까지의 대기. 기본 1000.</summary>
+        public int HotplugDebounceMs { get; set; } = 1000;
+
+        /// <summary>카메라별 COM 열기+S/N 확인 제한 시간. 넘으면 해당 카메라만 시리얼 비활성. 기본 5000.</summary>
+        public int SerialOpenTimeoutMs { get; set; } = 5000;
+
+        /// <summary>전체 카메라 COM 쌍 탐색(포트마다 S/N 읽기)의 제한 시간. 넘으면 저장된 구성으로 시작. 기본 30000.</summary>
+        public int PairingTimeoutMs { get; set; } = 30_000;
+
+        public AgentUiTuning Normalized() => new()
+        {
+            SerialPollIntervalMs = SerialPollIntervalMs is >= 200 and <= 600_000 ? SerialPollIntervalMs : 1000,
+            CameraStartStaggerMs = CameraStartStaggerMs is >= 0 and <= 60_000 ? CameraStartStaggerMs : 0,
+            HotplugDebounceMs = HotplugDebounceMs is >= 200 and <= 60_000 ? HotplugDebounceMs : 1000,
+            SerialOpenTimeoutMs = SerialOpenTimeoutMs is >= 500 and <= 120_000 ? SerialOpenTimeoutMs : 5000,
+            PairingTimeoutMs = PairingTimeoutMs is >= 1000 and <= 600_000 ? PairingTimeoutMs : 30_000,
         };
     }
 }

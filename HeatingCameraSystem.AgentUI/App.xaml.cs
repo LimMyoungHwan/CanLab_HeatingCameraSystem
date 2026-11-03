@@ -50,6 +50,7 @@ namespace HeatingCameraSystem.AgentUI
         private readonly Dictionary<string, CameraDescriptor> _panelBindings = new(StringComparer.Ordinal);
         private readonly CancellationTokenSource _appLifetime = new();
         private IReadOnlyList<CameraComPair> _lastPairs = Array.Empty<CameraComPair>();
+        private AgentUiTuning _tuning = new();
 
         /// <summary>온도 조회에서 패널을 못 찾은 AgentId. 하트비트마다 같은 경고를 반복하지 않으려고 기억한다.</summary>
         private readonly ConcurrentDictionary<string, byte> _temperaturePanelMisses = new(StringComparer.OrdinalIgnoreCase);
@@ -67,6 +68,7 @@ namespace HeatingCameraSystem.AgentUI
             base.OnStartup(e);
 
             AgentUiLog.Initialize();
+            RegisterGlobalExceptionLogging();
 
             // [S8] 헤드리스 배포 모드: 창 없이 카메라 + NATS만 돌린다. WPF는 마지막 창이 닫히면
             // 종료되므로 MainWindow를 건너뛰기 전에 명시적 종료 모드로 전환한다.
@@ -77,6 +79,11 @@ namespace HeatingCameraSystem.AgentUI
             }
 
             AgentUiConfig config = AgentUiConfig.LoadOrCreate();
+            _tuning = config.EffectiveTuning;
+            AgentUiLog.Logger.Information(
+                "AgentUI tuning: serialPoll={Poll}ms startStagger={Stagger}ms hotplugDebounce={Debounce}ms serialOpenTimeout={OpenTimeout}ms pairingTimeout={PairingTimeout}ms",
+                _tuning.SerialPollIntervalMs, _tuning.CameraStartStaggerMs, _tuning.HotplugDebounceMs,
+                _tuning.SerialOpenTimeoutMs, _tuning.PairingTimeoutMs);
             // 기본 리플레이 원본은 exe와 함께 배포되는 Assets\BB70_000.raw다. 작업 디렉터리가
             // exe 폴더가 아닐 수 있으므로(바로가기·서비스·스크립트) 상대경로를 쓰지 않는다.
             string? envRawPath = Environment.GetEnvironmentVariable("HCS_SIM_RAW_PATH");
@@ -136,7 +143,7 @@ namespace HeatingCameraSystem.AgentUI
 
             if (!config.SimulationMode)
             {
-                IReadOnlyList<CameraComPair> pairs = GetPairsOrEmpty(pairing);
+                IReadOnlyList<CameraComPair> pairs = GetPairsOrEmpty(pairing, TimeSpan.FromMilliseconds(_tuning.PairingTimeoutMs));
                 _lastPairs = pairs;
                 int deduped = CameraAutoRegistrar.DedupeByAgentId(config.Cameras);
                 AutoRegisterDetectedCameras(config, pairs);
@@ -264,7 +271,7 @@ namespace HeatingCameraSystem.AgentUI
 
             if (!config.SimulationMode)
             {
-                var watcher = new WmiCameraEnumerator();
+                var watcher = new WmiCameraEnumerator(TimeSpan.FromMilliseconds(_tuning.HotplugDebounceMs));
                 watcher.Changed += OnCameraHotplug;
                 watcher.StartWatching();
                 _cameraWatcher = watcher;
@@ -325,19 +332,48 @@ namespace HeatingCameraSystem.AgentUI
             return Task.FromResult<double?>(null);
         }
 
-        private static IReadOnlyList<CameraComPair> GetPairsOrEmpty(ICameraComPairingService pairing)
+        private static IReadOnlyList<CameraComPair> GetPairsOrEmpty(ICameraComPairingService pairing, TimeSpan timeout)
         {
             try
             {
-                // ponytail: 시리얼 S/N 읽는 동안 UI 스레드를 막는다(카메라당 1초 미만). 벤치 기동에는
-                // 충분 — 8대 시작이 느려지면 창 표시 후 비동기 reconcile로 올릴 것.
-                return Task.Run(() => pairing.GetPairsAsync()).GetAwaiter().GetResult();
+                // 시리얼 S/N 읽는 동안 호출 스레드를 막되, wedge된 USB 포트 하나가 시작 전체를 멈추지
+                // 않도록 제한 시간만 기다린다. 넘으면 저장된 구성으로 진행한다(탐색은 백그라운드에서 끝난다).
+                Task<IReadOnlyList<CameraComPair>> task = Task.Run(() => pairing.GetPairsAsync());
+                if (!WaitBounded(task, timeout))
+                {
+                    AgentUiLog.Logger.Warning(
+                        "Camera pairing did not finish within {TimeoutMs}ms (USB link stall suspected); keeping configured cameras",
+                        (int)timeout.TotalMilliseconds);
+                    return Array.Empty<CameraComPair>();
+                }
+                return task.GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
                 AgentUiLog.Logger.Warning(ex, "Camera pairing failed; keeping configured cameras");
                 return Array.Empty<CameraComPair>();
             }
+        }
+
+        /// <summary>완료(성공·실패 모두) 여부만 기다린다. 결과·예외는 호출자가 GetResult로 원래 형태로 받는다.</summary>
+        private static bool WaitBounded(Task task, TimeSpan timeout) => ((IAsyncResult)task).AsyncWaitHandle.WaitOne(timeout);
+
+        /// <summary>
+        /// 원래 크래시 경로를 찾기 위한 전역 예외 기록. 동작은 바꾸지 않는다(UI 예외는 여전히 처리되지 않은 채
+        /// 종료된다) — 상태가 불확실한 채 계속 돌리는 것보다 원인 기록 후 Manager 재기동이 안전하다.
+        /// </summary>
+        private void RegisterGlobalExceptionLogging()
+        {
+            DispatcherUnhandledException += (_, args) =>
+                AgentUiLog.Logger.Fatal(args.Exception, "Unhandled UI thread exception");
+            AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            {
+                AgentUiLog.Logger.Fatal(args.ExceptionObject as Exception,
+                    "Unhandled exception (terminating={Terminating}): {Exception}", args.IsTerminating, args.ExceptionObject);
+                if (args.IsTerminating) AgentUiLog.CloseAndFlush();
+            };
+            TaskScheduler.UnobservedTaskException += (_, args) =>
+                AgentUiLog.Logger.Error(args.Exception, "Unobserved task exception");
         }
 
         // 새로 감지된 카메라를 저장(Save)해 패널/NATS가 지금은 물론 이후 실행에서도 인식하게 한다.
@@ -526,6 +562,7 @@ namespace HeatingCameraSystem.AgentUI
             }
             var duplicateIndices = cameras.Where(camera => camera.OpenCvIndex >= 0)
                 .GroupBy(camera => camera.OpenCvIndex).Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet();
+            int startOrder = 0;
             foreach (CameraDescriptor configured in cameras)
             {
                 CameraDescriptor cam = duplicateIndices.Contains(configured.OpenCvIndex)
@@ -567,13 +604,25 @@ namespace HeatingCameraSystem.AgentUI
                         serial = _serialFactory(cam);
                         if (serial is not null)
                         {
-                            serial.InitializeAsync().GetAwaiter().GetResult();
-                            if (!_config.SimulationMode && IsUsableSerial(cam.CameraSerialNumber))
+                            ICameraSerialClient opening = serial;
+                            bool verifySerial = !_config.SimulationMode && IsUsableSerial(cam.CameraSerialNumber);
+                            Task<string?> open = Task.Run(async () =>
                             {
-                                string actual = serial.ReadSerialNumberAsync().GetAwaiter().GetResult();
-                                if (!string.Equals(actual, cam.CameraSerialNumber, StringComparison.OrdinalIgnoreCase))
-                                    throw new InvalidOperationException($"시리얼 S/N 불일치: 설정 {cam.CameraSerialNumber}, 실제 {actual}");
+                                await opening.InitializeAsync().ConfigureAwait(false);
+                                return verifySerial ? await opening.ReadSerialNumberAsync().ConfigureAwait(false) : null;
+                            });
+                            if (!WaitBounded(open, TimeSpan.FromMilliseconds(_tuning.SerialOpenTimeoutMs)))
+                            {
+                                // wedge된 COM의 Open/Dispose는 반환하지 않을 수 있다 — UI 스레드는 기다리지 않고
+                                // 열기 시도가 끝난 뒤 백그라운드에서 해제한다. 이 카메라만 시리얼이 비활성된다.
+                                serial = null;
+                                _ = open.ContinueWith(_ => opening.Dispose(), TaskScheduler.Default);
+                                throw new TimeoutException(
+                                    $"COM 열기/S/N 확인이 {_tuning.SerialOpenTimeoutMs}ms 안에 끝나지 않았습니다(USB 링크 정체 의심, 케이블 재연결 필요).");
                             }
+                            string? actual = open.GetAwaiter().GetResult();
+                            if (verifySerial && !string.Equals(actual, cam.CameraSerialNumber, StringComparison.OrdinalIgnoreCase))
+                                throw new InvalidOperationException($"시리얼 S/N 불일치: 설정 {cam.CameraSerialNumber}, 실제 {actual}");
                         }
                     }
                     catch (Exception ex)
@@ -588,21 +637,24 @@ namespace HeatingCameraSystem.AgentUI
                 var nuc = new ThermalNucCorrector();
                 _nucs[cam.AgentId] = nuc;
                 var panel = new CameraPanelViewModel(cam.Alias, cam.AgentId, runtime, Dispatcher, nuc, _store, _config.CaptureBurstCount, serial,
-                    publishResult: message => _nats is { } nats ? nats.PublishCaptureResultAsync(message) : Task.CompletedTask);
+                    publishResult: message => _nats is { } nats ? nats.PublishCaptureResultAsync(message) : Task.CompletedTask,
+                    infoPollInterval: TimeSpan.FromMilliseconds(_tuning.SerialPollIntervalMs));
                 if (serialStatus is not null) panel.SerialStatus = serialStatus;
                 _mainViewModel.Cameras.Add(panel);
                 _panelBindings[cam.AgentId] = cam;
                 if (runtime is not null)
                 {
-                    _ = StartCameraAsync(panel, runtime);
+                    // 이번 재구성에서 시작하는 카메라들을 간격을 두고 띄워 USB 동시 기동 부하를 나눈다.
+                    _ = StartCameraAsync(panel, runtime, TimeSpan.FromMilliseconds((long)_tuning.CameraStartStaggerMs * startOrder++));
                 }
             }
         }
 
-        private static async Task StartCameraAsync(CameraPanelViewModel panel, ICameraRuntime runtime)
+        private static async Task StartCameraAsync(CameraPanelViewModel panel, ICameraRuntime runtime, TimeSpan startDelay)
         {
             try
             {
+                if (startDelay > TimeSpan.Zero) await Task.Delay(startDelay);
                 await panel.StartLiveAsync();
                 if (panel.HasRuntime) await runtime.StartAsync();
             }
@@ -733,7 +785,7 @@ namespace HeatingCameraSystem.AgentUI
                     while (Interlocked.Exchange(ref _rebuildDirty, 0) == 1)
                     {
                         IReadOnlyList<CameraComPair>? pairs = _pairing is not null && _config?.SimulationMode == false
-                            ? GetPairsOrEmpty(_pairing) : null;
+                            ? GetPairsOrEmpty(_pairing, TimeSpan.FromMilliseconds(_tuning.PairingTimeoutMs)) : null;
                         await Dispatcher.InvokeAsync(() =>
                         {
                             if (_config is not null && pairs is not null)

@@ -38,7 +38,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         private bool _disposed;
 
         private const string Unknown = "—";
-        private static readonly TimeSpan InfoPollInterval = TimeSpan.FromSeconds(1);
+        private readonly TimeSpan _infoPollInterval;
 
         [ObservableProperty]
         private string _title;
@@ -130,7 +130,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
 
         public int CameraIndex => _runtime?.CameraIndex ?? -1;
 
-        public CameraPanelViewModel(string title, string agentId, ICameraRuntime? runtime, Dispatcher dispatcher, ThermalNucCorrector nuc, CaptureStore store, int captureBurstCount = 1, ICameraSerialClient? serial = null, Func<CaptureResultMessage, Task>? publishResult = null)
+        public CameraPanelViewModel(string title, string agentId, ICameraRuntime? runtime, Dispatcher dispatcher, ThermalNucCorrector nuc, CaptureStore store, int captureBurstCount = 1, ICameraSerialClient? serial = null, Func<CaptureResultMessage, Task>? publishResult = null, TimeSpan? infoPollInterval = null)
         {
             _title = title;
             _agentId = agentId;
@@ -141,6 +141,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _captureBurstCount = captureBurstCount > 0 ? captureBurstCount : 1;
             _serial = serial;
             _publishResult = publishResult;
+            _infoPollInterval = infoPollInterval ?? TimeSpan.FromSeconds(1);
             _status = runtime?.Status.ToString() ?? CameraRuntimeStatus.Stopped.ToString();
 
             if (runtime is not null)
@@ -423,7 +424,7 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             {
                 while (true)
                 {
-                    await Task.Delay(InfoPollInterval, ct).ConfigureAwait(false);
+                    await Task.Delay(_infoPollInterval, ct).ConfigureAwait(false);
 
                     (string SerialNumber, double Fpa, byte Lsb)? reading = null;
                     try

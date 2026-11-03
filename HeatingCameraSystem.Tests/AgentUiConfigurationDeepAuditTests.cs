@@ -192,6 +192,22 @@ namespace HeatingCameraSystem.Tests
             new DiscoveredCamera { FriendlyName = "CLTC_T_VGA", HardwareId = "camera-" + serial, UsbParentId = container, OpenCvIndex = index },
             new DiscoveredSerialPort(port, "serial", "serial-" + serial, container), serial, PairingStatus.Paired, false);
 
+        [Fact]
+        public void SettingsScreenSaveKeepsFileEditedTuning()
+        {
+            using var file = new ConfigFileScope();
+            var active = new AgentUiConfig { SimulationMode = true };
+            active.Tuning.SerialPollIntervalMs = 3000;
+            active.Tuning.CameraStartStaggerMs = 1500;
+
+            // 설정 화면·원격 스냅샷은 Tuning 없이 새 객체를 만들어 저장한다.
+            active.SaveDraft(new AgentUiConfig { SimulationMode = true, NatsUrl = active.NatsUrl });
+
+            using JsonDocument disk = JsonDocument.Parse(File.ReadAllText(file.Path));
+            JsonElement saved = disk.RootElement.GetProperty("Tuning");
+            Assert.Equal(3000, saved.GetProperty("SerialPollIntervalMs").GetInt32());
+            Assert.Equal(1500, saved.GetProperty("CameraStartStaggerMs").GetInt32());
+        }
         private sealed class ConfigFileScope : IDisposable
         {
             public string Path { get; } = System.IO.Path.Combine(AgentUiConfig.ConfigDir, "agentui.json");

@@ -28,7 +28,16 @@ namespace HeatingCameraSystem.Protocols.Cameras.CL
         public void Write(byte[] buffer, int offset, int count, int timeoutMilliseconds)
         {
             _port.WriteTimeout = timeoutMilliseconds;
-            _port.Write(buffer, offset, count);
+            try
+            {
+                _port.Write(buffer, offset, count);
+            }
+            catch (IOException ex)
+            {
+                // USB 링크가 wedge되면 드라이버가 ERROR_SEM_TIMEOUT(121)을 IOException으로 던진다.
+                // 호출자들이 이미 처리하는 TimeoutException으로 바꿔 원인을 보존한 채 이 명령만 실패시킨다.
+                throw new TimeoutException($"CL serial write failed: {ex.Message}", ex);
+            }
         }
 
         public int Read(byte[] buffer, int offset, int count, int timeoutMilliseconds)

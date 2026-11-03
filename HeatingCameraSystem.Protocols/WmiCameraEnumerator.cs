@@ -20,7 +20,12 @@ namespace HeatingCameraSystem.Protocols
         private ManagementEventWatcher? _arrivalWatcher;
         private ManagementEventWatcher? _removalWatcher;
         private Timer? _debounceTimer;
-        private readonly TimeSpan _debounce = TimeSpan.FromSeconds(1);
+        private readonly TimeSpan _debounce;
+
+        public WmiCameraEnumerator() : this(TimeSpan.FromSeconds(1)) { }
+
+        /// <param name="debounce">PnP 이벤트를 모아 재열거하기까지의 대기. 다수 카메라 동시 열거 부하 조정용.</param>
+        public WmiCameraEnumerator(TimeSpan debounce) => _debounce = debounce;
         private readonly object _debounceLock = new();
         private readonly object _inventoryLock = new();
         private IReadOnlyList<DiscoveredCamera> _previousCameras = Array.Empty<DiscoveredCamera>();
