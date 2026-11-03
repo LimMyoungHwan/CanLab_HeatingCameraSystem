@@ -469,6 +469,18 @@
                                   Width="160" HorizontalAlignment="Left" Margin="0,2,0,8"/>
                         <TextBlock Text="{loc:Loc Set_CaptureBurst}"/>
                         <TextBox Text="{Binding CaptureBurstCount}" Width="80" HorizontalAlignment="Left" Margin="0,2,0,8"/>
+                        <TextBlock Text="{loc:Loc Set_UsbTuning}" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                        <TextBlock Text="{loc:Loc Set_UsbTuningHint}" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                        <TextBlock Text="{loc:Loc Set_SerialPoll}"/>
+                        <TextBox Text="{Binding SerialPollIntervalMs}" Width="100" HorizontalAlignment="Left" Margin="0,2,0,8"/>
+                        <TextBlock Text="{loc:Loc Set_StartStagger}"/>
+                        <TextBox Text="{Binding CameraStartStaggerMs}" Width="100" HorizontalAlignment="Left" Margin="0,2,0,8"/>
+                        <TextBlock Text="{loc:Loc Set_HotplugDebounce}"/>
+                        <TextBox Text="{Binding HotplugDebounceMs}" Width="100" HorizontalAlignment="Left" Margin="0,2,0,8"/>
+                        <TextBlock Text="{loc:Loc Set_SerialOpenTimeout}"/>
+                        <TextBox Text="{Binding SerialOpenTimeoutMs}" Width="100" HorizontalAlignment="Left" Margin="0,2,0,8"/>
+                        <TextBlock Text="{loc:Loc Set_PairingTimeout}"/>
+                        <TextBox Text="{Binding PairingTimeoutMs}" Width="100" HorizontalAlignment="Left" Margin="0,2,0,8"/>
                         <TextBlock Text="{loc:Loc Set_Cameras}" FontWeight="SemiBold" Margin="0,6,0,4"/>
                         <DataGrid ItemsSource="{Binding Cameras}" IsReadOnly="False" Height="180">
                             <DataGrid.Columns>

@@ -90,6 +90,21 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
         [ObservableProperty]
         private int _captureBurstCount;
 
+        [ObservableProperty]
+        private int _serialPollIntervalMs;
+
+        [ObservableProperty]
+        private int _cameraStartStaggerMs;
+
+        [ObservableProperty]
+        private int _hotplugDebounceMs;
+
+        [ObservableProperty]
+        private int _serialOpenTimeoutMs;
+
+        [ObservableProperty]
+        private int _pairingTimeoutMs;
+
         public CaptureImageFormat[] ImageFormats { get; } = Enum.GetValues<CaptureImageFormat>();
 
         [ObservableProperty]
@@ -112,6 +127,12 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
             _heartbeatSeconds = editable.HeartbeatSeconds;
             _captureImageFormat = editable.CaptureImageFormat;
             _captureBurstCount = editable.CaptureBurstCount;
+            AgentUiTuning tuning = editable.EffectiveTuning;
+            _serialPollIntervalMs = tuning.SerialPollIntervalMs;
+            _cameraStartStaggerMs = tuning.CameraStartStaggerMs;
+            _hotplugDebounceMs = tuning.HotplugDebounceMs;
+            _serialOpenTimeoutMs = tuning.SerialOpenTimeoutMs;
+            _pairingTimeoutMs = tuning.PairingTimeoutMs;
 
             foreach (CameraDescriptor camera in editable.Cameras)
             {
@@ -175,6 +196,14 @@ namespace HeatingCameraSystem.AgentUI.ViewModels
                 HeartbeatSeconds = HeartbeatSeconds,
                 CaptureImageFormat = CaptureImageFormat,
                 CaptureBurstCount = CaptureBurstCount,
+                Tuning = new AgentUiTuning
+                {
+                    SerialPollIntervalMs = SerialPollIntervalMs,
+                    CameraStartStaggerMs = CameraStartStaggerMs,
+                    HotplugDebounceMs = HotplugDebounceMs,
+                    SerialOpenTimeoutMs = SerialOpenTimeoutMs,
+                    PairingTimeoutMs = PairingTimeoutMs,
+                },
                 Cameras = Cameras.Select(row => row.ToDescriptor()).ToList()
             };
             try

@@ -53,6 +53,13 @@ Set_StoragePath=Storage path (blank = default under config dir)
 Set_Heartbeat=Heartbeat (seconds)
 Set_ImageFormat=Capture image format
 Set_CaptureBurst=Capture count (frames per Save)
+Set_UsbTuning=USB load tuning (ms, applied after saving and restarting AgentUI)
+Set_UsbTuningHint=Adjust when serial errors occur with many cameras or PCIe USB cards / extension cables. Defaults keep the previous behavior.
+Set_SerialPoll=Serial poll interval (default 1000, 200-600000)
+Set_StartStagger=Camera start interval (default 0, 0-60000)
+Set_HotplugDebounce=USB change debounce (default 1000, 200-60000)
+Set_SerialOpenTimeout=COM open / S/N check timeout (default 5000, 500-120000)
+Set_PairingTimeout=Camera-COM pairing timeout (default 30000, 1000-600000)
 Set_Cameras=Cameras
 Set_AddCamera=Add camera
 Set_AutoDetectCom=Auto-detect COM

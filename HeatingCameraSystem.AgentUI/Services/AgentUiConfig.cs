@@ -42,7 +42,7 @@ namespace HeatingCameraSystem.AgentUI.Services
 
         public int CaptureBurstCount { get; set; } = 1;
 
-        /// <summary>다수 카메라 USB 부하 조정값. agentui.json에서만 편집하며 재시작 후 적용된다.</summary>
+        /// <summary>다수 카메라 USB 부하 조정값. 설정 화면 또는 agentui.json에서 편집하며 재시작 후 적용된다.</summary>
         public AgentUiTuning Tuning { get; set; } = new();
 
         public string EffectiveStorageDir =>
@@ -100,14 +100,14 @@ namespace HeatingCameraSystem.AgentUI.Services
             HeartbeatSeconds = HeartbeatSeconds,
             CaptureImageFormat = CaptureImageFormat,
             CaptureBurstCount = CaptureBurstCount,
-            Tuning = Tuning,
+            Tuning = (Tuning ?? new AgentUiTuning()) with { },
             Cameras = Cameras.ToList()
         };
 
         private bool SameRuntimeSettings(AgentUiConfig other) =>
             SimulationMode == other.SimulationMode && NatsUrl == other.NatsUrl && StoragePath == other.StoragePath
             && HeartbeatSeconds == other.HeartbeatSeconds && CaptureImageFormat == other.CaptureImageFormat
-            && CaptureBurstCount == other.CaptureBurstCount;
+            && CaptureBurstCount == other.CaptureBurstCount && EffectiveTuning == other.EffectiveTuning;
 
         /// <summary>
         /// 디스크 기록이 성공한 뒤에만 활성 설정을 변경한다. 소스/연결/저장 서비스가 기동 시 고정하는
@@ -115,9 +115,9 @@ namespace HeatingCameraSystem.AgentUI.Services
         /// </summary>
         public bool SaveDraft(AgentUiConfig draft, bool requireRestart = false)
         {
+            if (draft.Tuning is null || draft.Tuning != draft.Tuning.Normalized())
+                throw new ArgumentOutOfRangeException(nameof(draft), AgentUiTuning.RangeText);
             AgentUiConfig saved = draft.Copy();
-            // 설정 화면·원격 스냅샷은 Tuning을 싣지 않으므로 파일에서 편집한 값을 유지한다.
-            saved.Tuning = (_pendingRestart ?? this).Tuning;
             if (string.IsNullOrWhiteSpace(saved.NatsUrl)) throw new ArgumentException("NATS URL이 비어 있습니다.");
             if (saved.HeartbeatSeconds <= 0 || saved.CaptureBurstCount <= 0)
                 throw new ArgumentOutOfRangeException(nameof(draft), "하트비트 간격과 촬영 장수는 1 이상이어야 합니다.");
@@ -178,7 +178,7 @@ namespace HeatingCameraSystem.AgentUI.Services
     /// PCIe USB 카드·연장 케이블 환경에서 동시 USB 트래픽을 줄이기 위한 현장 조정값(밀리초).
     /// 기본값은 기존 동작과 같고, 0 이하·범위 밖 값은 기본값으로 대체한다.
     /// </summary>
-    public sealed class AgentUiTuning
+    public sealed record AgentUiTuning
     {
         /// <summary>카메라별 S/N·FPA·LSB 시리얼 표시 갱신 주기. 기본 1000.</summary>
         public int SerialPollIntervalMs { get; set; } = 1000;
@@ -194,6 +194,10 @@ namespace HeatingCameraSystem.AgentUI.Services
 
         /// <summary>전체 카메라 COM 쌍 탐색(포트마다 S/N 읽기)의 제한 시간. 넘으면 저장된 구성으로 시작. 기본 30000.</summary>
         public int PairingTimeoutMs { get; set; } = 30_000;
+
+        public const string RangeText =
+            "USB 부하 조정값 범위: 시리얼 폴링 200~600000ms, 시작 간격 0~60000ms, 디바운스 200~60000ms, "
+            + "COM 열기 제한 500~120000ms, 쌍 탐색 제한 1000~600000ms.";
 
         public AgentUiTuning Normalized() => new()
         {

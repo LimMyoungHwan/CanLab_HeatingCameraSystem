@@ -174,6 +174,8 @@ namespace HeatingCameraSystem.AgentUI
                         HeartbeatSeconds = snap.HeartbeatSeconds,
                         CaptureImageFormat = snap.CaptureImageFormat,
                         CaptureBurstCount = snap.CaptureBurstCount,
+                        // 원격 스냅샷은 USB 조정값을 싣지 않는다 — 현장에서 정한 값을 유지한다.
+                        Tuning = config.EditableSnapshot().EffectiveTuning,
                         Cameras = snap.Cameras?.ToList() ?? new List<CameraDescriptor>()
                     }, requireRestart: true);
                     if (_mainViewModel?.Settings is { } settings)

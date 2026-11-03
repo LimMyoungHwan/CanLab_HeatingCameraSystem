@@ -193,21 +193,41 @@ namespace HeatingCameraSystem.Tests
             new DiscoveredSerialPort(port, "serial", "serial-" + serial, container), serial, PairingStatus.Paired, false);
 
         [Fact]
-        public void SettingsScreenSaveKeepsFileEditedTuning()
+        public void SettingsScreenEditsTuningAsRestartDraft()
         {
             using var file = new ConfigFileScope();
             var active = new AgentUiConfig { SimulationMode = true };
             active.Tuning.SerialPollIntervalMs = 3000;
-            active.Tuning.CameraStartStaggerMs = 1500;
+            var vm = new SettingsViewModel(active);
+            Assert.Equal(3000, vm.SerialPollIntervalMs);
 
-            // 설정 화면·원격 스냅샷은 Tuning 없이 새 객체를 만들어 저장한다.
-            active.SaveDraft(new AgentUiConfig { SimulationMode = true, NatsUrl = active.NatsUrl });
+            vm.CameraStartStaggerMs = 2000;
+            vm.SaveCommand.Execute(null);
 
+            Assert.True(active.RestartRequired);
+            Assert.Equal(0, active.Tuning.CameraStartStaggerMs);
+            Assert.Equal(2000, active.EditableSnapshot().Tuning.CameraStartStaggerMs);
             using JsonDocument disk = JsonDocument.Parse(File.ReadAllText(file.Path));
             JsonElement saved = disk.RootElement.GetProperty("Tuning");
             Assert.Equal(3000, saved.GetProperty("SerialPollIntervalMs").GetInt32());
-            Assert.Equal(1500, saved.GetProperty("CameraStartStaggerMs").GetInt32());
+            Assert.Equal(2000, saved.GetProperty("CameraStartStaggerMs").GetInt32());
         }
+
+        [Fact]
+        public void SettingsScreenRejectsOutOfRangeTuning()
+        {
+            using var file = new ConfigFileScope();
+            var active = new AgentUiConfig { SimulationMode = true };
+            var vm = new SettingsViewModel(active) { SerialPollIntervalMs = 50 };
+            string? before = File.Exists(file.Path) ? File.ReadAllText(file.Path) : null;
+
+            vm.SaveCommand.Execute(null);
+
+            Assert.False(active.RestartRequired);
+            Assert.Equal(before, File.Exists(file.Path) ? File.ReadAllText(file.Path) : null);
+            Assert.Contains("200~600000", vm.StatusText);
+        }
+
         private sealed class ConfigFileScope : IDisposable
         {
             public string Path { get; } = System.IO.Path.Combine(AgentUiConfig.ConfigDir, "agentui.json");
